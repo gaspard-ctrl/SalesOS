@@ -1,43 +1,88 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Settings2 } from "lucide-react";
+import Link from "next/link";
 
 
-type Message = { role: "user" | "assistant"; text: string };
-
-const mockReplies = [
-  "D'après les données HubSpot, ton deal Kering est le plus avancé avec un score de 91. La prochaine étape recommandée est de finaliser le contrat avant fin mars.",
-  "Je vois 3 relances en attente : Decathlon (2j), L'Oréal (5j) et BNP Paribas (8j). Je peux générer un draft d'email pour chacun si tu veux.",
-  "Cornerstone a lancé une nouvelle offre de coaching IA cette semaine. Ils ciblent le segment mid-market avec un prix agressif à 15€/session. Je te recommande de surveiller leur positionnement sur LinkedIn.",
-  "Le score moyen de ton pipe est de 72/100. Tes deals les plus solides sont Kering (91) et Decathlon (84). BNP Paribas (61) nécessite une action rapide.",
-  "Je n'ai pas encore accès aux données en temps réel — les intégrations HubSpot, Slack et Gmail seront connectées dans la prochaine version. Pour l'instant, je travaille avec les données mockées.",
-];
-
-let replyIndex = 0;
+type Message = { role: "user" | "assistant"; content: string };
+type ApiMessage = { role: "user" | "assistant"; content: string };
 
 export default function IntelligencePage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
+  const [activeTool, setActiveTool] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages, loading, streamingText]);
 
-  const send = () => {
+  const send = async () => {
     const text = input.trim();
     if (!text || loading) return;
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", text }]);
+    const newMessages: Message[] = [...messages, { role: "user", content: text }];
+    setMessages(newMessages);
     setLoading(true);
-    setTimeout(() => {
-      const reply = mockReplies[replyIndex % mockReplies.length];
-      replyIndex++;
-      setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
+    setStreamingText("");
+    setActiveTool(null);
+
+    try {
+      const apiMessages: ApiMessage[] = newMessages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: apiMessages,
+          customPrompt: localStorage.getItem("coachello_prompt_guide") ?? undefined,
+        }),
+      });
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+            if (event.type === "text") {
+              fullText += event.text;
+              setStreamingText(fullText);
+              setActiveTool(null);
+            } else if (event.type === "tool") {
+              setActiveTool(event.name);
+            } else if (event.type === "done") {
+              setMessages((prev) => [...prev, { role: "assistant", content: fullText }]);
+              setStreamingText("");
+              setActiveTool(null);
+              setLoading(false);
+            } else if (event.type === "error") {
+              setMessages((prev) => [...prev, { role: "assistant", content: `Erreur : ${event.message}` }]);
+              setStreamingText("");
+              setLoading(false);
+            }
+          } catch {}
+        }
+      }
+    } catch {
+      setMessages((prev) => [...prev, { role: "assistant", content: "Erreur de connexion. Réessaie." }]);
       setLoading(false);
-    }, 1000);
+    }
   };
 
   const handleKey = (e: React.KeyboardEvent) => {
@@ -49,6 +94,19 @@ export default function IntelligencePage() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Top bar */}
+      <div className="flex justify-end px-4 pt-3">
+        <Link
+          href="/prompt"
+          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors"
+          style={{ borderColor: "#e5e5e5", color: "#aaa" }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "#f01563"; e.currentTarget.style.borderColor = "#f01563"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "#aaa"; e.currentTarget.style.borderColor = "#e5e5e5"; }}
+        >
+          <Settings2 size={12} />
+          Guide de réponse
+        </Link>
+      </div>
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto px-6 py-8">
         {messages.length === 0 ? (
@@ -89,21 +147,33 @@ export default function IntelligencePage() {
                       : { background: "#f5f5f5", color: "#111", borderBottomLeftRadius: 4 }
                   }
                 >
-                  {m.text}
+                  {m.content}
                 </div>
               </div>
             ))}
-            {loading && (
+            {/* Streaming response */}
+            {streamingText && (
+              <div className="flex justify-start">
+                <img src="/logo.png" alt="AI" width={28} height={28} className="rounded-lg mr-3 mt-0.5 shrink-0" />
+                <div className="max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed" style={{ background: "#f5f5f5", color: "#111", borderBottomLeftRadius: 4 }}>
+                  {streamingText}
+                </div>
+              </div>
+            )}
+            {/* Loading / tool indicator */}
+            {loading && !streamingText && (
               <div className="flex justify-start items-center gap-3">
                 <img src="/logo.png" alt="AI" width={28} height={28} className="rounded-lg shrink-0" />
-                <div className="flex gap-1 px-4 py-3 rounded-2xl" style={{ background: "#f5f5f5" }}>
-                  {[0, 1, 2].map((i) => (
-                    <div
-                      key={i}
-                      className="w-1.5 h-1.5 rounded-full animate-bounce"
-                      style={{ background: "#f01563", animationDelay: `${i * 0.15}s` }}
-                    />
-                  ))}
+                <div className="flex items-center gap-2 px-4 py-3 rounded-2xl" style={{ background: "#f5f5f5" }}>
+                  {activeTool ? (
+                    <span className="text-xs" style={{ color: "#888" }}>
+                      Recherche HubSpot…
+                    </span>
+                  ) : (
+                    [0, 1, 2].map((i) => (
+                      <div key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: "#f01563", animationDelay: `${i * 0.15}s` }} />
+                    ))
+                  )}
                 </div>
               </div>
             )}
