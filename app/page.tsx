@@ -17,10 +17,18 @@ export default function IntelligencePage() {
   const [streamingText, setStreamingText] = useState("");
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading, streamingText]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }, [input]);
 
   const send = async () => {
     const text = input.trim();
@@ -194,13 +202,14 @@ export default function IntelligencePage() {
       <div className="px-6 pb-6 pt-2">
         <div className="max-w-2xl mx-auto flex items-end gap-3 p-3 rounded-2xl border transition-all" style={{ background: "#fff", borderColor: "#e5e5e5" }}>
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKey}
             placeholder="Pose une question sur tes deals, prospects, concurrents..."
             rows={1}
             className="flex-1 resize-none text-sm outline-none bg-transparent leading-relaxed"
-            style={{ color: "#111", maxHeight: 120 }}
+            style={{ color: "#111", maxHeight: 200, overflowY: "auto" }}
           />
           <button
             onClick={send}
