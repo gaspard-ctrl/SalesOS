@@ -1,5 +1,11 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
+import fs from "fs";
+import path from "path";
 import { db } from "./db";
+
+function getDefaultPrompt(): string {
+  return fs.readFileSync(path.join(process.cwd(), "prompt-guide.txt"), "utf-8");
+}
 
 export interface DbUser {
   id: string;
@@ -37,6 +43,7 @@ export async function getAuthenticatedUser(): Promise<DbUser | null> {
       email,
       name: name || null,
       is_admin: email === "arthur@coachello.io",
+      user_prompt: getDefaultPrompt(),
     })
     .select()
     .single();

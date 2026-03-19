@@ -18,11 +18,51 @@ export default async function AdminPage() {
     .select("user_id, is_active")
     .eq("service", "claude");
 
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+  const [{ data: allLogs }, { data: monthLogs }] = await Promise.all([
+    db.from("usage_logs").select("user_id, model, input_tokens, output_tokens"),
+    db.from("usage_logs").select("user_id, model, input_tokens, output_tokens").gte("created_at", monthStart),
+  ]);
+
   const keyMap = new Map((keys ?? []).map((k) => [k.user_id, k.is_active]));
+
+  // Pricing per model ($/M tokens)
+  const PRICING: Record<string, { input: number; output: number }> = {
+    "claude-haiku-4-5":  { input: 1, output: 5  },
+    "claude-sonnet-4-6": { input: 3, output: 15 },
+    "claude-opus-4-6":   { input: 5, output: 25 },
+  };
+  const DEFAULT_PRICE = { input: 1, output: 5 };
+
+  type UsageStat = { input: number; output: number; costUsd: number };
+  const EMPTY: UsageStat = { input: 0, output: 0, costUsd: 0 };
+
+  function aggregate(logs: typeof allLogs): Map<string, UsageStat> {
+    const map = new Map<string, UsageStat>();
+    for (const log of logs ?? []) {
+      const cur = map.get(log.user_id) ?? { ...EMPTY };
+      const price = PRICING[log.model] ?? DEFAULT_PRICE;
+      map.set(log.user_id, {
+        input: cur.input + log.input_tokens,
+        output: cur.output + log.output_tokens,
+        costUsd: cur.costUsd
+          + (log.input_tokens / 1_000_000) * price.input
+          + (log.output_tokens / 1_000_000) * price.output,
+      });
+    }
+    return map;
+  }
+
+  const totalMap = aggregate(allLogs);
+  const monthMap = aggregate(monthLogs);
 
   const usersWithStatus = (users ?? []).map((u) => ({
     ...u,
     claude_key_active: keyMap.get(u.id) ?? false,
+    usageTotal: totalMap.get(u.id) ?? { ...EMPTY },
+    usageMonth: monthMap.get(u.id) ?? { ...EMPTY },
   }));
 
   return (
