@@ -36,13 +36,28 @@ export function GmailConnect({ initialConnected }: { initialConnected: boolean }
     );
   }
 
+  const [loading, setLoading] = useState(false);
+
+  const connect = () => {
+    setLoading(true);
+    router.push("/api/gmail/connect");
+  };
+
   return (
     <button
-      onClick={() => router.push("/api/gmail/connect")}
-      className="text-sm px-4 py-2 rounded-xl text-white transition-opacity hover:opacity-90"
-      style={{ background: "#f01563" }}
+      onClick={connect}
+      disabled={loading}
+      className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl text-white transition-all active:scale-95"
+      style={{ background: "#f01563", opacity: loading ? 0.7 : 1 }}
     >
-      Connecter Gmail
+      {loading ? (
+        <>
+          <span className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+          Redirection…
+        </>
+      ) : (
+        "Connecter Gmail"
+      )}
     </button>
   );
 }
