@@ -58,9 +58,8 @@ export default async function SettingsPage() {
         {/* Gmail */}
         <IntegrationCard
           title="Gmail"
-          description="Connecte ton compte Gmail pour que l'agent puisse analyser tes échanges."
-          status={null}
-          action={
+          description="Connecte ton compte Gmail pour envoyer des emails et analyser tes échanges."
+          status={
             <Suspense>
               <GmailConnect initialConnected={gmailConnected} />
             </Suspense>
