@@ -1,8 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest } from "next/server";
+import fs from "fs";
+import path from "path";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
+
+function getDefaultPrompt(): string {
+  const filePath = path.join(process.cwd(), "prompt-guide.txt");
+  return fs.readFileSync(filePath, "utf-8");
+}
 
 // ── HubSpot helper ────────────────────────────────────────────────────────────
 async function hubspot(path: string, method = "GET", body?: unknown) {
@@ -18,17 +25,30 @@ async function hubspot(path: string, method = "GET", body?: unknown) {
   return res.json();
 }
 
-// ── Property cache (module-level, reset on cold start) ────────────────────────
-const propCache: Record<string, string[]> = {};
+// ── Curated property lists (avoids fetching all 200+ props on every cold start) ─
+const PROPS: Record<string, string[]> = {
+  contacts: [
+    "firstname", "lastname", "email", "phone", "mobilephone",
+    "jobtitle", "company", "industry", "city", "country",
+    "lifecyclestage", "hs_lead_status", "hubspot_owner_id",
+    "notes_last_contacted", "num_contacted_notes", "createdate",
+    "hs_lastmodifieddate", "linkedin_bio", "website", "hs_email_optout",
+  ],
+  deals: [
+    "dealname", "dealstage", "amount", "closedate", "pipeline",
+    "hubspot_owner_id", "hs_lastmodifieddate", "createdate",
+    "description", "hs_deal_stage_probability", "hs_is_closed",
+    "hs_is_closed_won", "num_associated_contacts", "notes_last_contacted",
+  ],
+  companies: [
+    "name", "domain", "industry", "city", "country", "phone",
+    "numberofemployees", "annualrevenue", "createdate",
+    "hs_lastmodifieddate", "description", "type", "website",
+  ],
+};
 
-async function getPropertyNames(objectType: string): Promise<string[]> {
-  if (propCache[objectType]) return propCache[objectType];
-  const data = await hubspot(`/crm/v3/properties/${objectType}`);
-  const names = (data.results ?? [])
-    .filter((p: { hidden?: boolean; calculated?: boolean }) => !p.hidden && !p.calculated)
-    .map((p: { name: string }) => p.name);
-  propCache[objectType] = names;
-  return names;
+function getPropertyNames(objectType: string): string[] {
+  return PROPS[objectType] ?? PROPS.contacts;
 }
 
 // Strip null/empty values to keep context manageable
@@ -36,6 +56,32 @@ function stripEmpty(obj: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(obj).filter(([, v]) => v !== null && v !== "" && v !== undefined)
   );
+}
+
+// ── Slack helper ──────────────────────────────────────────────────────────────
+async function slack(path: string, params?: Record<string, string>) {
+  const url = new URL(`https://slack.com/api${path}`);
+  if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` },
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(`Slack ${path} → ${data.error}`);
+  return data;
+}
+
+async function slackPost(path: string, body: Record<string, unknown>) {
+  const res = await fetch(`https://slack.com/api${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(`Slack ${path} → ${data.error}`);
+  return data;
 }
 
 // ── Tool definitions ──────────────────────────────────────────────────────────
@@ -132,13 +178,49 @@ const tools: Anthropic.Tool[] = [
       required: ["deal_id"],
     },
   },
+  {
+    name: "search_slack",
+    description: "Recherche des messages Slack par mot-clé. Utilise cet outil pour trouver des conversations sur un deal, un contact ou un sujet.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Mots-clés à rechercher dans Slack" },
+        limit: { type: "number", description: "Nombre de résultats (défaut : 10)" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "get_slack_channel_history",
+    description: "Récupère les derniers messages d'un canal Slack. Utilise cet outil pour avoir le contexte récent d'un canal (#sales, #deals...).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        channel_name: { type: "string", description: "Nom du canal sans # (ex: sales, general)" },
+        limit: { type: "number", description: "Nombre de messages (défaut : 20)" },
+      },
+      required: ["channel_name"],
+    },
+  },
+  {
+    name: "send_slack_message",
+    description: "Envoie un message dans un canal Slack ou en DM à un utilisateur. Toujours demander confirmation avant d'envoyer.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        channel: { type: "string", description: "Nom du canal sans # (ex: sales) ou email de l'utilisateur pour un DM" },
+        message: { type: "string", description: "Contenu du message à envoyer" },
+      },
+      required: ["channel", "message"],
+    },
+  },
 ];
 
 // ── Tool execution ────────────────────────────────────────────────────────────
 async function executeTool(name: string, input: Record<string, unknown>): Promise<string> {
   switch (name) {
     case "search_contacts": {
-      const props = await getPropertyNames("contacts");
+      const props = getPropertyNames("contacts");
       const data = await hubspot("/crm/v3/objects/contacts/search", "POST", {
         query: input.query,
         limit: input.limit || 10,
@@ -151,7 +233,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return JSON.stringify(results);
     }
     case "search_deals": {
-      const props = await getPropertyNames("deals");
+      const props = getPropertyNames("deals");
       const data = await hubspot("/crm/v3/objects/deals/search", "POST", {
         query: input.query,
         limit: input.limit || 10,
@@ -164,7 +246,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return JSON.stringify(results);
     }
     case "get_deals": {
-      const props = await getPropertyNames("deals");
+      const props = getPropertyNames("deals");
       const allResults: { id: string; properties: Record<string, unknown> }[] = [];
       let after: string | undefined;
       do {
@@ -190,7 +272,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return JSON.stringify(allResults);
     }
     case "get_companies": {
-      const props = await getPropertyNames("companies");
+      const props = getPropertyNames("companies");
       const data = await hubspot(
         `/crm/v3/objects/companies?limit=${input.limit || 20}&properties=${props.join(",")}`
       );
@@ -201,7 +283,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return JSON.stringify(results);
     }
     case "get_contact_details": {
-      const props = await getPropertyNames("contacts");
+      const props = getPropertyNames("contacts");
       const data = await hubspot(
         `/crm/v3/objects/contacts/${input.contact_id}?properties=${props.join(",")}`
       );
@@ -273,6 +355,86 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       );
       return JSON.stringify(contacts);
     }
+    case "search_slack": {
+      const data = await slack("/search.messages", {
+        query: input.query as string,
+        count: String(input.limit ?? 10),
+        sort: "timestamp",
+        sort_dir: "desc",
+      });
+      const messages = (data.messages?.matches ?? []).map((m: {
+        text: string; ts: string; username?: string;
+        channel?: { name?: string }; permalink?: string;
+      }) => ({
+        text: m.text,
+        user: m.username,
+        channel: m.channel?.name,
+        timestamp: new Date(parseFloat(m.ts) * 1000).toISOString(),
+        permalink: m.permalink,
+      }));
+      return JSON.stringify(messages);
+    }
+    case "get_slack_channel_history": {
+      // Resolve channel name → ID
+      const channelsData = await slack("/conversations.list", { limit: "200", types: "public_channel,private_channel" });
+      const channel = (channelsData.channels ?? []).find(
+        (c: { name: string; id: string }) => c.name === (input.channel_name as string).replace("#", "")
+      );
+      if (!channel) return `Canal "${input.channel_name}" introuvable.`;
+
+      const histData = await slack("/conversations.history", {
+        channel: channel.id,
+        limit: String(input.limit ?? 20),
+      });
+
+      // Resolve user IDs to names
+      const userIds = [...new Set(
+        (histData.messages ?? []).map((m: { user?: string }) => m.user).filter(Boolean)
+      )] as string[];
+      const userMap: Record<string, string> = {};
+      await Promise.all(userIds.map(async (uid) => {
+        try {
+          const u = await slack("/users.info", { user: uid });
+          userMap[uid] = u.user?.real_name ?? u.user?.name ?? uid;
+        } catch { userMap[uid] = uid; }
+      }));
+
+      const messages = (histData.messages ?? []).map((m: {
+        text: string; ts: string; user?: string;
+      }) => ({
+        text: m.text,
+        user: m.user ? (userMap[m.user] ?? m.user) : "bot",
+        timestamp: new Date(parseFloat(m.ts) * 1000).toISOString(),
+      }));
+      return JSON.stringify({ channel: channel.name, messages });
+    }
+    case "send_slack_message": {
+      const target = input.channel as string;
+      let channelId = target;
+
+      // If it looks like an email, find the user's DM channel
+      if (target.includes("@")) {
+        const usersData = await slack("/users.lookupByEmail", { email: target });
+        const userId = usersData.user?.id;
+        if (!userId) return `Utilisateur avec l'email "${target}" introuvable dans Slack.`;
+        const dmData = await slackPost("/conversations.open", { users: userId });
+        channelId = dmData.channel?.id;
+      } else {
+        // Resolve channel name → ID
+        const channelsData = await slack("/conversations.list", { limit: "200", types: "public_channel,private_channel" });
+        const ch = (channelsData.channels ?? []).find(
+          (c: { name: string; id: string }) => c.name === target.replace("#", "")
+        );
+        if (!ch) return `Canal "${target}" introuvable.`;
+        channelId = ch.id;
+      }
+
+      await slackPost("/chat.postMessage", {
+        channel: channelId,
+        text: input.message as string,
+      });
+      return `Message envoyé dans "${target}".`;
+    }
     default:
       return "Outil inconnu.";
   }
@@ -318,7 +480,21 @@ export async function POST(req: NextRequest) {
 
   const client = new Anthropic({ apiKey: claudeApiKey });
 
-  const { messages, customPrompt } = await req.json();
+  // Fetch user's personal prompt from DB (fallback to default file)
+  let systemPrompt: string;
+  if (process.env.SUPABASE_URL) {
+    const { data: userData } = await db
+      .from("users")
+      .select("user_prompt")
+      .eq("id", user.id)
+      .single();
+    systemPrompt = userData?.user_prompt ?? getDefaultPrompt();
+  } else {
+    systemPrompt = getDefaultPrompt();
+  }
+
+  const { messages, model: requestedModel } = await req.json();
+  const model = requestedModel ?? "claude-haiku-4-5";
 
   const encoder = new TextEncoder();
 
@@ -329,16 +505,15 @@ export async function POST(req: NextRequest) {
 
       try {
         let currentMessages: Anthropic.MessageParam[] = messages;
+        let totalInputTokens = 0;
+        let totalOutputTokens = 0;
 
         // Agentic loop
         while (true) {
           const apiStream = client.messages.stream({
-            model: "claude-haiku-4-5",
+            model,
             max_tokens: 4096,
-            system: customPrompt ?? `Tu es Coachello Intelligence, l'assistant IA de l'équipe commerciale de Coachello.
-Tu as accès en temps réel aux données HubSpot CRM via tes outils (contacts, deals, entreprises).
-Quand une question porte sur des données commerciales, utilise systématiquement tes outils pour récupérer les vraies données.
-Réponds en français, de façon concise et orientée action. Formate les listes avec des tirets.`,
+            system: systemPrompt,
             tools,
             messages: currentMessages,
           });
@@ -347,9 +522,25 @@ Réponds en français, de façon concise et orientée action. Formate les listes
           apiStream.on("text", (delta) => send({ type: "text", text: delta }));
 
           const message = await apiStream.finalMessage();
+          totalInputTokens += message.usage.input_tokens;
+          totalOutputTokens += message.usage.output_tokens;
 
           if (message.stop_reason === "end_turn") {
+            // Send full message history (with tool calls) back to client for next turn
+            currentMessages = [...currentMessages, { role: "assistant", content: message.content }];
+            send({ type: "history", messages: currentMessages });
             send({ type: "done" });
+            // Log usage asynchronously (fire-and-forget)
+            if (process.env.SUPABASE_URL) {
+              void Promise.resolve(
+                db.from("usage_logs").insert({
+                  user_id: user.id,
+                  model,
+                  input_tokens: totalInputTokens,
+                  output_tokens: totalOutputTokens,
+                })
+              );
+            }
             break;
           }
 

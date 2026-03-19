@@ -3,6 +3,25 @@
 import { useState } from "react";
 import { SetKeyDialog } from "./set-key-dialog";
 
+function formatCost(usd: number): string {
+  if (usd === 0) return "—";
+  if (usd < 0.01) return "< $0.01";
+  return `$${usd.toFixed(2)}`;
+}
+
+function formatTokens(n: number): string {
+  if (n === 0) return "—";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return String(n);
+}
+
+interface UsageStat {
+  input: number;
+  output: number;
+  costUsd: number;
+}
+
 interface User {
   id: string;
   email: string;
@@ -10,6 +29,8 @@ interface User {
   created_at: string;
   is_admin: boolean;
   claude_key_active: boolean;
+  usageTotal: UsageStat;
+  usageMonth: UsageStat;
 }
 
 export function UsersTable({ users }: { users: User[] }) {
@@ -57,6 +78,18 @@ export function UsersTable({ users }: { users: User[] }) {
               >
                 Clé Claude
               </th>
+              <th
+                className="text-left px-4 py-3 font-medium"
+                style={{ color: "#888" }}
+              >
+                Ce mois
+              </th>
+              <th
+                className="text-left px-4 py-3 font-medium"
+                style={{ color: "#888" }}
+              >
+                Total
+              </th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -100,6 +133,22 @@ export function UsersTable({ users }: { users: User[] }) {
                     </span>
                   )}
                 </td>
+                <td className="px-4 py-3">
+                  <span className="text-xs" style={{ color: "#555" }}>
+                    {formatTokens(user.usageMonth.input + user.usageMonth.output)}
+                  </span>
+                  <span className="text-xs ml-1.5" style={{ color: "#aaa" }}>
+                    {formatCost(user.usageMonth.costUsd)}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <span className="text-xs" style={{ color: "#555" }}>
+                    {formatTokens(user.usageTotal.input + user.usageTotal.output)}
+                  </span>
+                  <span className="text-xs ml-1.5" style={{ color: "#aaa" }}>
+                    {formatCost(user.usageTotal.costUsd)}
+                  </span>
+                </td>
                 <td className="px-4 py-3 text-right">
                   <button
                     onClick={() => setSelectedUser(user)}
@@ -122,7 +171,7 @@ export function UsersTable({ users }: { users: User[] }) {
             {localUsers.length === 0 && (
               <tr>
                 <td
-                  colSpan={4}
+                  colSpan={6}
                   className="px-4 py-8 text-center text-sm"
                   style={{ color: "#aaa" }}
                 >

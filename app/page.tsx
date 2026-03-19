@@ -1,21 +1,37 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ArrowUp, Settings2 } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 
 
 type Message = { role: "user" | "assistant"; content: string };
-type ApiMessage = { role: "user" | "assistant"; content: string };
+// Full Anthropic message history including tool calls — kept in sync with the API
+type ApiMessage = { role: "user" | "assistant"; content: unknown };
 
 export default function IntelligencePage() {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [apiHistory, setApiHistory] = useState<ApiMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [streamingText, setStreamingText] = useState("");
-  const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [toolSteps, setToolSteps] = useState<string[]>([]);
+
+  const TOOL_LABELS: Record<string, string> = {
+    search_contacts:         "Recherche de contacts…",
+    search_deals:            "Recherche de deals…",
+    get_deals:               "Chargement du pipeline…",
+    get_companies:           "Chargement des entreprises…",
+    get_contact_details:     "Détails du contact…",
+    get_contact_activity:    "Historique des échanges…",
+    get_deal_activity:       "Historique du deal…",
+    get_deal_contacts:       "Contacts associés au deal…",
+    search_slack:            "Recherche Slack…",
+    get_slack_channel_history: "Lecture du canal Slack…",
+    send_slack_message:      "Envoi du message Slack…",
+  };
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -38,26 +54,24 @@ export default function IntelligencePage() {
     setMessages(newMessages);
     setLoading(true);
     setStreamingText("");
-    setActiveTool(null);
+    setToolSteps([]);
 
     try {
-      const apiMessages: ApiMessage[] = newMessages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      // Use full API history (with tool calls) if available, otherwise build from display messages
+      const apiMessages: ApiMessage[] = apiHistory.length > 0
+        ? [...apiHistory, { role: "user", content: text }]
+        : newMessages.map((m) => ({ role: m.role, content: m.content }));
 
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: apiMessages,
-          customPrompt: localStorage.getItem("coachello_prompt_guide") ?? undefined,
-        }),
+        body: JSON.stringify({ messages: apiMessages }),
       });
 
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let fullText = "";
+      let latestHistory: ApiMessage[] | null = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -73,13 +87,15 @@ export default function IntelligencePage() {
             if (event.type === "text") {
               fullText += event.text;
               setStreamingText(fullText);
-              setActiveTool(null);
             } else if (event.type === "tool") {
-              setActiveTool(event.name);
+              setToolSteps((prev) => [...prev, TOOL_LABELS[event.name] ?? event.name]);
+            } else if (event.type === "history") {
+              latestHistory = event.messages;
             } else if (event.type === "done") {
               setMessages((prev) => [...prev, { role: "assistant", content: fullText }]);
+              if (latestHistory) setApiHistory(latestHistory);
               setStreamingText("");
-              setActiveTool(null);
+              setToolSteps([]);
               setLoading(false);
             } else if (event.type === "error") {
               setMessages((prev) => [...prev, { role: "assistant", content: `Erreur : ${event.message}` }]);
@@ -104,19 +120,6 @@ export default function IntelligencePage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Top bar */}
-      <div className="flex justify-end px-4 pt-3">
-        <Link
-          href="/prompt"
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors"
-          style={{ borderColor: "#e5e5e5", color: "#aaa" }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "#f01563"; e.currentTarget.style.borderColor = "#f01563"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = "#aaa"; e.currentTarget.style.borderColor = "#e5e5e5"; }}
-        >
-          <Settings2 size={12} />
-          Guide de réponse
-        </Link>
-      </div>
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto px-6 py-8">
         {messages.length === 0 ? (
@@ -140,6 +143,28 @@ export default function IntelligencePage() {
                   {q}
                 </button>
               ))}
+            </div>
+            <Link
+              href="/prompt"
+              className="text-xs px-4 py-2 rounded-lg transition-opacity"
+              style={{ background: "#f01563", color: "#fff" }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+            >
+              Guide de réponse
+            </Link>
+            {/* Advice cards */}
+            <div className="w-full max-w-xl flex flex-col gap-2 mt-2">
+              <div
+                className="rounded-xl px-5 py-3 text-left"
+                style={{ background: "#fff8f0", border: "1px solid #ffe4c4" }}
+              >
+                <span className="text-xs font-semibold" style={{ color: "#c2410c" }}>Arthur&apos;s advice — </span>
+                <span className="text-xs leading-relaxed" style={{ color: "#78350f" }}>
+                  For best results, tell the bot where to look (HubSpot, Drive, or Slack) and be specific about what you need—stages, timelines, deals, or contacts.
+                  <br />Use the <Link href="/prompt" className="underline underline-offset-2">prompt guide</Link> to tailor it to how you sell.
+                </span>
+              </div>
             </div>
           </div>
         ) : (
@@ -177,18 +202,27 @@ export default function IntelligencePage() {
               </div>
             )}
             {/* Loading / tool indicator */}
-            {loading && !streamingText && (
-              <div className="flex justify-start items-center gap-3">
-                <Image src="/logo.png" alt="AI" width={28} height={28} quality={100} className="rounded-lg shrink-0" />
-                <div className="flex items-center gap-2 px-4 py-3 rounded-2xl" style={{ background: "#f5f5f5" }}>
-                  {activeTool ? (
-                    <span className="text-xs" style={{ color: "#888" }}>
-                      Recherche HubSpot…
-                    </span>
-                  ) : (
-                    [0, 1, 2].map((i) => (
-                      <div key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: "#f01563", animationDelay: `${i * 0.15}s` }} />
-                    ))
+            {loading && (
+              <div className="flex justify-start items-start gap-3">
+                <Image src="/logo.png" alt="AI" width={28} height={28} quality={100} className="rounded-lg shrink-0 mt-0.5" />
+                <div className="px-4 py-3 rounded-2xl space-y-1.5" style={{ background: "#f5f5f5" }}>
+                  {toolSteps.map((step, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="text-xs" style={{ color: "#16a34a" }}>✓</span>
+                      <span className="text-xs" style={{ color: "#888" }}>{step}</span>
+                    </div>
+                  ))}
+                  {!streamingText && (
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-1">
+                        {[0, 1, 2].map((i) => (
+                          <div key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: "#f01563", animationDelay: `${i * 0.15}s` }} />
+                        ))}
+                      </div>
+                      {toolSteps.length > 0 && (
+                        <span className="text-xs" style={{ color: "#bbb" }}>en cours…</span>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
