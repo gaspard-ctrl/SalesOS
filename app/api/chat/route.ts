@@ -70,6 +70,20 @@ async function slack(path: string, params?: Record<string, string>) {
   return data;
 }
 
+// Fetch all channels with pagination (Slack caps each page at 1000)
+async function slackAllChannels(): Promise<{ name: string; id: string }[]> {
+  const all: { name: string; id: string }[] = [];
+  let cursor: string | undefined;
+  do {
+    const params: Record<string, string> = { limit: "1000", types: "public_channel,private_channel" };
+    if (cursor) params.cursor = cursor;
+    const data = await slack("/conversations.list", params);
+    all.push(...(data.channels ?? []));
+    cursor = data.response_metadata?.next_cursor || undefined;
+  } while (cursor);
+  return all;
+}
+
 
 async function slackPost(path: string, body: Record<string, unknown>) {
   const res = await fetch(`https://slack.com/api${path}`, {
@@ -365,8 +379,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       const perChannelLimit = String(input.limit ?? 50);
 
       // Resolve channel names → IDs
-      const channelsData = await slack("/conversations.list", { limit: "200", types: "public_channel,private_channel,mpim" });
-      const allChannels: { name: string; id: string }[] = channelsData.channels ?? [];
+      const allChannels = await slackAllChannels();
       const channelMap = new Map(allChannels.map((c) => [c.name, c.id]));
 
       const results: { channel: string; text: string; user: string; timestamp: string }[] = [];
@@ -399,8 +412,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
     }
     case "get_slack_channel_history": {
       // Resolve channel name → ID
-      const channelsData = await slack("/conversations.list", { limit: "200", types: "public_channel,private_channel" });
-      const allChannels: { name: string; id: string }[] = channelsData.channels ?? [];
+      const allChannels = await slackAllChannels();
       const searched = (input.channel_name as string).replace("#", "");
       const channel = allChannels.find((c) => c.name === searched);
       if (!channel) {
@@ -447,10 +459,8 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
         channelId = dmData.channel?.id;
       } else {
         // Resolve channel name → ID
-        const channelsData = await slack("/conversations.list", { limit: "200", types: "public_channel,private_channel" });
-        const ch = (channelsData.channels ?? []).find(
-          (c: { name: string; id: string }) => c.name === target.replace("#", "")
-        );
+        const allChs = await slackAllChannels();
+        const ch = allChs.find((c) => c.name === target.replace("#", ""));
         if (!ch) return `Canal "${target}" introuvable.`;
         channelId = ch.id;
       }
