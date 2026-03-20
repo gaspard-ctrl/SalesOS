@@ -1,0 +1,84 @@
+import { NextRequest, NextResponse } from "next/server";
+import Anthropic from "@anthropic-ai/sdk";
+import { getAuthenticatedUser } from "@/lib/auth";
+import { db } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
+
+interface ContactInfo {
+  firstName: string;
+  lastName: string;
+  email: string;
+  jobTitle: string;
+  company: string;
+  industry: string;
+  lifecyclestage: string;
+  crmSummary: string;
+}
+
+export async function POST(req: NextRequest) {
+  const user = await getAuthenticatedUser();
+  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+
+  const { contactInfo, recentNews, companyContext, coachingNeed, angle } = await req.json() as {
+    contactInfo: ContactInfo;
+    recentNews?: string;
+    companyContext?: string;
+    coachingNeed?: string;
+    angle?: string;
+  };
+
+  // Fetch the user's personal prospection guide from DB
+  const { data } = await db.from("users").select("prospection_guide").eq("id", user.id).maybeSingle();
+  const guide = data?.prospection_guide ?? "";
+
+  const prospectBlock = [
+    `Nom : ${contactInfo.firstName} ${contactInfo.lastName}`,
+    `Email : ${contactInfo.email}`,
+    `Poste : ${contactInfo.jobTitle || "—"}`,
+    `Entreprise : ${contactInfo.company || "—"}`,
+    `Secteur : ${contactInfo.industry || "—"}`,
+    `Statut CRM : ${contactInfo.lifecyclestage || "—"}`,
+    contactInfo.crmSummary ? `Historique CRM :\n${contactInfo.crmSummary}` : null,
+    recentNews ? `Actualité récente / contexte externe :\n${recentNews}` : null,
+    companyContext ? `Contexte de l'entreprise :\n${companyContext}` : null,
+    coachingNeed ? `Pourquoi pourrait-il avoir besoin de coaching :\n${coachingNeed}` : null,
+    angle ? `Angle d'attaque / message clé :\n${angle}` : null,
+  ].filter(Boolean).join("\n\n");
+
+  const systemPrompt = [
+    "Tu es un expert en prospection B2B pour Coachello, une entreprise de coaching professionnel.",
+    "Tu rédiges des emails de prospection ultra-personnalisés, humains et percutants.",
+    "L'email doit sonner vrai, pas comme un template générique.",
+    "Réponds UNIQUEMENT en JSON valide avec exactement ces deux clés : { \"subject\": \"...\", \"body\": \"...\" }",
+    "Le body doit être en texte brut (pas de HTML, pas de markdown).",
+    guide ? `\n---\nGUIDE DE PROSPECTION (exemples et instructions) :\n${guide}` : "",
+  ].filter(Boolean).join("\n");
+
+  const userPrompt = `Voici les informations sur le prospect :\n\n${prospectBlock}\n\nRédige un email de prospection personnalisé pour cette personne.`;
+
+  const client = new Anthropic();
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 1024,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+
+  const raw = message.content[0].type === "text" ? message.content[0].text : "";
+
+  let subject = "";
+  let body = "";
+  try {
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      subject = parsed.subject ?? "";
+      body = parsed.body ?? "";
+    }
+  } catch {
+    body = raw;
+  }
+
+  return NextResponse.json({ subject, body });
+}
