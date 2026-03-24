@@ -15,6 +15,7 @@ export async function GET() {
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/gmail.send",
       "https://www.googleapis.com/auth/gmail.compose",
+      "https://www.googleapis.com/auth/calendar.readonly",
       "openid",
       "email",
       "profile",
