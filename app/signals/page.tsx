@@ -47,6 +47,7 @@ interface SelectedContact {
   lifecyclestage: string;
   source: "hubspot" | "web";
   linkedin_url?: string | null;
+  crmSummary?: string;
 }
 
 interface ContactDetails {
@@ -356,7 +357,7 @@ export default function SignalsPage() {
             company: selectedContact.company,
             industry: selectedContact.industry,
             lifecyclestage: selectedContact.lifecyclestage,
-            crmSummary: "",
+            crmSummary: selectedContact.crmSummary ?? "",
           },
           recentNews: signalText,
           companyContext: contextText,
@@ -903,6 +904,17 @@ export default function SignalsPage() {
                   className="w-full text-xs py-2 rounded-xl font-medium transition-colors"
                   style={{ background: "#f01563", color: "#fff" }}
                   onClick={() => {
+                    const crmSummary = contactDetails.engagements.length > 0
+                      ? contactDetails.engagements.slice(0, 8).map((e) => {
+                          const date = new Date(e.date).toLocaleDateString("fr-FR");
+                          const lines = [
+                            `[${engagementLabel(e.type)} — ${date}${e.duration ? ` — ${e.duration} min` : ""}]`,
+                            e.subject ? `Objet : ${e.subject}` : null,
+                            e.body ? e.body : null,
+                          ].filter(Boolean).join("\n");
+                          return lines;
+                        }).join("\n\n")
+                      : "";
                     setSelectedContact({
                       firstName: contactDetails.firstName,
                       lastName: contactDetails.lastName,
@@ -912,6 +924,7 @@ export default function SignalsPage() {
                       industry: contactDetails.industry,
                       lifecyclestage: contactDetails.lifecyclestage,
                       source: "hubspot",
+                      crmSummary,
                     });
                     setContactDetails(null);
                   }}

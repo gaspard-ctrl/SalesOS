@@ -8,6 +8,7 @@ import Image from "next/image";
 
 const nav = [
   { href: "/", label: "Coachello Intelligence" },
+  { href: "/briefing", label: "Briefing" },
   { href: "/prospecting", label: "Prospection" },
   { href: "/deals", label: "Deals" },
   { href: "/competitive", label: "Competition" },

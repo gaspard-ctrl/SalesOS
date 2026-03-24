@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
       .map((e) => ({
         type: e.engagement.type,
         date: new Date(e.engagement.createdAt).toISOString(),
-        body: e.metadata.body?.slice(0, 300) ?? null,
+        body: e.metadata.body?.slice(0, 800) ?? null,
         subject: e.metadata.subject ?? null,
         duration: e.metadata.durationMilliseconds
           ? Math.round(e.metadata.durationMilliseconds / 60000)
