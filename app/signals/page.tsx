@@ -301,9 +301,7 @@ export default function SignalsPage() {
     setQuery(signal.company_name);
     setHsContacts([]);
     setWebContacts([]);
-    // Launch both searches + context in parallel
     searchHubSpot(signal.company_name);
-    searchWeb(signal.company_name);
     loadCompanyContext(signal.company_name);
   }
 
@@ -543,16 +541,18 @@ export default function SignalsPage() {
       {/* ── CENTER: Contacts & Context ─────────────────────────────────────── */}
       <div className="flex flex-col flex-1 min-w-0 relative">
         {/* Background icon */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage: "url('/icon.png')",
-            backgroundRepeat: "no-repeat",
-            backgroundPosition: "center center",
-            backgroundSize: "460px 460px",
-            opacity: 0.10,
-          }}
-        />
+        {!searching && !searchingWeb && !loadingContext && !companyContext && hsContacts.length === 0 && webContacts.length === 0 && (
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: "url('/icon.png')",
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "center center",
+              backgroundSize: "600px 600px",
+              opacity: 0.10,
+            }}
+          />
+        )}
         {activeSignal && (
           <div
             className="flex items-center gap-2 px-4 py-2 text-xs border-b"
@@ -598,7 +598,7 @@ export default function SignalsPage() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4" style={{ position: "relative", zIndex: 1 }}>
           {/* Company context */}
           {(loadingContext || companyContext) && (
             <div className="rounded-xl border p-4" style={{ borderColor: "#e5e5e5", background: "#fff" }}>
@@ -659,6 +659,20 @@ export default function SignalsPage() {
             </div>
           )}
 
+          {/* Web search trigger */}
+          {!searchingWeb && webContacts.length === 0 && query && (
+            <button
+              onClick={() => searchWeb(query)}
+              className="w-full flex items-center justify-center gap-1.5 text-xs py-2 rounded-xl border transition-colors"
+              style={{ borderColor: "#e5e5e5", color: "#555", background: "#fafafa" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#f5f5f5"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#fafafa"; }}
+            >
+              <Globe size={12} />
+              Chercher sur le web
+            </button>
+          )}
+
           {/* Web contacts */}
           {(searchingWeb || webContacts.length > 0) && (
             <div>
@@ -703,9 +717,9 @@ export default function SignalsPage() {
           {/* Empty state */}
           {!searching && !searchingWeb && !loadingContext && !companyContext && hsContacts.length === 0 && webContacts.length === 0 && (
             <div className="flex flex-col items-center justify-center h-40 gap-2 text-center">
-              <span className="text-3xl">🔍</span>
-              <p className="text-xs" style={{ color: "#aaa" }}>
-                Cliquez sur &ldquo;Prospecter →&rdquo; sur un signal pour lancer la recherche.
+              <span className="text-3xl"></span>
+              <p className="text-m" style={{ color: "#f30000" }}>
+                
               </p>
             </div>
           )}
@@ -852,27 +866,59 @@ export default function SignalsPage() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-end"
           style={{ background: "rgba(0,0,0,0.3)" }}
-          onClick={(e) => { if (e.target === e.currentTarget) { setContactDetails(null); } }}
+          onClick={(e) => { if (e.target === e.currentTarget) setContactDetails(null); }}
         >
-          <div
-            className="h-full overflow-y-auto flex flex-col shadow-2xl"
-            style={{ width: 420, background: "#fff" }}
-          >
+          <div className="h-full overflow-y-auto flex flex-col shadow-2xl" style={{ width: 440, background: "#fff" }}>
+
             {/* Header */}
-            <div className="px-5 py-4 border-b flex items-start justify-between" style={{ borderColor: "#eee" }}>
-              <div>
-                <h3 className="text-sm font-semibold" style={{ color: "#111" }}>
-                  {contactDetails ? `${contactDetails.firstName} ${contactDetails.lastName}` : "Chargement..."}
-                </h3>
-                {contactDetails && (
-                  <p className="text-xs mt-0.5" style={{ color: "#888" }}>
-                    {contactDetails.jobTitle}{contactDetails.company ? ` · ${contactDetails.company}` : ""}
-                  </p>
-                )}
+            <div className="px-5 pt-5 pb-4 border-b" style={{ borderColor: "#eee" }}>
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center text-base font-bold shrink-0 uppercase"
+                    style={{ background: "#fde8ef", color: "#f01563" }}
+                  >
+                    {contactDetails
+                      ? (contactDetails.firstName?.[0] ?? "") + (contactDetails.lastName?.[0] ?? "")
+                      : "…"}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold" style={{ color: "#111" }}>
+                      {contactDetails ? `${contactDetails.firstName} ${contactDetails.lastName}` : "Chargement..."}
+                    </h3>
+                    {contactDetails && (
+                      <p className="text-xs mt-0.5" style={{ color: "#888" }}>
+                        {contactDetails.jobTitle}{contactDetails.company ? ` · ${contactDetails.company}` : ""}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <button onClick={() => setContactDetails(null)}>
+                  <X size={16} style={{ color: "#aaa" }} />
+                </button>
               </div>
-              <button onClick={() => setContactDetails(null)}>
-                <X size={16} style={{ color: "#aaa" }} />
-              </button>
+
+              {contactDetails && (
+                <button
+                  className="w-full text-xs py-2 rounded-xl font-medium transition-colors"
+                  style={{ background: "#f01563", color: "#fff" }}
+                  onClick={() => {
+                    setSelectedContact({
+                      firstName: contactDetails.firstName,
+                      lastName: contactDetails.lastName,
+                      email: contactDetails.email,
+                      jobTitle: contactDetails.jobTitle,
+                      company: contactDetails.company,
+                      industry: contactDetails.industry,
+                      lifecyclestage: contactDetails.lifecyclestage,
+                      source: "hubspot",
+                    });
+                    setContactDetails(null);
+                  }}
+                >
+                  Rédiger → pour ce contact
+                </button>
+              )}
             </div>
 
             {loadingDetails ? (
@@ -883,17 +929,21 @@ export default function SignalsPage() {
               <div className="flex-1 px-5 py-4 space-y-5">
 
                 {/* Contact info */}
-                <div className="space-y-2">
+                <div className="rounded-xl p-3 space-y-2.5" style={{ background: "#fafafa", border: "1px solid #f0f0f0" }}>
                   {contactDetails.email && (
-                    <div className="flex items-center gap-2 text-xs" style={{ color: "#555" }}>
+                    <div className="flex items-center gap-2">
                       <Mail size={12} style={{ color: "#aaa" }} />
-                      {contactDetails.email}
+                      <a href={`mailto:${contactDetails.email}`} className="text-xs hover:underline" style={{ color: "#555" }}>
+                        {contactDetails.email}
+                      </a>
                     </div>
                   )}
                   {contactDetails.phone && (
-                    <div className="flex items-center gap-2 text-xs" style={{ color: "#555" }}>
+                    <div className="flex items-center gap-2">
                       <Phone size={12} style={{ color: "#aaa" }} />
-                      {contactDetails.phone}
+                      <a href={`tel:${contactDetails.phone}`} className="text-xs" style={{ color: "#555" }}>
+                        {contactDetails.phone}
+                      </a>
                     </div>
                   )}
                   {(contactDetails.city || contactDetails.country) && (
@@ -910,39 +960,43 @@ export default function SignalsPage() {
                   )}
                 </div>
 
-                {/* CRM status */}
-                <div className="flex gap-2 flex-wrap">
-                  {contactDetails.lifecyclestage && (
-                    <span className="text-[10px] px-2 py-1 rounded-full" style={{ background: "#f0fdf4", color: "#166534" }}>
-                      {contactDetails.lifecyclestage}
-                    </span>
-                  )}
-                  {contactDetails.leadStatus && (
-                    <span className="text-[10px] px-2 py-1 rounded-full" style={{ background: "#f1f5f9", color: "#475569" }}>
-                      {contactDetails.leadStatus}
-                    </span>
-                  )}
-                  {contactDetails.industry && (
-                    <span className="text-[10px] px-2 py-1 rounded-full" style={{ background: "#fef3c7", color: "#92400e" }}>
-                      {contactDetails.industry}
-                    </span>
-                  )}
-                </div>
+                {/* CRM badges */}
+                {(contactDetails.lifecyclestage || contactDetails.leadStatus || contactDetails.industry) && (
+                  <div className="flex gap-1.5 flex-wrap">
+                    {contactDetails.lifecyclestage && (
+                      <span className="text-[10px] px-2.5 py-1 rounded-full font-medium" style={{ background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0" }}>
+                        {contactDetails.lifecyclestage}
+                      </span>
+                    )}
+                    {contactDetails.leadStatus && (
+                      <span className="text-[10px] px-2.5 py-1 rounded-full font-medium" style={{ background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0" }}>
+                        {contactDetails.leadStatus}
+                      </span>
+                    )}
+                    {contactDetails.industry && (
+                      <span className="text-[10px] px-2.5 py-1 rounded-full font-medium" style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}>
+                        {contactDetails.industry}
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {/* Deals */}
                 {contactDetails.deals.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold mb-2" style={{ color: "#111" }}>Deals associés</p>
+                    <p className="text-xs font-semibold mb-2" style={{ color: "#111" }}>
+                      Deals associés ({contactDetails.deals.length})
+                    </p>
                     <div className="space-y-2">
                       {contactDetails.deals.map((d) => (
-                        <div key={d.id} className="p-3 rounded-xl border" style={{ borderColor: "#e5e5e5" }}>
-                          <p className="text-xs font-medium" style={{ color: "#111" }}>{d.name}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: "#dbeafe", color: "#1e40af" }}>
+                        <div key={d.id} className="p-3 rounded-xl" style={{ border: "1px solid #e5e5e5", borderLeft: "3px solid #f01563" }}>
+                          <p className="text-xs font-medium mb-1.5" style={{ color: "#111" }}>{d.name}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: "#dbeafe", color: "#1e40af" }}>
                               {d.stage}
                             </span>
                             {d.amount && (
-                              <span className="text-[10px]" style={{ color: "#888" }}>
+                              <span className="text-xs font-semibold" style={{ color: "#f01563" }}>
                                 {Number(d.amount).toLocaleString("fr-FR")} €
                               </span>
                             )}
@@ -958,34 +1012,42 @@ export default function SignalsPage() {
                   </div>
                 )}
 
-                {/* Engagement history */}
+                {/* Engagement timeline */}
                 <div>
-                  <p className="text-xs font-semibold mb-2" style={{ color: "#111" }}>
+                  <p className="text-xs font-semibold mb-3" style={{ color: "#111" }}>
                     Historique ({contactDetails.engagements.length})
                   </p>
                   {contactDetails.engagements.length === 0 ? (
                     <p className="text-xs" style={{ color: "#aaa" }}>Aucun historique trouvé</p>
                   ) : (
-                    <div className="space-y-2">
+                    <div>
                       {contactDetails.engagements.map((e, i) => (
-                        <div key={i} className="p-3 rounded-xl border" style={{ borderColor: "#f0f0f0" }}>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={engagementStyle(e.type)}>
-                              {engagementLabel(e.type)}
-                            </span>
-                            <span className="text-[10px]" style={{ color: "#aaa" }}>
-                              {new Date(e.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
-                            </span>
-                            {e.duration !== null && (
-                              <span className="text-[10px]" style={{ color: "#aaa" }}>{e.duration} min</span>
+                        <div key={i} className="flex gap-3 pb-4">
+                          <div className="flex flex-col items-center">
+                            <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: engagementStyle(e.type).color }} />
+                            {i < contactDetails.engagements.length - 1 && (
+                              <div className="w-px flex-1 mt-1" style={{ background: "#e5e5e5" }} />
                             )}
                           </div>
-                          {e.subject && (
-                            <p className="text-xs font-medium mb-0.5" style={{ color: "#333" }}>{e.subject}</p>
-                          )}
-                          {e.body && (
-                            <p className="text-xs leading-relaxed" style={{ color: "#666", whiteSpace: "pre-wrap" }}>{e.body}</p>
-                          )}
+                          <div className="flex-1 min-w-0 pb-0.5">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={engagementStyle(e.type)}>
+                                {engagementLabel(e.type)}
+                              </span>
+                              <span className="text-[10px]" style={{ color: "#aaa" }}>
+                                {new Date(e.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
+                              </span>
+                              {e.duration !== null && (
+                                <span className="text-[10px]" style={{ color: "#aaa" }}>{e.duration} min</span>
+                              )}
+                            </div>
+                            {e.subject && (
+                              <p className="text-xs font-medium mb-0.5" style={{ color: "#333" }}>{e.subject}</p>
+                            )}
+                            {e.body && (
+                              <p className="text-xs leading-relaxed" style={{ color: "#777", whiteSpace: "pre-wrap" }}>{e.body}</p>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
