@@ -6,6 +6,7 @@ import { GmailConnect } from "./_components/gmail-connect";
 import { CalendarStatus } from "./_components/calendar-status";
 import { GuideEditor } from "./_components/guide-editor";
 import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/default-guide";
+import { DEFAULT_BRIEFING_GUIDE } from "@/lib/default-briefing-guide";
 
 async function getIntegrationStatus(userId: string) {
   const [keyRes, gmailRes] = await Promise.all([
@@ -36,7 +37,7 @@ export default async function SettingsPage() {
 
   const { data: userData } = await db
     .from("users")
-    .select("prospection_guide")
+    .select("prospection_guide, briefing_guide")
     .eq("id", user.id)
     .single();
 
@@ -144,6 +145,23 @@ export default async function SettingsPage() {
           <GuideEditor
             initialGuide={userData?.prospection_guide ?? null}
             defaultGuide={DEFAULT_PROSPECTION_GUIDE}
+          />
+        </div>
+      </div>
+
+      {/* Briefing guide */}
+      <div className="mt-8">
+        <h2 className="text-base font-semibold mb-1" style={{ color: "#111" }}>
+          Guide de briefing
+        </h2>
+        <p className="text-xs mb-4" style={{ color: "#888" }}>
+          Ce guide est utilisé par l&apos;IA pour préparer tes briefings pré-meeting. Indique le contexte Coachello, ce que tu veux mettre en avant, et le style d&apos;analyse attendu.
+        </p>
+        <div className="rounded-xl border p-5" style={{ borderColor: "#eeeeee", background: "#fff" }}>
+          <GuideEditor
+            initialGuide={userData?.briefing_guide ?? null}
+            defaultGuide={DEFAULT_BRIEFING_GUIDE}
+            endpoint="/api/settings/briefing-guide"
           />
         </div>
       </div>

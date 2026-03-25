@@ -4,6 +4,7 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
 import { logUsage } from "@/lib/log-usage";
+import { DEFAULT_BRIEFING_GUIDE } from "@/lib/default-briefing-guide";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -28,19 +29,19 @@ export async function POST(req: NextRequest) {
       };
     };
 
-    // ── Get Claude key ────────────────────────────────────────────────────────
+    // ── Get Claude key + briefing guide ───────────────────────────────────────
     let claudeApiKey: string;
+    let briefingGuide: string = DEFAULT_BRIEFING_GUIDE;
     if (process.env.SUPABASE_URL) {
-      const { data: keyRow } = await db
-        .from("user_keys")
-        .select("encrypted_key, iv, auth_tag, is_active")
-        .eq("user_id", user.id)
-        .eq("service", "claude")
-        .single();
-      if (!keyRow?.is_active) {
+      const [keyRes, userRes] = await Promise.all([
+        db.from("user_keys").select("encrypted_key, iv, auth_tag, is_active").eq("user_id", user.id).eq("service", "claude").single(),
+        db.from("users").select("briefing_guide").eq("id", user.id).single(),
+      ]);
+      if (!keyRes.data?.is_active) {
         return NextResponse.json({ error: "Clé Claude non configurée" }, { status: 402 });
       }
-      claudeApiKey = decrypt({ encryptedKey: keyRow.encrypted_key, iv: keyRow.iv, authTag: keyRow.auth_tag });
+      claudeApiKey = decrypt({ encryptedKey: keyRes.data.encrypted_key, iv: keyRes.data.iv, authTag: keyRes.data.auth_tag });
+      if (userRes.data?.briefing_guide) briefingGuide = userRes.data.briefing_guide;
     } else {
       claudeApiKey = process.env.ANTHROPIC_API_KEY ?? "";
     }
@@ -88,9 +89,12 @@ export async function POST(req: NextRequest) {
 
     const contextBlock = sections.join("\n\n");
 
-    const systemPrompt = `Tu prépares un briefing de réunion pour un commercial de Coachello (coaching professionnel B2B).
+    const systemPrompt = `${briefingGuide}
+
+---
+
+Tu prépares un briefing de réunion. Suis les instructions du guide ci-dessus.
 Tu reçois des données issues de HubSpot, Gmail, Slack et du web.
-Sois factuel et concis (3-4 phrases max par section), en français.
 Si tu manques de données pour une section, dis-le explicitement — ne fabrique rien.
 Réponds UNIQUEMENT en JSON valide avec exactement cette structure :
 {
