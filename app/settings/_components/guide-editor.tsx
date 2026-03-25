@@ -5,9 +5,11 @@ import { useState } from "react";
 export function GuideEditor({
   initialGuide,
   defaultGuide,
+  endpoint = "/api/settings/guide",
 }: {
   initialGuide: string | null;
   defaultGuide: string;
+  endpoint?: string;
 }) {
   const [guide, setGuide] = useState(initialGuide ?? defaultGuide);
   const [saving, setSaving] = useState(false);
@@ -17,7 +19,7 @@ export function GuideEditor({
   async function save() {
     setSaving(true);
     try {
-      await fetch("/api/settings/guide", {
+      await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ guide }),
@@ -31,7 +33,7 @@ export function GuideEditor({
 
   async function resetToDefault() {
     setGuide(defaultGuide);
-    await fetch("/api/settings/guide", {
+    await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ guide: null }),
