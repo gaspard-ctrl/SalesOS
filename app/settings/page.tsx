@@ -7,6 +7,9 @@ import { CalendarStatus } from "./_components/calendar-status";
 import { GuideEditor } from "./_components/guide-editor";
 import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/default-guide";
 import { DEFAULT_BRIEFING_GUIDE } from "@/lib/default-briefing-guide";
+import fs from "fs";
+import path from "path";
+
 
 async function getIntegrationStatus(userId: string) {
   const [keyRes, gmailRes] = await Promise.all([
@@ -35,11 +38,13 @@ export default async function SettingsPage() {
 
   const { claudeActive, gmailConnected } = await getIntegrationStatus(user.id);
 
-  const { data: userData } = await db
+  const { data: guides } = await db
     .from("users")
-    .select("prospection_guide, briefing_guide")
+    .select("user_prompt, prospection_guide, briefing_guide")
     .eq("id", user.id)
     .single();
+
+  const defaultBotGuide = fs.readFileSync(path.join(process.cwd(), "prompt-guide.txt"), "utf-8");
 
   return (
     <div className="p-8 max-w-2xl mx-auto">
@@ -133,37 +138,35 @@ export default async function SettingsPage() {
         />
       </div>
 
-      {/* Prospection guide */}
-      <div className="mt-8">
-        <h2 className="text-base font-semibold mb-1" style={{ color: "#111" }}>
-          Guide de prospection
-        </h2>
-        <p className="text-xs mb-4" style={{ color: "#888" }}>
-          Ce guide est utilisé par l&apos;IA pour générer tes emails dans Prospection et Market Intel. Personnalise-le avec ton style, tes personas cibles et tes exemples.
-        </p>
-        <div className="rounded-xl border p-5" style={{ borderColor: "#eeeeee", background: "#fff" }}>
-          <GuideEditor
-            initialGuide={userData?.prospection_guide ?? null}
-            defaultGuide={DEFAULT_PROSPECTION_GUIDE}
-          />
+      {/* Guides IA */}
+      <div className="mt-8 space-y-3">
+        <div>
+          <h2 className="text-base font-semibold" style={{ color: "#111" }}>Guides IA</h2>
+          <p className="text-xs mt-1" style={{ color: "#888" }}>
+            Personnalise les instructions données à Claude. Tes guides remplacent les défauts pour toi uniquement.
+          </p>
         </div>
-      </div>
-
-      {/* Briefing guide */}
-      <div className="mt-8">
-        <h2 className="text-base font-semibold mb-1" style={{ color: "#111" }}>
-          Guide de briefing
-        </h2>
-        <p className="text-xs mb-4" style={{ color: "#888" }}>
-          Ce guide est utilisé par l&apos;IA pour préparer tes briefings pré-meeting. Indique le contexte Coachello, ce que tu veux mettre en avant, et le style d&apos;analyse attendu.
-        </p>
-        <div className="rounded-xl border p-5" style={{ borderColor: "#eeeeee", background: "#fff" }}>
-          <GuideEditor
-            initialGuide={userData?.briefing_guide ?? null}
-            defaultGuide={DEFAULT_BRIEFING_GUIDE}
-            endpoint="/api/settings/briefing-guide"
-          />
-        </div>
+        <GuideEditor
+          initialGuide={guides?.user_prompt ?? null}
+          defaultGuide={defaultBotGuide}
+          endpoint="/api/settings/bot-guide"
+          title="Guide bot"
+          description="System prompt du chat Coachello Intelligence."
+        />
+        <GuideEditor
+          initialGuide={guides?.prospection_guide ?? null}
+          defaultGuide={DEFAULT_PROSPECTION_GUIDE}
+          endpoint="/api/settings/guide"
+          title="Guide de prospection"
+          description="Instructions pour générer les emails dans Prospection et Market Intel."
+        />
+        <GuideEditor
+          initialGuide={guides?.briefing_guide ?? null}
+          defaultGuide={DEFAULT_BRIEFING_GUIDE}
+          endpoint="/api/settings/briefing-guide"
+          title="Guide de briefing"
+          description="Instructions pour préparer les briefings pré-meeting."
+        />
       </div>
     </div>
   );
