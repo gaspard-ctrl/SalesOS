@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, KeyboardEvent } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Paperclip, Send, Save, X, Search, Loader2, Sparkles, RotateCcw, ChevronDown, ChevronRight } from "lucide-react";
+import { Paperclip, Send, Save, X, Search, Loader2, Sparkles, RotateCcw, ChevronDown, ChevronRight, Linkedin, Copy, Check } from "lucide-react";
 import Link from "next/link";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -22,6 +22,7 @@ interface SearchResult {
   leadStatus: string;
   employees: string;
   source: string;
+  linkedinUrl: string | null;
 }
 
 interface ContactDetails extends SearchResult {
@@ -208,6 +209,97 @@ function FilterSelect({ value, onChange, label, children }: {
   );
 }
 
+// ── ProspectCard ───────────────────────────────────────────────────────────
+
+function ProspectCard({ result: r, onSelect }: { result: SearchResult; onSelect: () => void }) {
+  const [msgState, setMsgState] = useState<"idle" | "loading" | "done">("idle");
+  const [msg, setMsg] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  async function generateMsg(e: React.MouseEvent) {
+    e.stopPropagation();
+    setMsgState("loading");
+    try {
+      const res = await fetch("/api/linkedin/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: `${r.firstName} ${r.lastName}`, jobTitle: r.jobTitle, company: r.company, industry: r.industry, lifecyclestage: r.lifecyclestage }),
+      });
+      const data = await res.json();
+      setMsg(data.message ?? "");
+      setMsgState("done");
+    } catch { setMsgState("idle"); }
+  }
+
+  async function copyMsg(e: React.MouseEvent) {
+    e.stopPropagation();
+    await navigator.clipboard.writeText(msg);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div
+      className="flex flex-col gap-2 p-3 rounded-xl border text-left transition-all cursor-pointer"
+      style={{ borderColor: "#e5e5e5", background: "#fff" }}
+      onClick={onSelect}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#f01563"; e.currentTarget.style.background = "#fff8fb"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#e5e5e5"; e.currentTarget.style.background = "#fff"; }}
+    >
+      {/* Avatar + name */}
+      <div className="flex items-center gap-2">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0" style={{ background: "#f01563", color: "#fff" }}>
+          {((r.firstName?.[0] ?? "") + (r.lastName?.[0] ?? "") || "?").toUpperCase().slice(0, 2)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs font-semibold truncate leading-tight" style={{ color: "#111" }}>{r.firstName} {r.lastName}</p>
+            {r.linkedinUrl && (
+              <a href={r.linkedinUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: "#0a66c2", flexShrink: 0 }}>
+                <Linkedin size={11} />
+              </a>
+            )}
+          </div>
+          {r.jobTitle && <p className="text-[10px] truncate leading-tight" style={{ color: "#888" }}>{r.jobTitle}</p>}
+        </div>
+      </div>
+
+      {r.company && (
+        <p className="text-[11px] font-medium truncate" style={{ color: "#555" }}>
+          {r.company}{r.city ? <span style={{ color: "#bbb" }}> · {r.city}</span> : null}
+        </p>
+      )}
+      {r.email && <p className="text-[10px] truncate" style={{ color: "#aaa" }}>{r.email}</p>}
+
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {r.lifecyclestage && <LifecycleBadge stage={r.lifecyclestage} />}
+        {r.industry && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: "#f5f5f5", color: "#999" }}>{r.industry}</span>}
+        {r.lastContacted && <span className="text-[10px] ml-auto" style={{ color: "#bbb" }}>{new Date(r.lastContacted).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}</span>}
+      </div>
+
+      {/* LinkedIn message */}
+      {r.linkedinUrl && msgState !== "done" && (
+        <button
+          onClick={generateMsg}
+          disabled={msgState === "loading"}
+          className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md border"
+          style={{ borderColor: "#e5e5e5", color: "#374151", background: "white", cursor: "pointer" }}
+        >
+          {msgState === "loading" ? <><Loader2 size={9} className="animate-spin" /> Génération…</> : <><Linkedin size={9} /> Message LinkedIn</>}
+        </button>
+      )}
+      {msgState === "done" && msg && (
+        <div className="relative p-2 rounded-lg text-[10px] leading-relaxed" style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#374151", paddingRight: 20 }} onClick={(e) => e.stopPropagation()}>
+          {msg}
+          <button onClick={copyMsg} className="absolute top-1.5 right-1.5" style={{ background: "none", border: "none", cursor: "pointer", color: copied ? "#16a34a" : "#9ca3af" }}>
+            {copied ? <Check size={10} /> : <Copy size={10} />}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────
 
 export default function ProspectingPage() {
@@ -272,6 +364,9 @@ export default function ProspectingPage() {
   const [savingGuide, setSavingGuide] = useState(false);
   const [savedGuide, setSavedGuide] = useState(false);
 
+  // Owner filter
+  const [ownerFilter, setOwnerFilter] = useState<"mine" | "all">("mine");
+
   // Mode toggle
   const [mode, setMode] = useState<"individual" | "bulk">("individual");
 
@@ -311,6 +406,8 @@ export default function ProspectingPage() {
       .then((r) => r.json())
       .then(({ connected }) => setGmailConnected(connected))
       .catch(() => setGmailConnected(false));
+    // Auto-detect HubSpot owner
+    fetch("/api/hubspot/auto-link-owner").catch(() => {});
   }, []);
 
   // Load guide content on mount
@@ -445,6 +542,7 @@ export default function ProspectingPage() {
     if (filterCompanySize) params.set("companysize", filterCompanySize);
     if (filterSource) params.set("source", filterSource);
     if (filterSort) params.set("sort", filterSort);
+    if (ownerFilter === "all") params.set("owner", "all");
     if (cursor) params.set("after", cursor);
     return `/api/prospection/search?${params.toString()}`;
   };
@@ -508,7 +606,7 @@ export default function ProspectingPage() {
   useEffect(() => {
     if (searchResults.length > 0 || searchError) search();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterLifecycle, filterIndustry, filterCountry, filterLeadStatus, filterContacted, filterCompanySize, filterSource, filterSort]);
+  }, [filterLifecycle, filterIndustry, filterCountry, filterLeadStatus, filterContacted, filterCompanySize, filterSource, filterSort, ownerFilter]);
 
   const selectContact = async (result: SearchResult) => {
     setLoadingDetails(true);
@@ -607,6 +705,7 @@ export default function ProspectingPage() {
     if (bulkFilterCompanySize) params.set("companysize", bulkFilterCompanySize);
     if (bulkFilterSource) params.set("source", bulkFilterSource);
     if (bulkFilterSort) params.set("sort", bulkFilterSort);
+    if (ownerFilter === "all") params.set("owner", "all");
     if (cursor) params.set("after", cursor);
     return params;
   };
@@ -1112,6 +1211,25 @@ export default function ProspectingPage() {
                   </p>
                 )}
 
+                {/* Owner toggle */}
+                <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "#e5e5e5", width: "fit-content" }}>
+                  {(["mine", "all"] as const).map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => { setOwnerFilter(v); }}
+                      className="px-3 py-1.5 text-xs font-medium transition-colors"
+                      style={{
+                        background: ownerFilter === v ? "#111827" : "#fff",
+                        color: ownerFilter === v ? "#fff" : "#6b7280",
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {v === "mine" ? "Mes contacts" : "Tous"}
+                    </button>
+                  ))}
+                </div>
+
                 {/* Filters */}
                 <div className="space-y-2">
                   <div className="flex gap-2 flex-wrap">
@@ -1208,68 +1326,7 @@ export default function ProspectingPage() {
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-2">
                       {searchResults.map((r) => (
-                        <button
-                          key={r.id}
-                          onClick={() => selectContact(r)}
-                          className="flex flex-col gap-2 p-3 rounded-xl border text-left transition-all"
-                          style={{ borderColor: "#e5e5e5", background: "#fff" }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = "#f01563";
-                            e.currentTarget.style.background = "#fff8fb";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = "#e5e5e5";
-                            e.currentTarget.style.background = "#fff";
-                          }}
-                        >
-                          {/* Avatar + name */}
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                              style={{ background: "#f01563", color: "#fff" }}
-                            >
-                              {((r.firstName?.[0] ?? "") + (r.lastName?.[0] ?? "") || "?").toUpperCase().slice(0, 2)}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-xs font-semibold truncate leading-tight" style={{ color: "#111" }}>
-                                {r.firstName} {r.lastName}
-                              </p>
-                              {r.jobTitle && (
-                                <p className="text-[10px] truncate leading-tight" style={{ color: "#888" }}>
-                                  {r.jobTitle}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Company */}
-                          {r.company && (
-                            <p className="text-[11px] font-medium truncate" style={{ color: "#555" }}>
-                              {r.company}
-                              {r.city ? <span style={{ color: "#bbb" }}> · {r.city}</span> : null}
-                            </p>
-                          )}
-
-                          {/* Email */}
-                          {r.email && (
-                            <p className="text-[10px] truncate" style={{ color: "#aaa" }}>{r.email}</p>
-                          )}
-
-                          {/* Bottom row */}
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {r.lifecyclestage && <LifecycleBadge stage={r.lifecyclestage} />}
-                            {r.industry && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: "#f5f5f5", color: "#999" }}>
-                                {r.industry}
-                              </span>
-                            )}
-                            {r.lastContacted && (
-                              <span className="text-[10px] ml-auto" style={{ color: "#bbb" }}>
-                                {new Date(r.lastContacted).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}
-                              </span>
-                            )}
-                          </div>
-                        </button>
+                        <ProspectCard key={r.id} result={r} onSelect={() => selectContact(r)} />
                       ))}
                     </div>
 

@@ -33,8 +33,23 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   const { searchParams } = req.nextUrl;
-  const ownerFilter = searchParams.get("owner") ?? "";
+  const ownerParam = searchParams.get("owner"); // null = not set, "all" = no filter, id = filter by id
   const q = searchParams.get("q")?.trim() ?? "";
+
+  // Resolve owner filter: if param not set, default to user's HubSpot owner id
+  let ownerFilter = "";
+  let myOwnerId: string | null = null;
+  if (ownerParam === "all") {
+    ownerFilter = "";
+  } else if (ownerParam) {
+    ownerFilter = ownerParam;
+    myOwnerId = ownerParam;
+  } else {
+    // Default: fetch user's hubspot_owner_id
+    const { data: userRow } = await db.from("users").select("hubspot_owner_id").eq("id", user.id).single();
+    myOwnerId = userRow?.hubspot_owner_id ?? null;
+    ownerFilter = myOwnerId ?? "";
+  }
 
   try {
     // Fetch pipeline stages
@@ -125,7 +140,7 @@ export async function GET(req: NextRequest) {
       return sum + (parseFloat(d.amount) || 0) * (prob / 100);
     }, 0);
 
-    return NextResponse.json({ stages, deals, pipelineTotal, weightedTotal });
+    return NextResponse.json({ stages, deals, pipelineTotal, weightedTotal, myOwnerId });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur HubSpot" }, { status: 500 });
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { X, ChevronRight, Mail, Zap, AlertCircle, CheckCircle, TrendingUp, Search, RefreshCw } from "lucide-react";
+import { X, ChevronRight, Mail, Zap, AlertCircle, CheckCircle, TrendingUp, Search, RefreshCw, Linkedin, Copy, Check } from "lucide-react";
 import { scoreBadge, reliabilityLabel, reliabilityColor, healthIndicator, type DealScore } from "@/lib/deal-scoring";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -26,7 +26,7 @@ interface Deal {
 
 interface DealDetails extends Deal {
   description: string;
-  contacts: { id: string; name: string; jobTitle: string; email: string }[];
+  contacts: { id: string; name: string; jobTitle: string; email: string; linkedinUrl: string | null }[];
   company: { name: string; industry: string; employees: string; website: string };
   engagements: { type: string; date: string; body: string }[];
   reasoning: string | null;
@@ -565,17 +565,7 @@ function DealDrawer({
             {details.contacts.length > 0 && (
               <Section title="Contacts">
                 {details.contacts.map((c) => (
-                  <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, paddingBottom: 8, borderBottom: "1px solid #f9fafb" }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{c.name}</div>
-                      {c.jobTitle && <div style={{ fontSize: 11, color: "#6b7280" }}>{c.jobTitle}</div>}
-                    </div>
-                    {c.email && (
-                      <a href={`mailto:${c.email}`} style={{ fontSize: 11, color: "#6366f1", textDecoration: "none" }}>
-                        {c.email}
-                      </a>
-                    )}
-                  </div>
+                  <ContactRow key={c.id} contact={c} />
                 ))}
               </Section>
             )}
@@ -834,6 +824,84 @@ function DealDrawer({
   );
 }
 
+// ─── Contact row with LinkedIn ──────────────────────────────────────────────────
+
+function ContactRow({ contact }: { contact: { id: string; name: string; jobTitle: string; email: string; linkedinUrl: string | null } }) {
+  const [msgState, setMsgState] = useState<"idle" | "loading" | "done">("idle");
+  const [msg, setMsg] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  async function generateMsg() {
+    setMsgState("loading");
+    try {
+      const r = await fetch("/api/linkedin/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: contact.name, jobTitle: contact.jobTitle, company: "", industry: "" }),
+      });
+      const data = await r.json();
+      setMsg(data.message ?? "");
+      setMsgState("done");
+    } catch {
+      setMsgState("idle");
+    }
+  }
+
+  async function copyMsg() {
+    await navigator.clipboard.writeText(msg);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid #f9fafb" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{contact.name}</div>
+          {contact.jobTitle && <div style={{ fontSize: 11, color: "#6b7280" }}>{contact.jobTitle}</div>}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {contact.linkedinUrl && (
+            <a href={contact.linkedinUrl} target="_blank" rel="noreferrer" style={{ color: "#0a66c2", display: "flex" }}>
+              <Linkedin size={14} />
+            </a>
+          )}
+          {contact.email && (
+            <a href={`mailto:${contact.email}`} style={{ fontSize: 11, color: "#6366f1", textDecoration: "none" }}>
+              {contact.email}
+            </a>
+          )}
+        </div>
+      </div>
+      {contact.linkedinUrl && msgState !== "done" && (
+        <button
+          onClick={generateMsg}
+          disabled={msgState === "loading"}
+          style={{
+            marginTop: 5, fontSize: 10, padding: "2px 8px", borderRadius: 6,
+            border: "1px solid #e5e7eb", background: "white", color: "#374151",
+            cursor: msgState === "loading" ? "not-allowed" : "pointer",
+            display: "flex", alignItems: "center", gap: 4,
+          }}
+        >
+          {msgState === "loading" ? <><RefreshCw size={9} className="animate-spin" /> Génération…</> : <><Linkedin size={9} /> Message LinkedIn</>}
+        </button>
+      )}
+      {msgState === "done" && msg && (
+        <div style={{ marginTop: 6, padding: "6px 8px", background: "#f8fafc", borderRadius: 6, border: "1px solid #e2e8f0", position: "relative" }}>
+          <p style={{ fontSize: 11, color: "#374151", margin: 0, lineHeight: 1.5, paddingRight: 24 }}>{msg}</p>
+          <button
+            onClick={copyMsg}
+            style={{ position: "absolute", top: 6, right: 6, background: "none", border: "none", cursor: "pointer", color: copied ? "#16a34a" : "#9ca3af" }}
+          >
+            {copied ? <Check size={12} /> : <Copy size={12} />}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Section helper ────────────────────────────────────────────────────────────
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -878,13 +946,16 @@ export default function DealsPage() {
   const [filterRelance, setFilterRelance] = useState(false);
   const [scoring, setScoring] = useState(false);
   const [scoreResult, setScoreResult] = useState<{ scored: number; total: number } | null>(null);
+  const [ownerFilter, setOwnerFilter] = useState<"mine" | "all">("mine");
+  const [myOwnerId, setMyOwnerId] = useState<string | null>(null);
 
-  const load = useCallback(async (q = "") => {
+  const load = useCallback(async (q = "", owner: "mine" | "all" = "mine") => {
     setLoading(true);
     setError("");
     try {
       const url = new URL("/api/deals/list", window.location.origin);
       if (q) url.searchParams.set("q", q);
+      if (owner === "all") url.searchParams.set("owner", "all");
       const r = await fetch(url.toString());
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? "Erreur");
@@ -892,6 +963,7 @@ export default function DealsPage() {
       setDeals(data.deals ?? []);
       setPipelineTotal(data.pipelineTotal ?? 0);
       setWeightedTotal(data.weightedTotal ?? 0);
+      if (data.myOwnerId) setMyOwnerId(data.myOwnerId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur de chargement");
     } finally {
@@ -900,8 +972,10 @@ export default function DealsPage() {
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    // Auto-detect HubSpot owner if not set
+    fetch("/api/hubspot/auto-link-owner").catch(() => {});
+    load(searchQuery, ownerFilter);
+  }, [load, ownerFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const scoreAll = useCallback(async () => {
     setScoring(true);
@@ -916,12 +990,12 @@ export default function DealsPage() {
       if (r.ok) {
         setScoreResult({ scored: data.scored, total: data.total });
         // Reload to get updated scores
-        await load(searchQuery);
+        await load(searchQuery, ownerFilter);
       }
     } catch { /* ignore */ } finally {
       setScoring(false);
     }
-  }, [load, searchQuery]);
+  }, [load, searchQuery, ownerFilter]);
 
   const openDeal = useCallback(async (deal: Deal) => {
     setSelectedDeal(deal);
@@ -1012,9 +1086,27 @@ export default function DealsPage() {
           )}
         </button>
 
+        {/* Owner filter */}
+        <div style={{ display: "flex", borderRadius: 8, border: "1px solid #e5e7eb", overflow: "hidden" }}>
+          {(["mine", "all"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => { setOwnerFilter(v); }}
+              style={{
+                padding: "6px 12px", fontSize: 12, fontWeight: 500, border: "none",
+                background: ownerFilter === v ? "#111827" : "white",
+                color: ownerFilter === v ? "white" : "#6b7280",
+                cursor: "pointer",
+              }}
+            >
+              {v === "mine" ? "Mes deals" : "Tous"}
+            </button>
+          ))}
+        </div>
+
         {/* Refresh */}
         <button
-          onClick={() => load(searchQuery)}
+          onClick={() => load(searchQuery, ownerFilter)}
           style={{
             padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb",
             background: "white", color: "#6b7280", cursor: "pointer",

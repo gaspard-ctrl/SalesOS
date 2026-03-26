@@ -9,7 +9,7 @@ export async function GET() {
   const [keyRow, gmailRow, userRow] = await Promise.all([
     db.from("user_keys").select("is_active").eq("user_id", user.id).eq("service", "claude").single(),
     db.from("user_integrations").select("connected").eq("user_id", user.id).eq("provider", "gmail").single(),
-    db.from("users").select("slack_display_name").eq("id", user.id).single(),
+    db.from("users").select("slack_display_name, hubspot_owner_id").eq("id", user.id).single(),
   ]);
 
   return NextResponse.json({
@@ -20,6 +20,7 @@ export async function GET() {
     claude_key_active: keyRow.data?.is_active ?? false,
     gmail_connected: gmailRow.data?.connected ?? false,
     slack_display_name: userRow.data?.slack_display_name ?? null,
+    hubspot_owner_id: userRow.data?.hubspot_owner_id ?? null,
   });
 }
 
@@ -27,11 +28,12 @@ export async function PATCH(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json() as { slack_display_name?: string; model_preferences?: Record<string, string> };
+  const body = await req.json() as { slack_display_name?: string; model_preferences?: Record<string, string>; hubspot_owner_id?: string | null };
 
   const update: Record<string, unknown> = {};
   if ("slack_display_name" in body) update.slack_display_name = body.slack_display_name || null;
   if ("model_preferences" in body) update.model_preferences = body.model_preferences;
+  if ("hubspot_owner_id" in body) update.hubspot_owner_id = body.hubspot_owner_id || null;
 
   if (Object.keys(update).length === 0) return NextResponse.json({ ok: true });
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ const PROPS = [
   "firstname", "lastname", "email", "jobtitle", "company",
   "industry", "lifecyclestage", "city", "country",
   "notes_last_contacted", "hs_lead_status", "numberofemployees", "hs_lead_source",
+  "hubspot_owner_id", "linkedin_url",
 ];
 
 type HsFilter = { propertyName: string; operator: string; value?: string; highValue?: string };
@@ -42,8 +44,23 @@ export async function GET(req: NextRequest) {
   const source = searchParams.get("source")?.trim() ?? "";
   const sort = searchParams.get("sort")?.trim() ?? "";
   const after = searchParams.get("after")?.trim() ?? "";
+  const ownerParam = searchParams.get("owner"); // null = mine, "all" = no filter, id = specific
 
   const filters: HsFilter[] = [];
+  // Owner filter
+  let myOwnerId: string | null = null;
+  if (ownerParam === "all") {
+    // No owner filter
+  } else if (ownerParam) {
+    myOwnerId = ownerParam;
+    filters.push({ propertyName: "hubspot_owner_id", operator: "EQ", value: ownerParam });
+  } else {
+    // Default: user's own contacts
+    const { data: userRow } = await db.from("users").select("hubspot_owner_id").eq("id", user.id).single();
+    myOwnerId = userRow?.hubspot_owner_id ?? null;
+    if (myOwnerId) filters.push({ propertyName: "hubspot_owner_id", operator: "EQ", value: myOwnerId });
+  }
+
   if (lifecyclestage) filters.push({ propertyName: "lifecyclestage", operator: "EQ", value: lifecyclestage });
   if (industry) filters.push({ propertyName: "industry", operator: "EQ", value: industry });
   if (country) filters.push({ propertyName: "country", operator: "EQ", value: country });
@@ -107,12 +124,13 @@ export async function GET(req: NextRequest) {
       leadStatus: c.properties.hs_lead_status ?? "",
       employees: c.properties.numberofemployees ?? "",
       source: c.properties.hs_lead_source ?? "",
+      linkedinUrl: c.properties.linkedin_url ?? null,
     }));
 
     const nextCursor: string | null = (data.paging as { next?: { after?: string } } | undefined)?.next?.after ?? null;
     const total: number | null = data.total ?? null;
 
-    return NextResponse.json({ results, nextCursor, total });
+    return NextResponse.json({ results, nextCursor, total, myOwnerId });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur HubSpot" }, { status: 500 });
   }

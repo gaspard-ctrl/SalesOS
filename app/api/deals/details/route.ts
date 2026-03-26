@@ -49,13 +49,13 @@ export async function GET(req: NextRequest) {
     const p = deal?.properties ?? {};
 
     // Contacts
-    let contacts: { id: string; name: string; jobTitle: string; email: string }[] = [];
+    let contacts: { id: string; name: string; jobTitle: string; email: string; linkedinUrl: string | null }[] = [];
     if (contactAssoc.status === "fulfilled") {
       const contactIds: string[] = (contactAssoc.value?.results ?? []).slice(0, 5).map((r: { id: string }) => r.id);
       if (contactIds.length > 0) {
         const contactDetails = await Promise.allSettled(
           contactIds.map((cid) =>
-            hubspot(`/crm/v3/objects/contacts/${cid}?properties=firstname,lastname,jobtitle,email`)
+            hubspot(`/crm/v3/objects/contacts/${cid}?properties=firstname,lastname,jobtitle,email,linkedin_url`)
           )
         );
         contacts = contactDetails
@@ -67,6 +67,7 @@ export async function GET(req: NextRequest) {
               name: `${cp.properties.firstname ?? ""} ${cp.properties.lastname ?? ""}`.trim(),
               jobTitle: cp.properties.jobtitle ?? "",
               email: cp.properties.email ?? "",
+              linkedinUrl: cp.properties.linkedin_url ?? null,
             };
           });
       }

@@ -6,6 +6,7 @@ import { GmailConnect } from "./_components/gmail-connect";
 import { CalendarStatus } from "./_components/calendar-status";
 import { GuideEditor } from "./_components/guide-editor";
 import { SlackNameInput } from "./_components/slack-name-input";
+import { HubspotOwnerInput } from "./_components/hubspot-owner-input";
 import { DEFAULT_BOT_GUIDE } from "@/lib/guides/bot";
 import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/guides/prospection";
 import { DEFAULT_BRIEFING_GUIDE } from "@/lib/guides/briefing";
@@ -27,7 +28,7 @@ async function getIntegrationStatus(userId: string) {
       .single(),
     db
       .from("users")
-      .select("slack_display_name")
+      .select("slack_display_name, hubspot_owner_id")
       .eq("id", userId)
       .single(),
   ]);
@@ -35,6 +36,7 @@ async function getIntegrationStatus(userId: string) {
     claudeActive: keyRes.data?.is_active ?? false,
     gmailConnected: gmailRes.data?.connected ?? false,
     slackDisplayName: userRes.data?.slack_display_name ?? null,
+    hubspotOwnerId: userRes.data?.hubspot_owner_id ?? null,
   };
 }
 
@@ -42,7 +44,7 @@ export default async function SettingsPage() {
   const user = await getAuthenticatedUser();
   if (!user) return null;
 
-  const { claudeActive, gmailConnected, slackDisplayName } = await getIntegrationStatus(user.id);
+  const { claudeActive, gmailConnected, slackDisplayName, hubspotOwnerId } = await getIntegrationStatus(user.id);
 
   const [{ data: guides }, { data: globalGuides }] = await Promise.all([
     db.from("users").select("user_prompt, prospection_guide, briefing_guide, model_preferences").eq("id", user.id).single(),
@@ -113,6 +115,14 @@ export default async function SettingsPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
               Connecté
             </span>
+          }
+          action={
+            <div>
+              <p className="text-xs" style={{ color: "#888" }}>
+                Ton identifiant HubSpot Owner — utilisé pour filtrer tes deals et contacts. Détecté automatiquement depuis ton email.
+              </p>
+              <HubspotOwnerInput initialValue={hubspotOwnerId} />
+            </div>
           }
         />
 
