@@ -100,6 +100,29 @@ Je serais ravi d'avoir 30 min pour vous partager comment on pourrait apporter de
 
 ---
 
+## Template 05 — Accroche générale, à personnaliser un peu en fonction du prospect
+Canal : Email | Persona : CEO, DRH, tout décideur avec une initiative leadership en cours
+
+Bonjour [],
+
+Les entreprises doivent aujourd’hui relever des défis majeurs en matière de ressources humaines : attirer, engager et fidéliser leurs talents. Parmi les enjeux clés : la performance des collaborateurs, la rétention des talents et la qualité de vie au travail.
+
+Chez Coachello, nous accompagnons les organisations sur ces sujets grâce à une méthodologie unique combinant Coaching Humain et Coaching IA pour accompagner chaque collaborateur dans ses projets d’évolution.
+
+Concrètement, cela permet à nos clients de :
+• Réduire jusqu’à 30 % leurs coûts de recrutement externe
+• Tripler les mobilités internes
+• Accélérer la montée en compétences des talents à fort potentiel ou en transition
+
+Cette approche a déjà fait ses preuves auprès de plusieurs grands groupes confrontés à ces mêmes enjeux tels que GRDF, Microsoft, Enedis, Salomon, Payfit ou bien Qonto par exemple.
+
+Seriez-vous disponible dans les prochains jours pour échanger sur vos enjeux et besoins 2026 et vous présenter notre solution ?
+Voici le lien de mon agenda : cliquez ici.
+
+Belle journée,
+[]
+
+---
 ## Ce qu'il faut toujours éviter
 
 - "J'espère que vous allez bien" / "Je me permets de vous contacter"

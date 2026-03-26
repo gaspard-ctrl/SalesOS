@@ -50,6 +50,9 @@ ${competitorContext || "Aucun concurrent configuré."}
 Signaux de veille récents :
 ${signalContext || "Aucun signal disponible."}`;
 
+  const { data: modelPrefs } = await db.from("guide_defaults").select("content").eq("key", "model_preferences").single();
+  const competitiveModel = (() => { try { return (JSON.parse(modelPrefs?.content ?? "{}") as Record<string, string>).competitive ?? "claude-haiku-4-5-20251001"; } catch { return "claude-haiku-4-5-20251001"; } })();
+
   const client = new Anthropic();
   let inputTokens = 0;
   let outputTokens = 0;
@@ -59,7 +62,7 @@ ${signalContext || "Aucun signal disponible."}`;
       const send = (text: string) => controller.enqueue(new TextEncoder().encode(text));
       try {
         const apiStream = await client.messages.stream({
-          model: "claude-haiku-4-5-20251001",
+          model: competitiveModel,
           max_tokens: 1024,
           system: systemPrompt,
           messages: [{ role: "user", content: question }],
@@ -74,7 +77,7 @@ ${signalContext || "Aucun signal disponible."}`;
         const final = await apiStream.finalMessage();
         inputTokens = final.usage.input_tokens;
         outputTokens = final.usage.output_tokens;
-        logUsage(user.id, "claude-haiku-4-5-20251001", inputTokens, outputTokens, "competitive_chat");
+        logUsage(user.id, competitiveModel, inputTokens, outputTokens, "competitive_chat");
       } catch (e) {
         send(`\n\nErreur : ${e instanceof Error ? e.message : "inconnue"}`);
       } finally {

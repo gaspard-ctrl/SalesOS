@@ -128,15 +128,18 @@ Réponds UNIQUEMENT en JSON valide :
 { "signals": [ { "type": "...", "title": "...", "summary": "...", "signal_date": "...", "confidence": "...", "source_url": null, "linkedin_suggestion": null } ] }`;
 
   // ─── 4. Call Claude ──────────────────────────────────────────────────────────
+  const { data: modelPrefs } = await db.from("guide_defaults").select("content").eq("key", "model_preferences").single();
+  const competitiveModel = (() => { try { return (JSON.parse(modelPrefs?.content ?? "{}") as Record<string, string>).competitive ?? "claude-haiku-4-5-20251001"; } catch { return "claude-haiku-4-5-20251001"; } })();
+
   const client = new Anthropic();
   const message = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: competitiveModel,
     max_tokens: 4096,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   });
 
-  logUsage(userId, "claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens, "competitive");
+  logUsage(userId, competitiveModel, message.usage.input_tokens, message.usage.output_tokens, "competitive");
 
   const raw = message.content[0].type === "text" ? message.content[0].text : "";
   const jsonMatch = raw.match(/\{[\s\S]*\}/);

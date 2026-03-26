@@ -69,15 +69,18 @@ Pour chaque concurrent, 2 à 4 bullet points sur leurs actions les plus signific
 
 Sois précis, factuel et orienté impact business. Évite les généralités.`;
 
+  const { data: modelPrefs } = await db.from("guide_defaults").select("content").eq("key", "model_preferences").single();
+  const competitiveModel = (() => { try { return (JSON.parse(modelPrefs?.content ?? "{}") as Record<string, string>).competitive ?? "claude-haiku-4-5-20251001"; } catch { return "claude-haiku-4-5-20251001"; } })();
+
   const client = new Anthropic();
   const message = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: competitiveModel,
     max_tokens: 3000,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   });
 
-  logUsage(user.id, "claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens, "competitive_report");
+  logUsage(user.id, competitiveModel, message.usage.input_tokens, message.usage.output_tokens, "competitive_report");
 
   const content = message.content[0].type === "text" ? message.content[0].text : "";
 

@@ -111,15 +111,18 @@ export async function POST(req: NextRequest) {
       guide ? `\n---\nGUIDE DE PROSPECTION :\n${guide}` : "",
     ].filter(Boolean).join("\n");
 
+    const { data: modelPrefs } = await db.from("guide_defaults").select("content").eq("key", "model_preferences").single();
+    const emailModel = (() => { try { return (JSON.parse(modelPrefs?.content ?? "{}") as Record<string, string>).deals_email ?? "claude-haiku-4-5-20251001"; } catch { return "claude-haiku-4-5-20251001"; } })();
+
     const client = new Anthropic();
     const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: emailModel,
       max_tokens: 1024,
       system: systemPrompt,
       messages: [{ role: "user", content: `Rédige un email de suivi pour ce deal :\n\n${contextBlock}` }],
     });
 
-    logUsage(user.id, "claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens, "deals_email");
+    logUsage(user.id, emailModel, message.usage.input_tokens, message.usage.output_tokens, "deals_email");
     const raw = message.content[0].type === "text" ? message.content[0].text : "";
     let subject = "";
     let body = "";

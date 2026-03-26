@@ -9,13 +9,15 @@ const MODELS = [
 ];
 
 const FEATURES = [
-  { key: "briefing", label: "Briefing réunion" },
-  { key: "deals_score", label: "Scoring des deals" },
-  { key: "prospection", label: "Génération d'emails" },
-  { key: "chat", label: "Assistant commercial" },
+  { key: "chat",           label: "Assistant commercial (GPT)",         defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "briefing",       label: "Briefing réunion",                   defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "prospection",    label: "Génération d'emails prospection",    defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "deals_score",    label: "Scoring des deals",                  defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "deals_analyze",  label: "Analyse approfondie des deals",      defaultModel: "claude-sonnet-4-6" },
+  { key: "deals_email",    label: "Email de suivi deal",                defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "competitive",    label: "Analyse concurrentielle",            defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "market",         label: "Scan & signaux marché",              defaultModel: "claude-haiku-4-5-20251001" },
 ];
-
-const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 
 export function ModelPreferencesAdmin({ initialPreferences }: { initialPreferences: Record<string, string> }) {
   const [prefs, setPrefs] = useState<Record<string, string>>(initialPreferences);
@@ -43,7 +45,7 @@ export function ModelPreferencesAdmin({ initialPreferences }: { initialPreferenc
   return (
     <div className="space-y-3">
       {FEATURES.map((feature) => {
-        const current = prefs[feature.key] ?? DEFAULT_MODEL;
+        const current = prefs[feature.key] ?? feature.defaultModel;
         return (
           <div key={feature.key} className="flex items-center justify-between gap-4">
             <span className="text-xs" style={{ color: "#444" }}>{feature.label}</span>

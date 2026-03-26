@@ -66,9 +66,12 @@ async function runScan(scope = "France"): Promise<{
     .map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}${r.published_date ? `\nDate: ${r.published_date}` : ""}\n${r.content.slice(0, 400)}`)
     .join("\n\n---\n\n");
 
+  const { data: modelPrefs } = await db.from("guide_defaults").select("content").eq("key", "model_preferences").single();
+  const marketModel = (() => { try { return (JSON.parse(modelPrefs?.content ?? "{}") as Record<string, string>).market ?? "claude-haiku-4-5-20251001"; } catch { return "claude-haiku-4-5-20251001"; } })();
+
   const client = new Anthropic();
   const message = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: marketModel,
     max_tokens: 8192,
     system: `Tu es un analyste commercial pour Coachello (coaching professionnel B2B, France/Europe). Coachello cible les entreprises en croissance ou en transformation qui ont besoin de développer leurs managers et leaders.`,
     messages: [{

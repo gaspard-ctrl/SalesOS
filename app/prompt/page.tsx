@@ -65,7 +65,7 @@ export default function PromptPage() {
           <h1 className="text-sm font-semibold" style={{ color: "#111" }}>
             Guide de {firstName || "…"}
           </h1>
-          <p className="text-xs" style={{ color: "#aaa" }}>Personnalise le comportement de Coachello Intelligence</p>
+          <p className="text-xs" style={{ color: "#aaa" }}>Personnalise le comportement de CoachelloGPT</p>
         </div>
         <div className="flex items-center gap-2">
           <button

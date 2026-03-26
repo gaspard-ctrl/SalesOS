@@ -42,12 +42,20 @@ interface Stage {
 }
 
 interface Analysis {
-  summary: string;
-  positiveSignals: string[];
-  negativeSignals: string[];
-  nextSteps: string[];
+  synthese: string;
   riskLevel: "Faible" | "Moyen" | "Élevé";
-  scoringInsight: string;
+  dynamique: { momentum: string; analyse: string };
+  qualification: { budget: string; authority: string; need: string; timeline: string; fit: string };
+  signaux: { positifs: string[]; negatifs: string[] };
+  risques: { risque: string; severite: "Faible" | "Moyen" | "Élevé" }[];
+  scoreInsight: string;
+  prochaines_etapes: { action: string; priorite: "Urgent" | "Moyen" | "Faible"; impact: string }[];
+  // legacy compat
+  summary?: string;
+  positiveSignals?: string[];
+  negativeSignals?: string[];
+  nextSteps?: string[];
+  scoringInsight?: string;
 }
 
 // ─── Stage colors ──────────────────────────────────────────────────────────────
@@ -354,7 +362,7 @@ function DealDrawer({
 
   return (
     <div style={{
-      width: 520, borderLeft: "1px solid #e5e7eb", background: "white",
+      width: "50%", borderLeft: "1px solid #e5e7eb", background: "white",
       display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0,
     }}>
       {/* Header */}
@@ -635,7 +643,7 @@ function DealDrawer({
                   }}
                 >
                   <Zap size={14} />
-                  Analyser le deal
+                  Analyse approfondie
                 </button>
               )}
 
@@ -653,8 +661,8 @@ function DealDrawer({
               )}
 
               {analysis && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {/* Risk level */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {/* Risk level + synthèse */}
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ fontSize: 12, color: "#6b7280" }}>Niveau de risque :</span>
                     <span style={{
@@ -663,23 +671,66 @@ function DealDrawer({
                       background: (riskColors[analysis.riskLevel] ?? "#374151") + "18",
                     }}>{analysis.riskLevel}</span>
                   </div>
+                  <p style={{ fontSize: 13, color: "#374151", lineHeight: 1.6, margin: 0 }}>{analysis.synthese ?? analysis.summary}</p>
 
-                  {/* Summary */}
-                  <p style={{ fontSize: 13, color: "#374151", lineHeight: 1.6, margin: 0 }}>{analysis.summary}</p>
+                  {/* Dynamique */}
+                  {analysis.dynamique && (
+                    <div style={{ padding: "8px 10px", background: "#f8fafc", borderRadius: 6, border: "1px solid #e2e8f0" }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                        <TrendingUp size={11} />
+                        Dynamique du deal
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 99, marginLeft: 4,
+                          color: analysis.dynamique.momentum === "En accélération" ? "#16a34a" : analysis.dynamique.momentum === "En perte de vitesse" ? "#dc2626" : "#ca8a04",
+                          background: analysis.dynamique.momentum === "En accélération" ? "#dcfce7" : analysis.dynamique.momentum === "En perte de vitesse" ? "#fee2e2" : "#fef9c3",
+                        }}>{analysis.dynamique.momentum}</span>
+                      </div>
+                      <p style={{ fontSize: 12, color: "#4b5563", margin: 0, lineHeight: 1.5 }}>{analysis.dynamique.analyse}</p>
+                    </div>
+                  )}
 
-                  {/* Scoring insight */}
-                  <div style={{ padding: "8px 10px", background: "#f0f4ff", borderRadius: 6, border: "1px solid #c7d2fe" }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#4338ca", marginBottom: 3 }}>Insight score</div>
-                    <p style={{ fontSize: 12, color: "#4338ca", margin: 0, lineHeight: 1.5 }}>{analysis.scoringInsight}</p>
-                  </div>
+                  {/* Qualification BANT+ */}
+                  {analysis.qualification && (
+                    <div style={{ borderRadius: 6, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", padding: "6px 10px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                        Qualification
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+                      {[
+                        { key: "budget", label: "Budget", color: "#0369a1" },
+                        { key: "authority", label: "Autorité", color: "#7c3aed" },
+                        { key: "need", label: "Besoin", color: "#b45309" },
+                        { key: "timeline", label: "Timeline", color: "#0f766e" },
+                        { key: "fit", label: "Fit stratégique", color: "#16a34a" },
+                      ].map(({ key, label, color }) => {
+                        const val = analysis.qualification?.[key as keyof typeof analysis.qualification];
+                        if (!val) return null;
+                        return (
+                          <div key={key} style={{ padding: "5px 10px", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9" }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color, marginBottom: 2 }}>{label}</div>
+                            <div style={{ fontSize: 11, color: "#374151", lineHeight: 1.4 }}>{val}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    </div>
+                  )}
 
-                  {/* Signals */}
-                  {analysis.positiveSignals?.length > 0 && (
+                  {/* Score insight */}
+                  {(analysis.scoreInsight ?? analysis.scoringInsight) && (
+                    <div style={{ padding: "8px 10px", background: "#f0f4ff", borderRadius: 6, border: "1px solid #c7d2fe" }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "#4338ca", marginBottom: 3 }}>Insight score</div>
+                      <p style={{ fontSize: 12, color: "#4338ca", margin: 0, lineHeight: 1.5 }}>{analysis.scoreInsight ?? analysis.scoringInsight}</p>
+                    </div>
+                  )}
+
+                  {/* Signaux positifs */}
+                  {(analysis.signaux?.positifs ?? analysis.positiveSignals)?.length > 0 && (
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 600, color: "#16a34a", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
                         <CheckCircle size={12} /> Signaux positifs
                       </div>
-                      {analysis.positiveSignals.map((s, i) => (
+                      {(analysis.signaux?.positifs ?? analysis.positiveSignals ?? []).map((s, i) => (
                         <div key={i} style={{ fontSize: 12, color: "#374151", marginBottom: 3, paddingLeft: 12, position: "relative" }}>
                           <span style={{ position: "absolute", left: 0, color: "#16a34a" }}>·</span>
                           {s}
@@ -688,12 +739,13 @@ function DealDrawer({
                     </div>
                   )}
 
-                  {analysis.negativeSignals?.length > 0 && (
+                  {/* Signaux négatifs */}
+                  {(analysis.signaux?.negatifs ?? analysis.negativeSignals)?.length > 0 && (
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
                         <AlertCircle size={12} /> Points d'attention
                       </div>
-                      {analysis.negativeSignals.map((s, i) => (
+                      {(analysis.signaux?.negatifs ?? analysis.negativeSignals ?? []).map((s, i) => (
                         <div key={i} style={{ fontSize: 12, color: "#374151", marginBottom: 3, paddingLeft: 12, position: "relative" }}>
                           <span style={{ position: "absolute", left: 0, color: "#dc2626" }}>·</span>
                           {s}
@@ -702,17 +754,53 @@ function DealDrawer({
                     </div>
                   )}
 
-                  {analysis.nextSteps?.length > 0 && (
+                  {/* Risques */}
+                  {analysis.risques?.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "#92400e", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                        <AlertCircle size={12} /> Risques identifiés
+                      </div>
+                      {analysis.risques.map((r, i) => (
+                        <div key={i} style={{ fontSize: 12, color: "#374151", marginBottom: 4, display: "flex", alignItems: "flex-start", gap: 6 }}>
+                          <span style={{
+                            fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 99, marginTop: 2, whiteSpace: "nowrap",
+                            color: r.severite === "Élevé" ? "#dc2626" : r.severite === "Moyen" ? "#ca8a04" : "#6b7280",
+                            background: r.severite === "Élevé" ? "#fee2e2" : r.severite === "Moyen" ? "#fef9c3" : "#f3f4f6",
+                          }}>{r.severite}</span>
+                          {r.risque}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Prochaines étapes */}
+                  {((analysis.prochaines_etapes?.length ?? 0) > 0 || (analysis.nextSteps?.length ?? 0) > 0) && (
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
                         <TrendingUp size={12} /> Prochaines étapes
                       </div>
-                      {analysis.nextSteps.map((s, i) => (
-                        <div key={i} style={{ fontSize: 12, color: "#374151", marginBottom: 3, paddingLeft: 12, position: "relative" }}>
-                          <span style={{ position: "absolute", left: 0, color: "#6366f1" }}>{i + 1}.</span>
-                          {s}
-                        </div>
-                      ))}
+                      {analysis.prochaines_etapes
+                        ? analysis.prochaines_etapes.map((s, i) => (
+                          <div key={i} style={{ fontSize: 12, color: "#374151", marginBottom: 6, paddingLeft: 12, position: "relative" }}>
+                            <span style={{ position: "absolute", left: 0, color: "#6366f1", fontWeight: 700 }}>{i + 1}.</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                              <span style={{
+                                fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 99,
+                                color: s.priorite === "Urgent" ? "#dc2626" : s.priorite === "Moyen" ? "#ca8a04" : "#6b7280",
+                                background: s.priorite === "Urgent" ? "#fee2e2" : s.priorite === "Moyen" ? "#fef9c3" : "#f3f4f6",
+                              }}>{s.priorite}</span>
+                              <span>{s.action}</span>
+                            </div>
+                            {s.impact && <div style={{ fontSize: 11, color: "#6b7280", marginTop: 1, fontStyle: "italic" }}>{s.impact}</div>}
+                          </div>
+                        ))
+                        : (analysis.nextSteps ?? []).map((s, i) => (
+                          <div key={i} style={{ fontSize: 12, color: "#374151", marginBottom: 3, paddingLeft: 12, position: "relative" }}>
+                            <span style={{ position: "absolute", left: 0, color: "#6366f1" }}>{i + 1}.</span>
+                            {s}
+                          </div>
+                        ))
+                      }
                     </div>
                   )}
 
