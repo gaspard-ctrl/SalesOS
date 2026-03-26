@@ -177,7 +177,7 @@ export default async function SettingsPage() {
           defaultGuide={globalBotGuide}
           endpoint="/api/settings/bot-guide"
           title="Guide bot"
-          description="System prompt du chat Coachello Intelligence."
+          description="System prompt du chat CoachelloGPT."
         />
         <GuideEditor
           initialGuide={guides?.prospection_guide ?? null}

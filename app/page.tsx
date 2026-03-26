@@ -234,7 +234,7 @@ export default function IntelligencePage() {
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
             <Image src="/logo.png" alt="Coachello" width={56} height={56} quality={100} className="rounded-2xl" />
-            <h1 className="text-2xl font-semibold" style={{ color: "#111" }}>Coachello Intelligence</h1>
+            <h1 className="text-2xl font-semibold" style={{ color: "#111" }}>CoachelloGPT</h1>
             <p className="text-sm max-w-sm" style={{ color: "#aaa" }}>
               Pose une question sur tes deals, prospects, concurrents ou ton pipeline.
             </p>

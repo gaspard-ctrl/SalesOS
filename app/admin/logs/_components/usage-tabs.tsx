@@ -59,8 +59,8 @@ function filterByDays<T extends { created_at: string }>(items: T[], days: number
 }
 
 const FEATURE_DESCRIPTIONS: Record<string, string> = {
-  chat:                    "Onglet Coachello Intelligence — chaque message envoyé au bot",
-  conversations:           "Onglet Coachello Intelligence — génération automatique du titre de conversation (1er message uniquement)",
+  chat:                    "Onglet CoachelloGPT — chaque message envoyé au bot",
+  conversations:           "Onglet CoachelloGPT — génération automatique du titre de conversation (1er message uniquement)",
   briefing:                "Onglet Briefing — synthèse pré-meeting (contexte HubSpot + calendrier)",
   market_scan:             "Onglet Market Intel — scan web d'une entreprise cible",
   market_signals:          "Onglet Market Intel — extraction de signaux commerciaux",

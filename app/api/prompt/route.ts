@@ -1,29 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { DEFAULT_BOT_GUIDE } from "@/lib/guides/bot";
 
 export const dynamic = "force-dynamic";
-
-function getDefaultPrompt(): string {
-  return fs.readFileSync(path.join(process.cwd(), "prompt-guide.txt"), "utf-8");
-}
 
 export async function GET() {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const { data, error } = await db
-    .from("users")
-    .select("user_prompt, name")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [userRes, globalGuide] = await Promise.all([
+    db.from("users").select("user_prompt, name").eq("id", user.id).maybeSingle(),
+    db.from("guide_defaults").select("content").eq("key", "bot").maybeSingle(),
+  ]);
 
-  if (error) console.error("[GET /api/prompt] Supabase error:", error);
-
-  const prompt = data?.user_prompt ?? getDefaultPrompt();
-  const firstName = (data?.name ?? user.name ?? "").split(" ")[0] || "moi";
+  const prompt = userRes.data?.user_prompt ?? globalGuide.data?.content ?? DEFAULT_BOT_GUIDE;
+  const firstName = (userRes.data?.name ?? user.name ?? "").split(" ")[0] || "moi";
 
   return NextResponse.json({ prompt, firstName });
 }

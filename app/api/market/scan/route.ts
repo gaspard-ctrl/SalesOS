@@ -131,15 +131,18 @@ Pour chaque signal :
 Réponds UNIQUEMENT en JSON valide :
 { "signals": [ { "company_name": "...", "signal_type": "...", "title": "...", "summary": "...", "signal_date": null, "strength": 2, "source_url": null } ] }`;
 
+  const { data: modelPrefs } = await db.from("guide_defaults").select("content").eq("key", "model_preferences").single();
+  const marketModel = (() => { try { return (JSON.parse(modelPrefs?.content ?? "{}") as Record<string, string>).market ?? "claude-haiku-4-5-20251001"; } catch { return "claude-haiku-4-5-20251001"; } })();
+
   const client = new Anthropic();
   const message = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: marketModel,
     max_tokens: 8192,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   });
 
-  logUsage(user.id, "claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens, "market_scan");
+  logUsage(user.id, marketModel, message.usage.input_tokens, message.usage.output_tokens, "market_scan");
 
   const raw = message.content[0].type === "text" ? message.content[0].text : "";
   const jsonMatch = raw.match(/\{[\s\S]*\}/);

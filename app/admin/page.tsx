@@ -8,6 +8,7 @@ import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/guides/prospection";
 import { DEFAULT_BRIEFING_GUIDE } from "@/lib/guides/briefing";
 import { GuideEditor } from "../settings/_components/guide-editor";
 import { ModelPreferencesAdmin } from "./_components/model-preferences-admin";
+import { ResetGuidesButton } from "./_components/reset-guides-button";
 import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
@@ -134,13 +135,14 @@ export default async function AdminPage() {
           </p>
         </div>
         <div className="space-y-3">
+          <ResetGuidesButton />
           <Suspense>
             <GuideEditor
               initialGuide={globalMap.bot ?? null}
               defaultGuide={DEFAULT_BOT_GUIDE}
               endpoint="/api/admin/guides?key=bot"
               title="Guide bot"
-              description="System prompt du chat Coachello Intelligence."
+              description="System prompt du chat CoachelloGPT."
             />
             <GuideEditor
               initialGuide={globalMap.prospection ?? null}

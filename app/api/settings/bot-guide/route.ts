@@ -9,15 +9,14 @@ export async function GET() {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const { data } = await db
-    .from("users")
-    .select("user_prompt")
-    .eq("id", user.id)
-    .single();
+  const [userRes, globalGuide] = await Promise.all([
+    db.from("users").select("user_prompt").eq("id", user.id).single(),
+    db.from("guide_defaults").select("content").eq("key", "bot").maybeSingle(),
+  ]);
 
   return NextResponse.json({
-    guide: data?.user_prompt ?? null,
-    default: DEFAULT_BOT_GUIDE,
+    guide: userRes.data?.user_prompt ?? null,
+    default: globalGuide.data?.content ?? DEFAULT_BOT_GUIDE,
   });
 }
 

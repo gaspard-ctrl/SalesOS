@@ -162,6 +162,7 @@ Modèle détecté : ${model}.
 - Moyen : manager intermédiaire impliqué mais pas décisionnaire final, doit convaincre au-dessus
 - Faible : champion sans autorité budgétaire, employé enthousiaste
 - Nul (0) : aucun contact identifié
+IMPORTANT : Si un DRH, C-level, VP ou directeur fonctionnel est identifié comme signataire ou décisionnaire final dans les échanges (même s'il n'est pas le premier point de contact), le score doit être ≥ 20. Un champion actif qui remonte directement à un DRH/C-level validant = score élevé, pas moyen. Tiens compte du buying group complet, pas seulement du contact principal.
 
 2. ${names[1]} (0 à ${maxes.budget} pts)
 Évalue la clarté et la disponibilité du budget à partir du montant, des échanges, de la description.

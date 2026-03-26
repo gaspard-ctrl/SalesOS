@@ -7,7 +7,7 @@ import { useUser, UserButton } from "@clerk/nextjs";
 import Image from "next/image";
 
 const nav = [
-  { href: "/", label: "Coachello Intelligence" },
+  { href: "/", label: "CoachelloGPT" },
   { href: "/briefing", label: "Briefing" },
   { href: "/prospecting", label: "Prospection" },
   { href: "/deals", label: "Deals" },
