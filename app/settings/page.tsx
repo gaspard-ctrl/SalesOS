@@ -103,6 +103,24 @@ export default async function SettingsPage() {
           note={!gmailConnected ? "Connecte d'abord Gmail pour activer Google Calendar." : undefined}
         />
 
+        {/* Google Drive */}
+        <IntegrationCard
+          title="Google Drive"
+          description="Accès partagé au Drive pour chercher et lire des documents depuis CoachelloGPT."
+          status={
+            <span
+              className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium"
+              style={process.env.GOOGLE_DRIVE_REFRESH_TOKEN
+                ? { background: "#f0fdf4", color: "#16a34a" }
+                : { background: "#fef2f2", color: "#991b1b" }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: process.env.GOOGLE_DRIVE_REFRESH_TOKEN ? "#22c55e" : "#ef4444" }} />
+              {process.env.GOOGLE_DRIVE_REFRESH_TOKEN ? "Connecté" : "Non configuré"}
+            </span>
+          }
+          note={!process.env.GOOGLE_DRIVE_REFRESH_TOKEN ? "Variable GOOGLE_DRIVE_REFRESH_TOKEN à configurer." : undefined}
+        />
+
         {/* HubSpot */}
         <IntegrationCard
           title="HubSpot CRM"

@@ -9,8 +9,8 @@ import Image from "next/image";
 const nav = [
   { href: "/", label: "CoachelloGPT" },
   { href: "/briefing", label: "Briefing" },
-  { href: "/prospecting", label: "Prospection" },
   { href: "/deals", label: "Deals" },
+  { href: "/prospecting", label: "Prospection" },
   { href: "/signals", label: "Market Intel (in progress)" },
   { href: "/competitive", label: "Competition (in progress)" },
 ];

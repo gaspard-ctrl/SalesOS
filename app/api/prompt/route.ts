@@ -14,10 +14,12 @@ export async function GET() {
     db.from("guide_defaults").select("content").eq("key", "bot").maybeSingle(),
   ]);
 
-  const prompt = userRes.data?.user_prompt ?? globalGuide.data?.content ?? DEFAULT_BOT_GUIDE;
+  const globalDefault = globalGuide.data?.content ?? DEFAULT_BOT_GUIDE;
+  const prompt = userRes.data?.user_prompt ?? globalDefault;
   const firstName = (userRes.data?.name ?? user.name ?? "").split(" ")[0] || "moi";
+  const isPersonal = !!userRes.data?.user_prompt;
 
-  return NextResponse.json({ prompt, firstName });
+  return NextResponse.json({ prompt, firstName, isPersonal, globalDefault });
 }
 
 export async function POST(req: NextRequest) {
@@ -25,7 +27,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   const { prompt } = await req.json();
-  if (typeof prompt !== "string") {
+  if (prompt !== null && typeof prompt !== "string") {
     return NextResponse.json({ error: "Prompt invalide" }, { status: 400 });
   }
 

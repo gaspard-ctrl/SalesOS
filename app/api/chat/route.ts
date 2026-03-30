@@ -8,6 +8,38 @@ import { DEFAULT_BOT_GUIDE } from "@/lib/guides/bot";
 
 export const maxDuration = 300; // 5 minutes — required for large HubSpot fetches
 
+// ── Tavily web search helper ─────────────────────────────────────────────────
+type TavilyResult = {
+  title: string;
+  url: string;
+  content: string;
+  score: number;
+  published_date?: string;
+};
+
+async function searchTavily(query: string, days = 30): Promise<TavilyResult[]> {
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey) return [];
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query,
+        search_depth: "basic",
+        max_results: 5,
+        days,
+      }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.results ?? []) as TavilyResult[];
+  } catch {
+    return [];
+  }
+}
+
 // ── HubSpot helper ────────────────────────────────────────────────────────────
 async function hubspot(path: string, method = "GET", body?: unknown) {
   const res = await fetch(`https://api.hubapi.com${path}`, {
@@ -106,6 +138,7 @@ const tools: Anthropic.Tool[] = [
       properties: {
         query: { type: "string", description: "Texte de recherche (nom, email, société...)" },
         limit: { type: "number", description: "Nombre max de résultats (défaut : 10)" },
+        my_contacts_only: { type: "boolean", description: "true = uniquement les contacts de l'utilisateur connecté" },
       },
       required: ["query"],
     },
@@ -113,12 +146,14 @@ const tools: Anthropic.Tool[] = [
   {
     name: "search_deals",
     description:
-      "Recherche des deals HubSpot par nom. Utilise cet outil quand on mentionne un deal ou une entreprise spécifique (ex: 'deal Mistral', 'opportunité Decathlon').",
+      "Recherche des deals HubSpot par nom. Utilise cet outil quand on mentionne un deal ou une entreprise spécifique.",
     input_schema: {
       type: "object" as const,
       properties: {
         query: { type: "string", description: "Nom du deal ou de l'entreprise à chercher" },
         limit: { type: "number", description: "Nombre max de résultats (défaut : 10)" },
+        my_deals_only: { type: "boolean", description: "true = uniquement les deals de l'utilisateur connecté" },
+        owner_id: { type: "string", description: "Filtrer par un owner_id spécifique" },
       },
       required: ["query"],
     },
@@ -126,10 +161,13 @@ const tools: Anthropic.Tool[] = [
   {
     name: "get_deals",
     description:
-      "Récupère TOUS les deals HubSpot en format compact (id, nom, stage, montant, dates, statut won/lost/open). Utilise cet outil pour avoir la liste complète du pipeline et identifier les deals pertinents. Pour accéder aux conversations (notes, appels, réunions, emails) d'un deal identifié, utilise ensuite get_deal_activity avec l'id du deal.",
+      "Récupère les deals HubSpot en format compact. Utilise cet outil pour avoir la liste du pipeline. Pour les conversations d'un deal, utilise ensuite get_deal_activity.",
     input_schema: {
       type: "object" as const,
-      properties: {},
+      properties: {
+        my_deals_only: { type: "boolean", description: "true = uniquement les deals de l'utilisateur connecté" },
+        owner_id: { type: "string", description: "Filtrer par un owner_id spécifique (ex: deals de Quentin → son owner_id)" },
+      },
       required: [],
     },
   },
@@ -226,17 +264,86 @@ const tools: Anthropic.Tool[] = [
       required: ["channel", "message"],
     },
   },
+  {
+    name: "web_search",
+    description:
+      "Recherche sur le web en temps réel. Utilise cet outil pour des questions sur l'actualité, les concurrents, les tendances marché, ou toute information externe récente.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Requête de recherche (en anglais ou français selon le sujet)" },
+        days: { type: "number", description: "Limiter aux résultats des N derniers jours (défaut : 30)" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "search_drive",
+    description:
+      "Recherche des fichiers dans Google Drive par mots-clés. Utilise cet outil pour trouver des présentations, propositions commerciales, documents liés à un deal ou un client.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Mots-clés de recherche (nom de client, deal, type de doc...)" },
+        limit: { type: "number", description: "Nombre max de résultats (défaut : 10)" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "read_drive_file",
+    description:
+      "Lit le contenu textuel d'un fichier Google Drive (Google Docs, Sheets, Slides exportés en texte). Utilise cet outil après search_drive pour lire un document trouvé.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        file_id: { type: "string", description: "ID du fichier Google Drive" },
+        mime_type: { type: "string", description: "Type MIME du fichier (ex: application/vnd.google-apps.document)" },
+      },
+      required: ["file_id"],
+    },
+  },
 ];
 
 // ── Tool execution ────────────────────────────────────────────────────────────
-async function executeTool(name: string, input: Record<string, unknown>, onProgress?: (msg: string) => void): Promise<string> {
+// ── Google Drive helper (shared token via env var) ───────────────────────────
+let _driveAccessToken: string | null = null;
+let _driveTokenExpiry = 0;
+
+async function getDriveAccessToken(): Promise<string> {
+  if (_driveAccessToken && Date.now() < _driveTokenExpiry) return _driveAccessToken;
+  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
+  if (!refreshToken) throw new Error("GOOGLE_DRIVE_REFRESH_TOKEN non configuré");
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      refresh_token: refreshToken,
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      grant_type: "refresh_token",
+    }),
+  });
+  if (!res.ok) throw new Error("Échec du refresh token Drive");
+  const { access_token, expires_in } = await res.json();
+  _driveAccessToken = access_token;
+  _driveTokenExpiry = Date.now() + ((expires_in ?? 3600) - 60) * 1000;
+  return access_token;
+}
+
+async function executeTool(name: string, input: Record<string, unknown>, onProgress?: (msg: string) => void, userOwnerId?: string | null): Promise<string> {
   switch (name) {
     case "search_contacts": {
       const props = getPropertyNames("contacts");
+      const filters: { propertyName: string; operator: string; value: string }[] = [];
+      if (input.my_contacts_only && userOwnerId) {
+        filters.push({ propertyName: "hubspot_owner_id", operator: "EQ", value: userOwnerId });
+      }
       const data = await hubspot("/crm/v3/objects/contacts/search", "POST", {
         query: input.query,
         limit: input.limit || 10,
         properties: props,
+        ...(filters.length ? { filterGroups: [{ filters }] } : {}),
       });
       const results = (data.results ?? []).map((r: { id: string; properties: Record<string, unknown> }) => ({
         id: r.id,
@@ -246,10 +353,17 @@ async function executeTool(name: string, input: Record<string, unknown>, onProgr
     }
     case "search_deals": {
       const props = getPropertyNames("deals");
+      const filters: { propertyName: string; operator: string; value: string }[] = [];
+      const dealOwnerId = input.owner_id as string | undefined
+        ?? (input.my_deals_only && userOwnerId ? userOwnerId : undefined);
+      if (dealOwnerId) {
+        filters.push({ propertyName: "hubspot_owner_id", operator: "EQ", value: dealOwnerId });
+      }
       const data = await hubspot("/crm/v3/objects/deals/search", "POST", {
         query: input.query,
         limit: input.limit || 10,
         properties: props,
+        ...(filters.length ? { filterGroups: [{ filters }] } : {}),
       });
       const results = (data.results ?? []).map((r: { id: string; properties: Record<string, unknown> }) => ({
         id: r.id,
@@ -261,12 +375,18 @@ async function executeTool(name: string, input: Record<string, unknown>, onProgr
       const props = getPropertyNames("deals");
       const allResults: { id: string; properties: Record<string, unknown> }[] = [];
       let after: string | undefined;
-      const MAX_PAGES = 50; // 10 000 deals max
+      const MAX_PAGES = 50;
       let pages = 0;
       let truncated = false;
+      const filterId = input.owner_id as string | undefined
+        ?? (input.my_deals_only && userOwnerId ? userOwnerId : undefined);
+      const ownerFilter = filterId
+        ? [{ propertyName: "hubspot_owner_id", operator: "EQ", value: filterId }]
+        : [];
       onProgress?.(`Récupération des deals... 0 chargés`);
       do {
         const data = await hubspot("/crm/v3/objects/deals/search", "POST", {
+          ...(ownerFilter.length ? { filterGroups: [{ filters: ownerFilter }] } : {}),
           sorts: [{ propertyName: "hs_lastmodifieddate", direction: "DESCENDING" }],
           limit: 200,
           ...(after ? { after } : {}),
@@ -344,7 +464,7 @@ async function executeTool(name: string, input: Record<string, unknown>, onProgr
       });
     }
     case "get_deal_activity": {
-      const T = 600; // max chars per field — keeps each deal activity under ~2k tokens
+      const T = 1500; // max chars per field
       const [notes, emails, calls, meetings] = await Promise.allSettled([
         hubspot(`/crm/v3/objects/notes/search`, "POST", {
           filterGroups: [{ filters: [{ propertyName: "associations.deal", operator: "EQ", value: input.deal_id }] }],
@@ -506,6 +626,74 @@ async function executeTool(name: string, input: Record<string, unknown>, onProgr
       });
       return `Message envoyé dans "${target}".`;
     }
+    case "web_search": {
+      const results = await searchTavily(
+        input.query as string,
+        (input.days as number) ?? 30
+      );
+      if (results.length === 0) return "Aucun résultat trouvé pour cette recherche.";
+      return JSON.stringify(
+        results.map((r) => ({
+          title: r.title,
+          url: r.url,
+          content: r.content.slice(0, 1000),
+          date: r.published_date,
+        }))
+      );
+    }
+    case "search_drive": {
+      try {
+        const token = await getDriveAccessToken();
+        const q = encodeURIComponent(
+          `fullText contains '${(input.query as string).replace(/'/g, "\\'")}'`
+        );
+        const limit = (input.limit as number) || 10;
+        const res = await fetch(
+          `https://www.googleapis.com/drive/v3/files?q=${q}&pageSize=${limit}&fields=files(id,name,mimeType,modifiedTime,webViewLink,owners)&orderBy=modifiedTime desc`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!res.ok) {
+          const err = await res.text().catch(() => "");
+          throw new Error(`Drive API ${res.status}: ${err.slice(0, 200)}`);
+        }
+        const data = await res.json();
+        const files = (data.files ?? []).map((f: { id: string; name: string; mimeType: string; modifiedTime: string; webViewLink: string }) => ({
+          id: f.id,
+          name: f.name,
+          type: f.mimeType,
+          modified: f.modifiedTime?.slice(0, 10),
+          link: f.webViewLink,
+        }));
+        if (files.length === 0) return `Aucun fichier trouvé pour "${input.query}".`;
+        return JSON.stringify(files);
+      } catch (e) {
+        return `Erreur Drive : ${e instanceof Error ? e.message : "inconnue"}`;
+      }
+    }
+    case "read_drive_file": {
+      try {
+        const token = await getDriveAccessToken();
+        const fileId = input.file_id as string;
+        const mime = (input.mime_type as string) ?? "";
+        let url: string;
+        if (mime.startsWith("application/vnd.google-apps.")) {
+          // Google Docs/Sheets/Slides → export as plain text
+          url = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`;
+        } else {
+          // Binary/other files → download content
+          url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+        }
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) {
+          const err = await res.text().catch(() => "");
+          throw new Error(`Drive API ${res.status}: ${err.slice(0, 200)}`);
+        }
+        const text = await res.text();
+        return text.slice(0, 8000); // limit to ~2k tokens
+      } catch (e) {
+        return `Erreur lecture Drive : ${e instanceof Error ? e.message : "inconnue"}`;
+      }
+    }
     default:
       return "Outil inconnu.";
   }
@@ -551,20 +739,39 @@ export async function POST(req: NextRequest) {
 
   const client = new Anthropic({ apiKey: claudeApiKey });
 
-  // Fetch user's personal prompt, fallback to global default, then hardcoded constant
+  // Fetch user's personal prompt, owner ID, and model preferences
   let systemPrompt: string;
   let chatModel = "claude-haiku-4-5-20251001";
+  let userOwnerId: string | null = null;
   if (process.env.SUPABASE_URL) {
-    const [{ data: userData }, { data: globalGuide }, { data: globalModelEntry }] = await Promise.all([
+    const [{ data: userData }, { data: globalGuide }, { data: globalModelEntry }, { data: ownerRow }] = await Promise.all([
       db.from("users").select("user_prompt").eq("id", user.id).single(),
       db.from("guide_defaults").select("content").eq("key", "bot").single(),
       db.from("guide_defaults").select("content").eq("key", "model_preferences").single(),
+      db.from("users").select("hubspot_owner_id").eq("id", user.id).single(),
     ]);
     systemPrompt = userData?.user_prompt ?? globalGuide?.content ?? DEFAULT_BOT_GUIDE;
+    userOwnerId = ownerRow?.hubspot_owner_id ?? null;
     try { if (globalModelEntry?.content) chatModel = (JSON.parse(globalModelEntry.content) as Record<string, string>).chat ?? chatModel; } catch { /* keep default */ }
   } else {
     systemPrompt = DEFAULT_BOT_GUIDE;
   }
+
+  // Fetch all HubSpot owners so the bot knows the team
+  let ownersMap: { id: string; name: string; email: string }[] = [];
+  try {
+    const ownersData = await hubspot("/crm/v3/owners?limit=100");
+    ownersMap = (ownersData.results ?? []).map((o: { id: string; firstName?: string; lastName?: string; email?: string }) => ({
+      id: o.id,
+      name: [o.firstName, o.lastName].filter(Boolean).join(" "),
+      email: o.email ?? "",
+    }));
+  } catch { /* owners fetch failed — continue without */ }
+
+  // Inject owner + team context into system prompt
+  const teamLines = ownersMap.map((o) => `- ${o.name} (owner_id: ${o.id}, ${o.email})`).join("\n");
+  const ownerContext = `\n\nCONTEXTE UTILISATEUR\nL'utilisateur connecté est ${user.name ?? user.email}${userOwnerId ? ` (HubSpot owner ID : ${userOwnerId})` : ""}.\nQuand il dit "mes deals" → utilise my_deals_only: true.\nQuand il dit "les deals de [prénom]" → résous le prénom ci-dessous et utilise owner_id.\n\nÉQUIPE COMMERCIALE (owners HubSpot) :\n${teamLines || "Aucun owner trouvé"}\n\nRÈGLES IMPORTANTES :\n- "les deals de Quentin" → trouver l'owner_id de Quentin dans la liste ci-dessus, puis get_deals avec owner_id\n- "deals perdu" ou "deals lost" = stage closedlost\n- "deals gagné" ou "deals won" = stage closedwon\n- Ne JAMAIS chercher un commercial comme un contact — ce sont des owners\n- Ne pose AUCUNE question de clarification — déduis du contexte`;
+  systemPrompt += ownerContext;
 
   const { messages } = await req.json();
   const model = chatModel;
@@ -589,7 +796,7 @@ export async function POST(req: NextRequest) {
         while (true) {
           const apiStream = client.messages.stream({
             model,
-            max_tokens: 4096,
+            max_tokens: 8192,
             system: systemPrompt,
             tools,
             messages: currentMessages,
@@ -637,6 +844,7 @@ export async function POST(req: NextRequest) {
                   tool.name,
                   tool.input as Record<string, unknown>,
                   (msg) => send({ type: "tool_progress", message: msg }),
+                  userOwnerId,
                 );
                 results.push({ type: "tool_result", tool_use_id: tool.id, content: result });
               } catch (e) {

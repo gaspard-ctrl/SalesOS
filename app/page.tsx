@@ -36,6 +36,9 @@ export default function IntelligencePage() {
     search_slack:              "Recherche dans Slack…",
     get_slack_channel_history: "Lecture du canal Slack…",
     send_slack_message:        "Envoi du message Slack…",
+    web_search:                "Recherche web…",
+    search_drive:              "Recherche dans Google Drive…",
+    read_drive_file:           "Lecture du document…",
   };
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -252,10 +255,10 @@ export default function IntelligencePage() {
             <Image src="/logo.png" alt="Coachello" width={56} height={56} quality={100} className="rounded-2xl" />
             <h1 className="text-2xl font-semibold" style={{ color: "#111" }}>CoachelloGPT</h1>
             <p className="text-sm max-w-sm" style={{ color: "#aaa" }}>
-              Pose une question sur tes deals, prospects, concurrents ou ton pipeline.
+              Ton assistant commercial : CRM, stratégie, méthodologie, rédaction, veille.
             </p>
             <div className="flex flex-wrap gap-2 justify-center mt-2">
-              {["Quels deals sont à risque ?", "Relances en retard ?", "Actualités concurrents ?"].map((q) => (
+              {["Quels deals sont à risque ?", "Relances en retard ?", "Rédige un cold email", "Explique la méthode MEDDIC", "Comment gérer l'objection prix ?"].map((q) => (
                 <button
                   key={q}
                   onClick={() => { setInput(q); }}
@@ -369,7 +372,7 @@ export default function IntelligencePage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Pose une question sur tes deals, prospects, concurrents..."
+            placeholder="Deals, stratégie, méthodologie, rédaction d'emails..."
             rows={1}
             className="flex-1 resize-none text-sm outline-none bg-transparent leading-relaxed"
             style={{ color: "#111", maxHeight: 200, overflowY: "auto" }}
@@ -384,7 +387,7 @@ export default function IntelligencePage() {
           </button>
         </div>
         <p className="text-center text-[10px] mt-2" style={{ color: "#ccc" }}>
-          Connecté à HubSpot · Slack · Gmail · Drive — bientôt disponible
+          Connecté à HubSpot · Slack · Web — Stratégie & méthodologie intégrées
         </p>
       </div>
 
