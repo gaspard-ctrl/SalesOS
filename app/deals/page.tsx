@@ -103,7 +103,6 @@ function engagementTypeBadge(type: string): string {
 function DealCard({ deal, selected, onClick }: { deal: Deal; selected: boolean; onClick: () => void }) {
   const hasScore = deal.score !== null;
   const badge = hasScore ? scoreBadge(deal.score!.total) : null;
-  const relColor = hasScore ? reliabilityColor(deal.score!.reliability) : "#9ca3af";
   const ref = deal.lastContacted || deal.lastModified;
   const closeDateMs = deal.closedate ? new Date(deal.closedate).getTime() : null;
   const lastContactMs = deal.lastContacted ? new Date(deal.lastContacted).getTime() : null;
@@ -143,28 +142,15 @@ function DealCard({ deal, selected, onClick }: { deal: Deal; selected: boolean; 
         </div>
       )}
 
-      {/* Score + reliability */}
+      {/* Score */}
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         {hasScore && badge ? (
-          <>
-            <span style={{
-              fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 99,
-              color: badge.color, background: badge.bg,
-            }}>
-              {deal.score!.total}
-            </span>
-            <div style={{ display: "flex", gap: 2 }}>
-              {[0, 1, 2, 3, 4].map((i) => (
-                <span key={i} style={{
-                  width: 6, height: 6, borderRadius: "50%",
-                  background: i < deal.score!.reliability ? relColor : "#e5e7eb",
-                }} />
-              ))}
-            </div>
-            <span style={{ fontSize: 10, color: relColor, fontWeight: 500 }}>
-              {reliabilityLabel(deal.score!.reliability)}
-            </span>
-          </>
+          <span style={{
+            fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 99,
+            color: badge.color, background: badge.bg,
+          }}>
+            {deal.score!.total}
+          </span>
         ) : (
           <span style={{ fontSize: 11, color: "#9ca3af", fontStyle: "italic" }}>Non scoré</span>
         )}
@@ -368,7 +354,7 @@ function DealDrawer({
 
   return (
     <div style={{
-      width: "50%", borderLeft: "1px solid #e5e7eb", background: "white",
+      width: "65%", borderLeft: "1px solid #e5e7eb", background: "white",
       display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0,
     }}>
       {/* Header */}
@@ -420,191 +406,206 @@ function DealDrawer({
               </p>
             )}
 
-            {/* ── Score breakdown ── */}
-            <Section title="Score de qualification">
-              {(() => {
-                const activeScore = localScore?.score ?? details.score;
-                const activeReasoning = localScore?.reasoning ?? details.reasoning;
-                const activeNextAction = localScore?.next_action ?? details.next_action;
-                const activeScoredAt = localScore?.scoredAt ?? details.scoredAt;
+            {/* ── Score + Qualification side by side ── */}
+            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
 
-                if (!activeScore) {
-                  return (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      <p style={{ fontSize: 12, color: "#9ca3af", margin: 0 }}>Ce deal n'a pas encore été scoré.</p>
-                      <button
-                        onClick={rescore}
-                        disabled={rescoring}
-                        style={{
-                          padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-                          background: "#eef2ff", color: "#4338ca", border: "1px solid #6366f1",
-                          cursor: rescoring ? "not-allowed" : "pointer",
-                          display: "flex", alignItems: "center", gap: 5,
-                        }}
-                      >
-                        {rescoring ? <><RefreshCw size={12} className="animate-spin" /> Scoring…</> : <><Zap size={12} /> Scorer ce deal</>}
-                      </button>
-                    </div>
-                  );
-                }
+              {/* Left: Score breakdown */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Section title="About the deal">
+                  {(() => {
+                    const activeScore = localScore?.score ?? details.score;
+                    const activeReasoning = localScore?.reasoning ?? details.reasoning;
+                    const activeNextAction = localScore?.next_action ?? details.next_action;
+                    const activeScoredAt = localScore?.scoredAt ?? details.scoredAt;
 
-                const badge = scoreBadge(activeScore.total);
-                const relColor = reliabilityColor(activeScore.reliability);
-                return (
-                  <div style={{ marginBottom: 8 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 22, fontWeight: 800, color: badge.color }}>{activeScore.total}</span>
-                        <span style={{ fontSize: 13, color: "#6b7280" }}>/100</span>
-                        <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: badge.bg, color: badge.color, fontWeight: 600 }}>
-                          {badge.label}
-                        </span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <div style={{ display: "flex", gap: 2 }}>
-                          {[0, 1, 2, 3, 4].map((i) => (
-                            <span key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: i < activeScore.reliability ? relColor : "#e5e7eb" }} />
-                          ))}
+                    if (!activeScore) {
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <p style={{ fontSize: 12, color: "#9ca3af", margin: 0 }}>Ce deal n'a pas encore été scoré.</p>
+                          <button
+                            onClick={rescore}
+                            disabled={rescoring}
+                            style={{
+                              padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                              background: "#eef2ff", color: "#4338ca", border: "1px solid #6366f1",
+                              cursor: rescoring ? "not-allowed" : "pointer",
+                              display: "flex", alignItems: "center", gap: 5,
+                            }}
+                          >
+                            {rescoring ? <><RefreshCw size={12} className="animate-spin" /> Scoring…</> : <><Zap size={12} /> Scorer ce deal</>}
+                          </button>
                         </div>
-                        <span style={{ fontSize: 11, color: relColor, fontWeight: 500 }}>
-                          {reliabilityLabel(activeScore.reliability)}
-                        </span>
-                      </div>
-                    </div>
+                      );
+                    }
 
-                    {/* AI reasoning */}
-                    {activeReasoning && (
-                      <div style={{ padding: "6px 10px", background: "#f8fafc", borderRadius: 6, border: "1px solid #e2e8f0", marginBottom: 6 }}>
-                        <p style={{ fontSize: 11, color: "#64748b", margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>{activeReasoning}</p>
-                      </div>
-                    )}
-
-                    {/* Next action */}
-                    {activeNextAction && (
-                      <div style={{ padding: "8px 10px", background: "#f0fdf4", borderRadius: 6, border: "1px solid #bbf7d0", marginBottom: 10, display: "flex", gap: 7, alignItems: "flex-start" }}>
-                        <span style={{ fontSize: 13, lineHeight: 1 }}>→</span>
-                        <p style={{ fontSize: 11, color: "#15803d", margin: 0, lineHeight: 1.5, fontWeight: 500 }}>{activeNextAction}</p>
-                      </div>
-                    )}
-
-                    {/* Components */}
-                    {activeScore.components.map((c) => (
-                      <div key={c.name} style={{ marginBottom: 6 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
-                          <span style={{ fontSize: 12, color: "#374151", display: "flex", alignItems: "center", gap: 4 }}>
-                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6366f1", display: "inline-block" }} />
-                            {c.name}
-                          </span>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: "#111827" }}>{c.earned}/{c.max}</span>
-                        </div>
-                        <div style={{ height: 4, background: "#f3f4f6", borderRadius: 2, overflow: "hidden" }}>
-                          <div style={{ height: "100%", background: "#6366f1", width: `${(c.earned / c.max) * 100}%`, borderRadius: 2 }} />
-                        </div>
-                      </div>
-                    ))}
-
-                    {/* Rescorer + date */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
-                      <button
-                        onClick={rescore}
-                        disabled={rescoring}
-                        style={{
-                          padding: "4px 10px", borderRadius: 6, fontSize: 11,
-                          background: "none", border: "1px solid #e5e7eb",
-                          color: "#6b7280", cursor: rescoring ? "not-allowed" : "pointer",
-                          display: "flex", alignItems: "center", gap: 4,
-                        }}
-                      >
-                        {rescoring ? <><RefreshCw size={10} className="animate-spin" /> Scoring…</> : <><RefreshCw size={10} /> Rescorer</>}
-                      </button>
-                      {activeScoredAt && (
-                        <span style={{ fontSize: 10, color: "#9ca3af" }}>
-                          Scoré {timeAgo(activeScoredAt)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-            </Section>
-
-            {/* ── Deal qualification ── */}
-            {localScore?.qualification && (() => {
-              const QUAL_FIELDS: { key: string; label: string }[] = [
-                { key: "budget",          label: "Budget" },
-                { key: "estimatedBudget", label: "Budget estimé" },
-                { key: "authority",       label: "Autorité (décisionnaire)" },
-                { key: "need",            label: "Besoin" },
-                { key: "champion",        label: "Champion interne" },
-                { key: "needDetailed",    label: "Besoin détaillé" },
-                { key: "timeline",        label: "Timeline" },
-                { key: "strategicFit",    label: "Fit stratégique" },
-              ];
-              const q = localScore.qualification!;
-              const known = QUAL_FIELDS.filter((f) => !!q[f.key]);
-              const missing = QUAL_FIELDS.filter((f) => !q[f.key]);
-              return (
-                <Section title="Qualification deal">
-                  <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 10 }}>
-                    {known.length}/{QUAL_FIELDS.length} informations collectées
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 0, border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
-                    {known.map((f, i) => (
-                      <div key={f.key} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px", borderBottom: i < known.length - 1 || missing.length > 0 ? "1px solid #f3f4f6" : undefined }}>
-                        <span style={{ fontSize: 12, lineHeight: 1.2, marginTop: 1 }}>✅</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7280", marginBottom: 2 }}>{f.label}</div>
-                          <div style={{ fontSize: 12, color: "#111827", lineHeight: 1.4 }}>{q[f.key]}</div>
-                        </div>
-                      </div>
-                    ))}
-                    {missing.length > 0 && (
-                      <div style={{ padding: "8px 12px", background: "#fffbfb" }}>
-                        <div style={{ fontSize: 10, fontWeight: 600, color: "#9ca3af", marginBottom: 6 }}>À collecter</div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                          {missing.map((f) => (
-                            <span key={f.key} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid #fecaca", background: "#fff", color: "#dc2626" }}>
-                              {f.label}
+                    const badge = scoreBadge(activeScore.total);
+                    const relColor = reliabilityColor(activeScore.reliability);
+                    return (
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 22, fontWeight: 800, color: badge.color }}>{activeScore.total}</span>
+                            <span style={{ fontSize: 13, color: "#6b7280" }}>/100</span>
+                            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: badge.bg, color: badge.color, fontWeight: 600 }}>
+                              {badge.label}
                             </span>
-                          ))}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ display: "flex", gap: 2 }}>
+                              {[0, 1, 2, 3, 4].map((i) => (
+                                <span key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: i < activeScore.reliability ? relColor : "#e5e7eb" }} />
+                              ))}
+                            </div>
+                            <span style={{ fontSize: 11, color: relColor, fontWeight: 500 }}>
+                              {reliabilityLabel(activeScore.reliability)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* AI reasoning */}
+                        {activeReasoning && (
+                          <div style={{ padding: "6px 10px", background: "#f8fafc", borderRadius: 6, border: "1px solid #e2e8f0", marginBottom: 6 }}>
+                            <p style={{ fontSize: 12, color: "#64748b", margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>{activeReasoning}</p>
+                          </div>
+                        )}
+
+                        {/* Next action */}
+                        {activeNextAction && (
+                          <div style={{ padding: "8px 10px", background: "#f0fdf4", borderRadius: 6, border: "1px solid #bbf7d0", marginBottom: 10, display: "flex", gap: 7, alignItems: "flex-start" }}>
+                            <span style={{ fontSize: 13, lineHeight: 1 }}>→</span>
+                            <p style={{ fontSize: 12, color: "#15803d", margin: 0, lineHeight: 1.5, fontWeight: 500 }}>{activeNextAction}</p>
+                          </div>
+                        )}
+
+                        {/* Components */}
+                        {activeScore.components.map((c) => (
+                          <div key={c.name} style={{ marginBottom: 6 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                              <span style={{ fontSize: 12, color: "#374151", display: "flex", alignItems: "center", gap: 4 }}>
+                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6366f1", display: "inline-block" }} />
+                                {c.name}
+                              </span>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: "#111827" }}>{c.earned}/{c.max}</span>
+                            </div>
+                            <div style={{ height: 4, background: "#f3f4f6", borderRadius: 2, overflow: "hidden" }}>
+                              <div style={{ height: "100%", background: "#6366f1", width: `${(c.earned / c.max) * 100}%`, borderRadius: 2 }} />
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Rescorer + date */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+                          <button
+                            onClick={rescore}
+                            disabled={rescoring}
+                            style={{
+                              padding: "4px 10px", borderRadius: 6, fontSize: 11,
+                              background: "none", border: "1px solid #e5e7eb",
+                              color: "#6b7280", cursor: rescoring ? "not-allowed" : "pointer",
+                              display: "flex", alignItems: "center", gap: 4,
+                            }}
+                          >
+                            {rescoring ? <><RefreshCw size={10} className="animate-spin" /> Scoring…</> : <><RefreshCw size={10} /> Rescorer</>}
+                          </button>
+                          {activeScoredAt && (
+                            <span style={{ fontSize: 10, color: "#9ca3af" }}>
+                              Scoré {timeAgo(activeScoredAt)}
+                            </span>
+                          )}
                         </div>
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </Section>
-              );
-            })()}
+              </div>
 
-            {/* ── Contacts ── */}
-            {details.contacts.length > 0 && (
-              <Section title="Contacts">
-                {details.contacts.map((c) => (
-                  <ContactRow key={c.id} contact={c} />
-                ))}
-              </Section>
-            )}
+              {/* Right: Deal qualification */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {localScore?.qualification && (() => {
+                  const QUAL_FIELDS: { key: string; label: string }[] = [
+                    { key: "budget",          label: "Budget" },
+                    { key: "estimatedBudget", label: "Budget estimé" },
+                    { key: "authority",       label: "Autorité (décisionnaire)" },
+                    { key: "need",            label: "Besoin" },
+                    { key: "champion",        label: "Champion interne" },
+                    { key: "needDetailed",    label: "Besoin détaillé" },
+                    { key: "timeline",        label: "Timeline" },
+                    { key: "strategicFit",    label: "Fit stratégique" },
+                  ];
+                  const q = localScore.qualification!;
+                  const known = QUAL_FIELDS.filter((f) => !!q[f.key]);
+                  const missing = QUAL_FIELDS.filter((f) => !q[f.key]);
+                  return (
+                    <Section title="Qualification">
+                      <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 10 }}>
+                        {known.length}/{QUAL_FIELDS.length} informations collectées
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 0, border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
+                        {known.map((f, i) => (
+                          <div key={f.key} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px", borderBottom: i < known.length - 1 || missing.length > 0 ? "1px solid #f3f4f6" : undefined }}>
+                            <span className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ background: "#22c55e" }} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7280", marginBottom: 2 }}>{f.label}</div>
+                              <div style={{ fontSize: 12, color: "#111827", lineHeight: 1.4 }}>{q[f.key]}</div>
+                            </div>
+                          </div>
+                        ))}
+                        {missing.length > 0 && (
+                          <div style={{ padding: "8px 12px", background: "#fffbfb" }}>
+                            <div style={{ fontSize: 10, fontWeight: 600, color: "#9ca3af", marginBottom: 6 }}>À collecter</div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                              {missing.map((f) => (
+                                <span key={f.key} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid #fecaca", background: "#fff", color: "#dc2626" }}>
+                                  {f.label}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </Section>
+                  );
+                })()}
+              </div>
 
-            {/* ── Company ── */}
-            {(details.company.name || details.company.industry) && (
-              <Section title="Entreprise">
-                {details.company.name && <InfoRow label="Nom" value={details.company.name} />}
-                {details.company.industry && <InfoRow label="Secteur" value={details.company.industry} />}
-                {details.company.employees && <InfoRow label="Effectifs" value={details.company.employees} />}
-                {details.company.website && (
-                  <InfoRow label="Site" value={
-                    <a href={details.company.website.startsWith("http") ? details.company.website : `https://${details.company.website}`}
-                       target="_blank" rel="noreferrer"
-                       style={{ color: "#6366f1", textDecoration: "none" }}>
-                      {details.company.website}
-                    </a>
-                  } />
+            </div>
+
+            {/* ── Contacts + Company side by side ── */}
+            {(details.contacts.length > 0 || details.company.name || details.company.industry) && (
+              <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+                {details.contacts.length > 0 && (
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <Section title="Contacts">
+                      {details.contacts.map((c) => (
+                        <ContactRow key={c.id} contact={c} />
+                      ))}
+                    </Section>
+                  </div>
                 )}
-              </Section>
+                {(details.company.name || details.company.industry) && (
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <Section title="Entreprise">
+                      {details.company.name && <InfoRow label="Nom" value={details.company.name} />}
+                      {details.company.industry && <InfoRow label="Secteur" value={details.company.industry} />}
+                      {details.company.employees && <InfoRow label="Effectifs" value={details.company.employees} />}
+                      {details.company.website && (
+                        <InfoRow label="Site" value={
+                          <a href={details.company.website.startsWith("http") ? details.company.website : `https://${details.company.website}`}
+                             target="_blank" rel="noreferrer"
+                             style={{ color: "#6366f1", textDecoration: "none" }}>
+                            {details.company.website}
+                          </a>
+                        } />
+                      )}
+                    </Section>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* ── Recent activity ── */}
             {details.engagements.length > 0 && (
-              <div style={{ marginBottom: 20 }}>
+              <div style={{ marginBottom: 20, padding: "12px 14px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fafafa" }}>
                 <button
                   onClick={() => setShowEngagements((v) => !v)}
                   style={{
@@ -612,8 +613,11 @@ function DealDrawer({
                     padding: 0, display: "flex", alignItems: "center", gap: 6, marginBottom: showEngagements ? 10 : 0,
                   }}
                 >
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    Activité récente ({details.engagements.length})
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Activité récente
+                  </span>
+                  <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500 }}>
+                    ({details.engagements.length})
                   </span>
                   <span style={{
                     fontSize: 11, color: "#9ca3af", marginLeft: "auto",

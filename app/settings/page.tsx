@@ -166,20 +166,6 @@ export default async function SettingsPage() {
             </div>
           }
         />
-
-        {/* Google Drive */}
-        <IntegrationCard
-          title="Google Drive"
-          description="Accès aux documents partagés — disponible prochainement."
-          status={
-            <span
-              className="text-xs px-2.5 py-1 rounded-full"
-              style={{ background: "#f5f5f5", color: "#aaa" }}
-            >
-              Bientôt
-            </span>
-          }
-        />
       </div>
 
       {/* Guides IA */}

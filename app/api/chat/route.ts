@@ -303,6 +303,19 @@ const tools: Anthropic.Tool[] = [
       required: ["file_id"],
     },
   },
+  {
+    name: "list_drive_folder",
+    description:
+      "Liste les fichiers d'un dossier Google Drive. Utilise cet outil pour naviguer dans l'arborescence Drive, explorer un dossier spécifique.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        folder_id: { type: "string", description: "ID du dossier Drive (défaut : root = racine du Drive)" },
+        limit: { type: "number", description: "Nombre max de fichiers (défaut : 20)" },
+      },
+      required: [],
+    },
+  },
 ];
 
 // ── Tool execution ────────────────────────────────────────────────────────────
@@ -313,7 +326,7 @@ let _driveTokenExpiry = 0;
 async function getDriveAccessToken(): Promise<string> {
   if (_driveAccessToken && Date.now() < _driveTokenExpiry) return _driveAccessToken;
   const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
-  if (!refreshToken) throw new Error("GOOGLE_DRIVE_REFRESH_TOKEN non configuré");
+  if (!refreshToken) throw new Error("GOOGLE_DRIVE_REFRESH_TOKEN manquant dans .env");
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -324,7 +337,11 @@ async function getDriveAccessToken(): Promise<string> {
       grant_type: "refresh_token",
     }),
   });
-  if (!res.ok) throw new Error("Échec du refresh token Drive");
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    console.error("[Drive] Token refresh failed:", res.status, errBody);
+    throw new Error(`Refresh token Drive échoué (${res.status}): ${errBody.slice(0, 100)}`);
+  }
   const { access_token, expires_in } = await res.json();
   _driveAccessToken = access_token;
   _driveTokenExpiry = Date.now() + ((expires_in ?? 3600) - 60) * 1000;
@@ -643,20 +660,23 @@ async function executeTool(name: string, input: Record<string, unknown>, onProgr
     }
     case "search_drive": {
       try {
+        console.log("[Drive] search_drive called, query:", input.query);
         const token = await getDriveAccessToken();
+        console.log("[Drive] Got access token OK");
         const q = encodeURIComponent(
           `fullText contains '${(input.query as string).replace(/'/g, "\\'")}'`
         );
         const limit = (input.limit as number) || 10;
-        const res = await fetch(
-          `https://www.googleapis.com/drive/v3/files?q=${q}&pageSize=${limit}&fields=files(id,name,mimeType,modifiedTime,webViewLink,owners)&orderBy=modifiedTime desc`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        const url = `https://www.googleapis.com/drive/v3/files?q=${q}&pageSize=${limit}&fields=files(id,name,mimeType,modifiedTime,webViewLink)&orderBy=modifiedTime desc&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+        console.log("[Drive] Fetching:", url.slice(0, 200));
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok) {
           const err = await res.text().catch(() => "");
+          console.error("[Drive] API error:", res.status, err.slice(0, 300));
           throw new Error(`Drive API ${res.status}: ${err.slice(0, 200)}`);
         }
         const data = await res.json();
+        console.log("[Drive] Results:", data.files?.length ?? 0, "files");
         const files = (data.files ?? []).map((f: { id: string; name: string; mimeType: string; modifiedTime: string; webViewLink: string }) => ({
           id: f.id,
           name: f.name,
@@ -692,6 +712,37 @@ async function executeTool(name: string, input: Record<string, unknown>, onProgr
         return text.slice(0, 8000); // limit to ~2k tokens
       } catch (e) {
         return `Erreur lecture Drive : ${e instanceof Error ? e.message : "inconnue"}`;
+      }
+    }
+    case "list_drive_folder": {
+      try {
+        const token = await getDriveAccessToken();
+        const folderId = (input.folder_id as string) || "root";
+        const limit = (input.limit as number) || 20;
+        const q = encodeURIComponent(`'${folderId}' in parents and trashed = false`);
+        const res = await fetch(
+          `https://www.googleapis.com/drive/v3/files?q=${q}&pageSize=${limit}&fields=files(id,name,mimeType,modifiedTime,webViewLink)&orderBy=modifiedTime desc`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!res.ok) {
+          const err = await res.text().catch(() => "");
+          throw new Error(`Drive API ${res.status}: ${err.slice(0, 200)}`);
+        }
+        const data = await res.json();
+        const files = (data.files ?? []).map((f: { id: string; name: string; mimeType: string; modifiedTime: string; webViewLink: string }) => {
+          const isFolder = f.mimeType === "application/vnd.google-apps.folder";
+          return {
+            id: f.id,
+            name: f.name,
+            type: isFolder ? "dossier" : f.mimeType,
+            modified: f.modifiedTime?.slice(0, 10),
+            link: f.webViewLink,
+          };
+        });
+        if (files.length === 0) return "Dossier vide.";
+        return JSON.stringify(files);
+      } catch (e) {
+        return `Erreur Drive : ${e instanceof Error ? e.message : "inconnue"}`;
       }
     }
     default:
@@ -815,6 +866,8 @@ export async function POST(req: NextRequest) {
             costWarned = true;
             send({ type: "cost_warning", cost: currentCost });
           }
+
+          console.log("[Chat] stop_reason:", message.stop_reason, "content blocks:", message.content.map(b => b.type));
 
           if (message.stop_reason === "end_turn") {
             // Send full message history (with tool calls) back to client for next turn

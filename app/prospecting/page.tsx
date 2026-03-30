@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, KeyboardEvent } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Paperclip, Send, Save, X, Search, Loader2, Sparkles, RotateCcw, ChevronDown, ChevronRight, Linkedin, Copy, Check } from "lucide-react";
+import { Paperclip, Send, Save, X, Search, Loader2, Sparkles, RotateCcw, ChevronDown, ChevronRight, ChevronUp, Linkedin, Copy, Check, Mail, MailOpen, Phone, Calendar, MessageSquare } from "lucide-react";
 import Link from "next/link";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -32,6 +32,23 @@ interface ContactDetails extends SearchResult {
   crmDetails: { type: string; date: string; body: string }[];
 }
 
+// ── CRM body toggle (for long emails) ─────────────────────────────────────
+function CrmBodyToggle({ body }: { body: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <>
+      {expanded ? body : body.slice(0, 280) + "…"}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-0.5 mt-1.5 text-[11px] font-medium"
+        style={{ color: "#f01563" }}
+      >
+        {expanded ? (<>Réduire <ChevronUp size={12} /></>) : (<>Voir plus <ChevronDown size={12} /></>)}
+      </button>
+    </>
+  );
+}
+
 // ── Lifecycle helpers ──────────────────────────────────────────────────────
 
 const LIFECYCLE_LABELS: Record<string, string> = {
@@ -53,6 +70,15 @@ const LIFECYCLE_COLORS: Record<string, { bg: string; text: string }> = {
   opportunity:            { bg: "#fefce8", text: "#b45309" },
   customer:               { bg: "#f0fdf4", text: "#15803d" },
 };
+
+const CRM_TYPE_CONFIG: Record<string, { icon: typeof Mail; label: string; color: string; bg: string }> = {
+  EMAIL:          { icon: Mail,          label: "Email envoyé", color: "#2563eb", bg: "#eff6ff" },
+  INCOMING_EMAIL: { icon: MailOpen,      label: "Email reçu",   color: "#059669", bg: "#ecfdf5" },
+  CALL:           { icon: Phone,         label: "Appel",        color: "#d97706", bg: "#fffbeb" },
+  MEETING:        { icon: Calendar,      label: "Réunion",      color: "#7c3aed", bg: "#f5f3ff" },
+  NOTE:           { icon: MessageSquare, label: "Note",         color: "#6b7280", bg: "#f3f4f6" },
+};
+const CRM_TYPE_FALLBACK = { icon: MessageSquare, label: "Activité", color: "#6b7280", bg: "#f3f4f6" };
 
 function LifecycleBadge({ stage }: { stage: string }) {
   if (!stage) return null;
@@ -784,45 +810,70 @@ export default function ProspectingPage() {
       )}
 
       {/* CRM history popup */}
-      {showCrmPopup && selectedContact && (
+      {showCrmPopup && selectedContact && (() => {
+        return (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.4)" }}
+          style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(2px)" }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowCrmPopup(false); }}
         >
-          <div className="flex flex-col rounded-2xl shadow-2xl w-full max-w-xl mx-4" style={{ background: "#fff", maxHeight: "80vh" }}>
-            <div className="flex items-center justify-between px-5 py-4 border-b shrink-0" style={{ borderColor: "#f0f0f0" }}>
+          <div className="flex flex-col rounded-2xl shadow-2xl w-full max-w-2xl mx-4" style={{ background: "#fff", maxHeight: "85vh" }}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: "#f0f0f0" }}>
               <div>
-                <p className="text-sm font-semibold" style={{ color: "#111" }}>Historique CRM</p>
-                <p className="text-xs" style={{ color: "#aaa" }}>
+                <p className="text-[15px] font-semibold" style={{ color: "#111" }}>Historique CRM</p>
+                <p className="text-xs mt-0.5" style={{ color: "#999" }}>
                   {selectedContact.firstName} {selectedContact.lastName} · {selectedContact.company}
                 </p>
               </div>
-              <button onClick={() => setShowCrmPopup(false)} style={{ color: "#aaa" }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#111")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "#aaa")}
-              >
+              <button onClick={() => setShowCrmPopup(false)} className="rounded-lg p-1.5 transition-colors hover:bg-gray-100" style={{ color: "#999" }}>
                 <X size={18} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-5 space-y-3">
-              {selectedContact.crmDetails.length > 0 ? selectedContact.crmDetails.map((e, i) => (
-                <div key={i} className="rounded-xl border p-3 space-y-1" style={{ borderColor: "#f0f0f0" }}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#f0f0f0", color: "#555" }}>
-                      {e.type}
-                    </span>
-                    {e.date && <span className="text-[10px]" style={{ color: "#aaa" }}>{e.date}</span>}
+            {/* Timeline */}
+            <div className="flex-1 overflow-y-auto px-6 py-5">
+              {selectedContact.crmDetails.length > 0 ? (
+                <div className="relative">
+                  {/* Vertical line */}
+                  <div className="absolute left-[15px] top-2 bottom-2 w-px" style={{ background: "#e5e7eb" }} />
+                  <div className="space-y-5">
+                    {selectedContact.crmDetails.map((e, i) => {
+                      const cfg = CRM_TYPE_CONFIG[e.type] ?? CRM_TYPE_FALLBACK;
+                      const Icon = cfg.icon;
+                      const isLong = e.body.length > 280;
+                      return (
+                        <div key={i} className="relative flex gap-4">
+                          {/* Icon dot */}
+                          <div className="relative z-10 shrink-0 w-[31px] h-[31px] rounded-full flex items-center justify-center" style={{ background: cfg.bg, border: `1.5px solid ${cfg.color}20` }}>
+                            <Icon size={14} style={{ color: cfg.color }} />
+                          </div>
+                          {/* Card */}
+                          <div className="flex-1 min-w-0 rounded-xl border p-4" style={{ borderColor: "#e5e7eb", background: "#fafafa" }}>
+                            <div className="flex items-center gap-2.5 mb-2">
+                              <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full" style={{ background: cfg.bg, color: cfg.color }}>
+                                {cfg.label}
+                              </span>
+                              {e.date && <span className="text-[11px]" style={{ color: "#999" }}>{e.date}</span>}
+                            </div>
+                            <div className="text-[13px] leading-[1.65] whitespace-pre-wrap" style={{ color: "#444" }}>
+                              {isLong ? (
+                                <CrmBodyToggle body={e.body} />
+                              ) : e.body}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: "#333" }}>{e.body}</p>
                 </div>
-              )) : (
-                <p className="text-xs text-center py-6" style={{ color: "#aaa" }}>{selectedContact.crmSummary}</p>
+              ) : (
+                <p className="text-sm text-center py-8" style={{ color: "#aaa" }}>{selectedContact.crmSummary}</p>
               )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Split layout */}
       <div className="flex flex-1 overflow-hidden">
@@ -1209,28 +1260,57 @@ export default function ProspectingPage() {
                           </p>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Field label="Email" value={selectedContact.email} readonly />
+                      {/* Contact metadata */}
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Mail size={12} style={{ color: "#bbb" }} />
+                          <span className="text-xs" style={{ color: "#555" }}>{selectedContact.email}</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {selectedContact.lifecyclestage && <LifecycleBadge stage={selectedContact.lifecyclestage} />}
+                          {selectedContact.leadStatus && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: "#f0f0f0", color: "#888" }}>
+                              {selectedContact.leadStatus}
+                            </span>
+                          )}
+                        </div>
                         <Field label="Secteur" value={contactIndustry} onChange={setContactIndustry} placeholder="ex: Technology" />
-                        {selectedContact.lifecyclestage && (
-                          <Field label="Lifecycle" value={selectedContact.lifecyclestage} readonly />
-                        )}
-                        {selectedContact.leadStatus && (
-                          <Field label="Statut lead" value={selectedContact.leadStatus} readonly />
-                        )}
                       </div>
-                      {selectedContact.crmSummary && (
-                        <div className="mt-2">
+
+                      {/* Mini CRM timeline */}
+                      {(selectedContact.crmDetails?.length > 0 || selectedContact.crmSummary) && (
+                        <div className="mt-3 pt-3" style={{ borderTop: "1px solid #f0f0f0" }}>
                           <span className="text-[11px] font-medium" style={{ color: "#888" }}>Historique CRM</span>
+                          {selectedContact.crmDetails?.length > 0 ? (
+                            <div className="mt-2 space-y-2">
+                              {selectedContact.crmDetails.slice(0, 3).map((e, i) => {
+                                const cfg = CRM_TYPE_CONFIG[e.type] ?? CRM_TYPE_FALLBACK;
+                                const Icon = cfg.icon;
+                                return (
+                                  <div key={i} className="flex items-start gap-2.5">
+                                    <div className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center mt-0.5" style={{ background: cfg.bg }}>
+                                      <Icon size={11} style={{ color: cfg.color }} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: cfg.bg, color: cfg.color }}>{cfg.label}</span>
+                                        {e.date && <span className="text-[10px]" style={{ color: "#bbb" }}>{e.date}</span>}
+                                      </div>
+                                      <p className="text-[11px] leading-snug mt-0.5 line-clamp-1" style={{ color: "#666" }}>{e.body}</p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : selectedContact.crmSummary ? (
+                            <p className="text-[11px] mt-1.5 line-clamp-2" style={{ color: "#888" }}>{selectedContact.crmSummary}</p>
+                          ) : null}
                           <button
                             onClick={() => setShowCrmPopup(true)}
-                            className="w-full text-left mt-1 rounded-lg border px-3 py-2 text-xs transition-all"
-                            style={{ borderColor: "#e5e5e5", color: "#555", background: "#f9f9f9", lineHeight: 1.5 }}
-                            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#f01563"; e.currentTarget.style.background = "#fff8fb"; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#e5e5e5"; e.currentTarget.style.background = "#f9f9f9"; }}
+                            className="text-[10px] font-medium mt-2 block transition-opacity hover:opacity-80"
+                            style={{ color: "#f01563" }}
                           >
-                            <span className="line-clamp-2">{selectedContact.crmSummary}</span>
-                            <span className="text-[10px] mt-1 block" style={{ color: "#f01563" }}>Voir tout →</span>
+                            Voir tout l&apos;historique →
                           </button>
                         </div>
                       )}

@@ -20,7 +20,7 @@ export async function getCalendarEvents(userId: string, days = 7): Promise<Calen
     timeMax,
     singleEvents: "true",
     orderBy: "startTime",
-    maxResults: "20",
+    maxResults: "50",
   });
 
   const res = await fetch(
