@@ -39,6 +39,7 @@ export default function IntelligencePage() {
     web_search:                "Recherche web…",
     search_drive:              "Recherche dans Google Drive…",
     read_drive_file:           "Lecture du document…",
+    list_drive_folder:         "Navigation dans Drive…",
   };
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -387,7 +388,7 @@ export default function IntelligencePage() {
           </button>
         </div>
         <p className="text-center text-[10px] mt-2" style={{ color: "#ccc" }}>
-          Connecté à HubSpot · Slack · Web — Stratégie & méthodologie intégrées
+          Connecté à HubSpot · Slack · Google Drive · Web — Stratégie & méthodologie intégrées
         </p>
       </div>
 

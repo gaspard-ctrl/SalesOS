@@ -134,13 +134,34 @@ export async function POST(req: NextRequest) {
           const dealDetails = await Promise.all(
             dealIds.map((did) => hs(`/crm/v3/objects/deals/${did}?properties=dealname,dealstage,amount,closedate`))
           );
-          deals.push(...dealDetails.filter(Boolean).map((d) => ({
-            id: d.id,
-            name: d.properties.dealname ?? "",
-            stage: d.properties.dealstage ?? "",
-            amount: d.properties.amount ?? null,
-            closedate: d.properties.closedate ?? null,
-          })));
+          const validDeals = dealDetails.filter(Boolean);
+
+          // Fetch scores from deal_scores table for each deal
+          const dealScoreRows = validDeals.length > 0
+            ? await db
+                .from("deal_scores")
+                .select("deal_id, score, reasoning, next_action, scored_at")
+                .in("deal_id", validDeals.map((d) => d.id))
+            : { data: [] };
+          const scoreMap = new Map(
+            (dealScoreRows.data ?? []).map((r: { deal_id: string; score: unknown; reasoning: string | null; next_action: string | null; scored_at: string }) => [r.deal_id, r])
+          );
+
+          deals.push(...validDeals.map((d) => {
+            const scoreRow = scoreMap.get(d.id) as { score: { total: number; reliability: number }; reasoning: string | null; next_action: string | null; scored_at: string } | undefined;
+            return {
+              id: d.id,
+              name: d.properties.dealname ?? "",
+              stage: d.properties.dealstage ?? "",
+              amount: d.properties.amount ?? null,
+              closedate: d.properties.closedate ?? null,
+              scoreTotal: scoreRow?.score?.total ?? null,
+              scoreReliability: scoreRow?.score?.reliability ?? null,
+              reasoning: scoreRow?.reasoning ?? null,
+              nextAction: scoreRow?.next_action ?? null,
+              scoredAt: scoreRow?.scored_at ?? null,
+            };
+          }));
 
           // Engagements
           const engData = await hs(`/engagements/v1/engagements/associated/contact/${contact.id}/paged?count=25`);
@@ -159,7 +180,33 @@ export async function POST(req: NextRequest) {
           engagements.push(...contactEngagements);
         }
 
-        return { contacts, deals, engagements };
+        // Deduplicate deals by id
+        const seenDealIds = new Set<string>();
+        const uniqueDeals = (deals as { id: string }[]).filter((d) => {
+          if (seenDealIds.has(d.id)) return false;
+          seenDealIds.add(d.id);
+          return true;
+        });
+
+        // Resolve stage IDs to labels
+        let stageMap = new Map<string, string>();
+        try {
+          const pipelines = await hs("/crm/v3/pipelines/deals");
+          if (pipelines?.results) {
+            for (const p of pipelines.results) {
+              for (const s of p.stages ?? []) {
+                stageMap.set(s.id, s.label);
+              }
+            }
+          }
+        } catch { /* continue with raw stage ids */ }
+
+        const resolvedDeals = uniqueDeals.map((d: Record<string, unknown>) => ({
+          ...d,
+          stage: stageMap.get(d.stage as string) ?? d.stage,
+        }));
+
+        return { contacts, deals: resolvedDeals, engagements };
       })(),
 
       // Gmail: recent emails from/to attendees
