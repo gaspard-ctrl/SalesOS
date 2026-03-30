@@ -1,16 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, RotateCcw } from "lucide-react";
 
 export default function PromptPage() {
   const router = useRouter();
   const [content, setContent] = useState("");
+  const [globalDefault, setGlobalDefault] = useState("");
+  const [isPersonal, setIsPersonal] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const initialContent = useRef("");
 
   useEffect(() => {
     fetch("/api/prompt")
@@ -18,12 +21,17 @@ export default function PromptPage() {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then(({ prompt, firstName: fn }) => {
+      .then(({ prompt, firstName: fn, isPersonal: ip, globalDefault: gd }) => {
         setContent(prompt);
+        setGlobalDefault(gd);
+        setIsPersonal(ip);
         setFirstName(fn);
+        initialContent.current = prompt;
       })
       .catch((e) => setError(e.message));
   }, []);
+
+  const hasChanges = content !== initialContent.current;
 
   const save = async () => {
     setSaving(true);
@@ -38,6 +46,30 @@ export default function PromptPage() {
         const body = await r.json().catch(() => ({}));
         throw new Error(body.error ?? `HTTP ${r.status}`);
       }
+      setIsPersonal(true);
+      initialContent.current = content;
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur inconnue");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const resetToDefault = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: null }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setContent(globalDefault);
+      setIsPersonal(false);
+      initialContent.current = globalDefault;
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
@@ -65,14 +97,27 @@ export default function PromptPage() {
           <h1 className="text-sm font-semibold" style={{ color: "#111" }}>
             Guide de {firstName || "…"}
           </h1>
-          <p className="text-xs" style={{ color: "#aaa" }}>Personnalise le comportement de CoachelloGPT</p>
+          <p className="text-xs" style={{ color: "#aaa" }}>
+            {isPersonal ? "Guide personnalisé" : "Guide par défaut (admin)"}
+          </p>
         </div>
         <div className="flex items-center gap-2">
+          {isPersonal && (
+            <button
+              onClick={resetToDefault}
+              disabled={saving}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors"
+              style={{ background: "#f5f5f5", color: "#666" }}
+            >
+              <RotateCcw size={12} />
+              Réinitialiser
+            </button>
+          )}
           <button
             onClick={save}
-            disabled={saving}
+            disabled={saving || !hasChanges}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors"
-            style={{ background: saved ? "#22c55e" : "#f01563", color: "#fff", opacity: saving ? 0.7 : 1 }}
+            style={{ background: saved ? "#22c55e" : "#f01563", color: "#fff", opacity: saving || !hasChanges ? 0.5 : 1 }}
           >
             <Save size={12} />
             {saved ? "Sauvegardé !" : saving ? "…" : "Sauvegarder"}

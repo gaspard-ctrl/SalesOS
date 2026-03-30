@@ -34,6 +34,11 @@ async function hubspot(path: string, method = "GET", body?: unknown) {
     const text = await res.text().catch(() => "");
     throw new Error(`HubSpot ${res.status}: ${text.slice(0, 200)}`);
   }
+  const ct = res.headers.get("content-type") ?? "";
+  if (!ct.includes("application/json")) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`HubSpot réponse non-JSON (${ct}): ${text.slice(0, 200)}`);
+  }
   return res.json();
 }
 
