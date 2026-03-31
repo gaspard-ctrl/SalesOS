@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { logUsage } from "@/lib/log-usage";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 const DEFAULT_ANALYZE_MODEL = "claude-sonnet-4-6";
 

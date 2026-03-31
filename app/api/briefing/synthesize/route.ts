@@ -69,15 +69,17 @@ export async function POST(req: NextRequest) {
     }
 
     if (rawData.engagements.length > 0) {
-      sections.push("=== HISTORIQUE ÉCHANGES (" + rawData.engagements.length + " échanges) ===\n" +
-        rawData.engagements.map((e) => {
+      const sorted = [...rawData.engagements].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      sections.push("=== HISTORIQUE ÉCHANGES (" + sorted.length + " échanges, du plus récent au plus ancien) ===\n" +
+        sorted.map((e) => {
           const date = new Date(e.date).toLocaleDateString("fr-FR");
           return `[${e.type} — ${date}${e.duration ? ` — ${e.duration}min` : ""}]${e.subject ? ` Objet: ${e.subject}` : ""}${e.body ? `\n${e.body}` : ""}`;
         }).join("\n\n"));
     }
 
     if (rawData.gmailMessages.length > 0) {
-      sections.push("=== EMAILS RÉCENTS (Gmail) ===\n" + rawData.gmailMessages.slice(0, 5).map((m) =>
+      const sortedEmails = [...rawData.gmailMessages].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      sections.push("=== EMAILS RÉCENTS (Gmail, du plus récent au plus ancien) ===\n" + sortedEmails.slice(0, 5).map((m) =>
         `[${m.date}] De: ${m.from} | Objet: ${m.subject}\n${m.snippet}`
       ).join("\n\n"));
     }
