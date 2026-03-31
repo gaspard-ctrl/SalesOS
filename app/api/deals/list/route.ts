@@ -117,16 +117,16 @@ export async function GET(req: NextRequest) {
 
     // Fetch cached AI scores from Supabase
     const dealIds = rawDeals.map((d: { id: string }) => d.id);
-    let scoreMap: Record<string, { score: DealScore; reasoning: string; next_action: string; scored_at: string }> = {};
+    let scoreMap: Record<string, { score: DealScore; reasoning: string; next_action: string; scored_at: string; qualification: Record<string, string | null> | null }> = {};
     if (dealIds.length > 0 && process.env.SUPABASE_URL) {
       const { data: cached } = await db
         .from("deal_scores")
-        .select("deal_id, score, reasoning, next_action, scored_at")
+        .select("deal_id, score, reasoning, next_action, qualification, scored_at")
         .in("deal_id", dealIds);
       scoreMap = Object.fromEntries(
-        (cached ?? []).map((c: { deal_id: string; score: DealScore; reasoning: string; next_action: string; scored_at: string }) => [
+        (cached ?? []).map((c: { deal_id: string; score: DealScore; reasoning: string; next_action: string; scored_at: string; qualification: Record<string, string | null> | null }) => [
           c.deal_id,
-          { score: c.score, reasoning: c.reasoning, next_action: c.next_action, scored_at: c.scored_at },
+          { score: c.score, reasoning: c.reasoning, next_action: c.next_action, scored_at: c.scored_at, qualification: c.qualification ?? null },
         ])
       );
     }
@@ -139,6 +139,7 @@ export async function GET(req: NextRequest) {
         reasoning: cached?.reasoning ?? null,
         next_action: cached?.next_action ?? null,
         scoredAt: cached?.scored_at ?? null,
+        qualification: cached?.qualification ?? null,
       };
     });
 

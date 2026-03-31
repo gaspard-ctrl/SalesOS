@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
           score: { total: result.total, components: result.components, reliability: result.reliability },
           reasoning: result.reasoning,
           next_action: result.next_action,
+          qualification: result.qualification ?? null,
           scored_at: new Date().toISOString(),
         }, { onConflict: "deal_id" });
         scored++;

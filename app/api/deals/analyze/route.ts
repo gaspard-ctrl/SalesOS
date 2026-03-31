@@ -251,6 +251,13 @@ Retourne UNIQUEMENT un JSON valide avec cette structure :
     const analysis = JSON.parse(jsonMatch[0]);
     return NextResponse.json(analysis);
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur" }, { status: 500 });
+    const msg = e instanceof Error ? e.message : "Erreur";
+    console.error("[analyze] error:", msg);
+    // Detect HTML responses from overloaded APIs
+    const isHtml = msg.includes("<HTML") || msg.includes("<html") || msg.includes("<!DOCTYPE");
+    return NextResponse.json(
+      { error: isHtml ? "L'API Claude est temporairement surchargée. Réessaie dans quelques secondes." : msg },
+      { status: isHtml ? 503 : 500 },
+    );
   }
 }
