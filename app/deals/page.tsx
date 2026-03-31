@@ -23,6 +23,7 @@ interface Deal {
   reasoning: string | null;
   next_action: string | null;
   scoredAt: string | null;
+  qualification: Record<string, string | null> | null;
 }
 
 interface DealDetails extends Deal {
@@ -33,6 +34,7 @@ interface DealDetails extends Deal {
   reasoning: string | null;
   next_action: string | null;
   scoredAt: string | null;
+  qualification: Record<string, string | null> | null;
 }
 
 interface Stage {
@@ -275,6 +277,10 @@ function DealDrawer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dealId: details.id }),
       });
+      const ct = r.headers.get("content-type") ?? "";
+      if (!ct.includes("application/json")) {
+        throw new Error("Le serveur a renvoyé une réponse inattendue. Réessaie dans un moment.");
+      }
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? "Erreur");
       setAnalysis(data);
@@ -521,7 +527,9 @@ function DealDrawer({
 
               {/* Right: Deal qualification */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                {localScore?.qualification && (() => {
+                {(() => {
+                  const activeQualification = localScore?.qualification ?? details.qualification;
+                  if (!activeQualification) return null;
                   const QUAL_FIELDS: { key: string; label: string }[] = [
                     { key: "budget",          label: "Budget" },
                     { key: "estimatedBudget", label: "Budget estimé" },
@@ -532,7 +540,7 @@ function DealDrawer({
                     { key: "timeline",        label: "Timeline" },
                     { key: "strategicFit",    label: "Fit stratégique" },
                   ];
-                  const q = localScore.qualification!;
+                  const q = activeQualification;
                   const known = QUAL_FIELDS.filter((f) => !!q[f.key]);
                   const missing = QUAL_FIELDS.filter((f) => !q[f.key]);
                   return (

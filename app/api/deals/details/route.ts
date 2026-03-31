@@ -126,10 +126,11 @@ export async function GET(req: NextRequest) {
     let reasoning: string | null = null;
     let next_action: string | null = null;
     let scoredAt: string | null = null;
+    let qualification: Record<string, string | null> | null = null;
     if (process.env.SUPABASE_URL) {
       const { data: cached } = await db
         .from("deal_scores")
-        .select("score, reasoning, next_action, scored_at")
+        .select("score, reasoning, next_action, qualification, scored_at")
         .eq("deal_id", id)
         .maybeSingle();
       if (cached) {
@@ -137,6 +138,7 @@ export async function GET(req: NextRequest) {
         reasoning = cached.reasoning ?? null;
         next_action = cached.next_action ?? null;
         scoredAt = cached.scored_at ?? null;
+        qualification = (cached.qualification as Record<string, string | null>) ?? null;
       }
     }
 
@@ -157,6 +159,7 @@ export async function GET(req: NextRequest) {
       reasoning,
       next_action,
       scoredAt,
+      qualification,
       contacts,
       company,
       engagements,

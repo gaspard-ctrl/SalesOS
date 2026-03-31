@@ -208,8 +208,12 @@ export default function IntelligencePage() {
       setStreamingText("");
       setToolSteps([]);
       setLoading(false);
-    } catch {
-      setMessages((prev) => [...prev, { role: "assistant", content: "Erreur de connexion. Réessaie." }]);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "Erreur inconnue";
+      console.error("[Chat] client error:", detail);
+      setMessages((prev) => [...prev, { role: "assistant", content: `Erreur de connexion : ${detail}` }]);
+      setStreamingText("");
+      setToolSteps([]);
       setLoading(false);
     }
   };
