@@ -8,6 +8,7 @@ import { logUsage } from "@/lib/log-usage";
 const DEFAULT_SCORE_MODEL = "claude-haiku-4-5-20251001";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 async function hubspot(path: string, method = "GET", body?: unknown) {
   const res = await fetch(`https://api.hubapi.com${path}`, {

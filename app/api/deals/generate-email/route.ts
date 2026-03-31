@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { logUsage } from "@/lib/log-usage";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 async function hubspot(path: string, method = "GET", body?: unknown) {
   const res = await fetch(`https://api.hubapi.com${path}`, {
