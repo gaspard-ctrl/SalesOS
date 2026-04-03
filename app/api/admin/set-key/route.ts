@@ -33,7 +33,9 @@ export async function POST(req: NextRequest) {
     .eq("user_id", userId)
     .eq("service", "claude");
 
-  console.log(`[set-key] Delete old key for ${userId}: ${delError ? delError.message : "OK"}`);
+  if (delError) {
+    return NextResponse.json({ error: "Échec suppression ancienne clé" }, { status: 500 });
+  }
 
   const { error: insError } = await db.from("user_keys").insert({
     user_id: userId,
@@ -45,10 +47,8 @@ export async function POST(req: NextRequest) {
   });
 
   if (insError) {
-    console.error(`[set-key] Insert failed for ${userId}:`, insError.message);
-    return NextResponse.json({ error: insError.message }, { status: 500 });
+    return NextResponse.json({ error: "Échec sauvegarde clé" }, { status: 500 });
   }
 
-  console.log(`[set-key] Key saved for ${userId}: encrypted_len=${encryptedKey.length}, starts="${claudeKey.slice(0, 7)}"`);
   return NextResponse.json({ success: true });
 }

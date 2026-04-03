@@ -71,40 +71,40 @@ export async function POST(req: NextRequest) {
 
     const hubspotContext = deal ? `Deal HubSpot existant : "${deal.dealName}" (stage: ${deal.stage})` : "Aucun deal HubSpot trouvé.";
 
+    const contextTool: Anthropic.Tool = {
+      name: "company_context",
+      description: "Fiche contexte entreprise",
+      input_schema: {
+        type: "object" as const,
+        properties: {
+          description: { type: "string", description: "1 phrase : secteur, taille, stade" },
+          keyFacts: { type: "array", items: { type: "string" }, description: "3-5 faits clés pour un commercial coaching" },
+          hubspotDeal: { type: "string", description: "Nom du deal HubSpot ou null" },
+        },
+        required: ["description", "keyFacts"],
+      },
+    };
+
     const client = new Anthropic();
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 512,
-      system: "Tu es un analyste commercial. À partir de sources web, génère une fiche contexte concise sur une entreprise, utile pour un commercial en coaching B2B.",
+      max_tokens: 1024,
+      system: "Tu es un analyste commercial. Génère une fiche contexte concise utile pour un commercial en coaching B2B. Utilise l'outil company_context.",
       messages: [{
         role: "user",
-        content: `Entreprise : ${company}
-${hubspotContext}
-
-Sources web :
-${sourcesText}
-
-Génère une fiche contexte avec :
-- description: 1 phrase de présentation (secteur, taille approx, stade)
-- keyFacts: 3 à 5 faits clés pertinents pour un commercial coaching (RH, leadership, croissance, défis)
-- hubspotDeal: le nom du deal HubSpot si présent, sinon null
-
-Réponds UNIQUEMENT en JSON :
-{ "description": "...", "keyFacts": ["...", "..."], "hubspotDeal": null }`,
+        content: `Entreprise : ${company}\n${hubspotContext}\n\nSources web :\n${sourcesText}`,
       }],
+      tools: [contextTool],
+      tool_choice: { type: "tool" as const, name: "company_context" },
     });
 
     logUsage(user.id, "claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens, "market_context");
 
-    const raw = message.content[0].type === "text" ? message.content[0].text : "";
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return NextResponse.json({ description: company, keyFacts: [], hubspotDeal: null });
-
-    try {
-      return NextResponse.json(JSON.parse(jsonMatch[0]));
-    } catch {
+    const toolBlock = message.content.find((b) => b.type === "tool_use");
+    if (!toolBlock || !("input" in toolBlock)) {
       return NextResponse.json({ description: company, keyFacts: [], hubspotDeal: null });
     }
+    return NextResponse.json(toolBlock.input);
   } catch (e) {
     console.error("company-context error:", e);
     return NextResponse.json({ description: "", keyFacts: [], hubspotDeal: null });

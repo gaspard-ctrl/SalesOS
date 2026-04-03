@@ -20,12 +20,15 @@ export default function RootLayout({
 }) {
   return (
     <ClerkProvider>
-      <html lang="en" suppressHydrationWarning>
+      <html lang="fr" suppressHydrationWarning>
         <body className={`${geist.className} antialiased`} style={{ background: "#ffffff", color: "#111" }}>
+          <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:p-2 focus:bg-white focus:text-black">
+            Aller au contenu principal
+          </a>
           <TooltipProvider>
             <div className="flex h-screen overflow-hidden">
               <Sidebar />
-              <main className="flex-1 overflow-y-auto" style={{ background: "#f9f9f9" }}>
+              <main id="main-content" className="flex-1 overflow-y-auto" style={{ background: "#f9f9f9" }}>
                 {children}
               </main>
             </div>

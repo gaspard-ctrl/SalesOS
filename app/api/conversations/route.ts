@@ -15,8 +15,10 @@ export async function GET() {
     .order("updated_at", { ascending: false })
     .limit(30);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ conversations: data ?? [] });
+  if (error) return NextResponse.json({ error: "Erreur chargement conversations" }, { status: 500 });
+  const response = NextResponse.json({ conversations: data ?? [] });
+  response.headers.set("Cache-Control", "private, max-age=10, stale-while-revalidate=30");
+  return response;
 }
 
 export async function POST(req: NextRequest) {

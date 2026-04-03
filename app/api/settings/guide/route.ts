@@ -15,10 +15,12 @@ export async function GET() {
     .eq("id", user.id)
     .single();
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     guide: data?.prospection_guide ?? null,
     default: DEFAULT_PROSPECTION_GUIDE,
   });
+  response.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=60");
+  return response;
 }
 
 export async function POST(req: NextRequest) {

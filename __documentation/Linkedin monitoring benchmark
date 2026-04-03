@@ -1,0 +1,274 @@
+================================================================================
+   COMPARATIF LINKEDIN MONITORING POUR SALESOS
+   Netrows vs Bright Data — Avril 2026
+================================================================================
+
+CONTEXTE
+--------
+SalesOS a besoin de surveiller ~150-300 entreprises françaises cibles pour :
+  1. Détecter les changements de poste (DRH, CHRO, Head of L&D, VP People...)
+  2. Récupérer les posts LinkedIn intéressants (coaching, L&D, transformation RH)
+  3. Alerter l'équipe commerciale en temps réel (Slack + feed in-app)
+
+
+================================================================================
+OPTION A : NETROWS (49€/mois) — Clé en main
+================================================================================
+
+Principe : API LinkedIn temps réel avec monitoring intégré (Radar + webhooks)
+
+FLUX — MONITORING CHANGEMENTS DE POSTE
+---------------------------------------
+Toi                         Netrows                      SalesOS
+ │                              │                            │
+ │  1. Ajouter 300 entreprises  │                            │
+ │  au Radar (300 crédits)      │                            │
+ │──────────────────────────────>│                            │
+ │                              │                            │
+ │  (monitoring gratuit à vie)  │                            │
+ │                              │                            │
+ │      Quelqu'un change de     │  2. Webhook POST auto      │
+ │      poste chez Danone       │───────────────────────────>│
+ │                              │  {profil, ancien poste,    │
+ │                              │   nouveau poste, date}     │
+ │                              │                            │
+ │                              │  3. SalesOS crée un signal │
+ │                              │     score 85, alerte Slack │
+ │                              │                            │
+ │  4. Tu reçois l'alerte       │                            │
+ │<─────────────────────────────────────────────────────────│
+
+COMMENT ÇA MARCHE
+------------------
+• Setup : 1 appel API pour ajouter chaque profil/entreprise au Radar
+         (300 crédits = ~1.50€ one-time)
+• Monitoring : Netrows surveille en continu, GRATUIT pour toujours après l'ajout
+• Webhook : quand un changement est détecté, Netrows POST automatiquement sur
+            https://ton-app.netlify.app/api/webhooks/netrows avec les données
+• Posts LinkedIn : 1 appel API par recherche de mots-clés
+                   ("coaching managers", "développement leadership") = 1 crédit
+• Crédits restants : avec 300 profils déjà en Radar, il reste ~9 700 crédits/mois
+                      pour les recherches de posts et l'enrichissement
+
+CE QU'IL FAUT CODER (~2 jours)
+-------------------------------
+1. Endpoint webhook /api/webhooks/netrows qui reçoit les changements et crée un signal
+2. Cron qui cherche les posts LinkedIn par mots-clés (1x/jour)
+3. Script d'init qui ajoute les 300 entreprises/profils au Radar
+4. Page UI /linkedin avec feed de signaux + gestion des watches
+5. Intégration Slack (notification sur changements détectés)
+
+API NETROWS — ENDPOINTS UTILES
+-------------------------------
+• 48+ endpoints LinkedIn dont :
+  - Profils (20+ endpoints) : profil complet, expérience, compétences
+  - Entreprises (12+ endpoints) : détails, posts, employés, insights
+  - Posts (4 endpoints) : recherche, réactions, hashtags
+  - Radar : ajout au monitoring, webhooks automatiques
+• Latence moyenne : ~1.4s par appel
+• SLA : 99.9% uptime
+• Format : JSON
+• Conformité : GDPR + CCPA
+
+PRICING NETROWS
+---------------
+  Plan Starter :  49€/mois  = 10 000 crédits (0.005€/crédit)
+  Plan Growth  : 299€/mois  = 100 000 crédits (0.003€/crédit)
+  Enterprise   : sur devis
+  Essai gratuit : 100 crédits
+
+  Coût par type d'appel :
+  • Profil LinkedIn          : 1 crédit
+  • Entreprise LinkedIn      : 1 crédit
+  • Company Insights premium : 10 crédits
+  • Ajout au Radar           : 1 crédit (one-time, monitoring gratuit ensuite)
+  • Recherche de posts       : 1 crédit
+
+
+================================================================================
+OPTION B : BRIGHT DATA (~2-20$/mois) — Fait maison
+================================================================================
+
+Principe : Infrastructure de scraping (proxies + API async). Tu scrapes les pages
+LinkedIn, tu stockes les snapshots, tu fais le diff toi-même.
+
+FLUX — MONITORING CHANGEMENTS DE POSTE
+---------------------------------------
+
+SalesOS Cron (hebdo)             Bright Data              SalesOS DB
+ │                                   │                        │
+ │  1. Trigger scrape               │                        │
+ │  300 company pages               │                        │
+ │──────────────────────────────────>│                        │
+ │                                   │                        │
+ │  2. Bright Data scrape LinkedIn  │                        │
+ │     (async, ~5-15 min)           │                        │
+ │                                   │                        │
+ │  3. Webhook: "ready"             │                        │
+ │<──────────────────────────────────│                        │
+ │                                   │                        │
+ │  4. GET /snapshot/{id}            │                        │
+ │──────────────────────────────────>│                        │
+ │                                   │                        │
+ │  5. Données: 300 pages           │                        │
+ │     avec liste employés          │                        │
+ │<──────────────────────────────────│                        │
+ │                                   │                        │
+ │  6. Comparer avec snapshot        │                        │
+ │     précédent en DB               │───────────────────────>│
+ │                                   │  7. Diff: "Jean Dupont │
+ │                                   │  est passé DRH chez    │
+ │                                   │  Danone" → signal      │
+ │                                   │                        │
+ │  8. Alerte Slack                  │                        │
+ │<──────────────────────────────────────────────────────────│
+
+COMMENT ÇA MARCHE
+------------------
+• Trigger : cron hebdo qui envoie 300 URLs LinkedIn companies à Bright Data
+• Scraping : Bright Data scrape les pages (async, 5-15 min), notifie quand c'est prêt
+• Diff : tu télécharges les données, tu compares avec le snapshot précédent en DB
+• Détection : si un employé a changé de titre/poste → tu crées un signal
+• Posts : pareil — trigger un scrape "discover posts by keyword" avec tes mots-clés L&D
+
+ATTENTION : Bright Data n'a PAS de collector "employés par entreprise + titre".
+Les scrapers fonctionnent par URL de profil ou par nom de personne.
+→ Il faut construire la liste initiale de profils manuellement ou via Sales Navigator.
+
+CE QU'IL FAUT CODER (~5-7 jours)
+---------------------------------
+1. Table linkedin_snapshots pour stocker les employés de chaque entreprise
+2. Cron qui trigger le scrape Bright Data + webhook de réception
+3. Logique de diff (comparer ancien vs nouveau snapshot)
+4. Gestion des erreurs, retries, timeouts (scraping async = complexe)
+5. Création de signaux à partir des diffs
+6. Même chose pour les posts LinkedIn
+7. Page UI + intégration Slack
+
+PRICING BRIGHT DATA
+-------------------
+  Pay-as-you-go : $1.50 / 1 000 profils
+  510K records  : $0.98 / 1 000
+  1M records    : $0.83 / 1 000
+  Minimum dataset : $250/mois (si approche dataset)
+
+  Coût estimé pour 300 entreprises :
+  • Company pages (300/semaine)                        : ~$1.80/mois
+  • Profils employés (10 × 300 = 3 000 profils/semaine) : ~$18/mois
+  • Posts LinkedIn (mots-clés, ~500/mois)              : ~$3/mois
+  • TOTAL estimé                                       : ~$5-23/mois
+
+  Essai gratuit : 20 appels API
+
+
+================================================================================
+COMPARAISON DIRECTE
+================================================================================
+
+┌──────────────────────┬──────────────────────┬──────────────────────────────┐
+│ Critère              │ Netrows              │ Bright Data                  │
+├──────────────────────┼──────────────────────┼──────────────────────────────┤
+│ Prix mensuel         │ 49€/mois fixe        │ ~5-23$/mois (usage)          │
+├──────────────────────┼──────────────────────┼──────────────────────────────┤
+│ Changements de poste │ Automatique          │ À construire                 │
+│                      │ (Radar + webhooks)   │ (scrape + diff + snapshots)  │
+├──────────────────────┼──────────────────────┼──────────────────────────────┤
+│ Posts LinkedIn       │ 1 appel API =        │ Async (trigger, attendre     │
+│                      │ résultats immédiats  │ 5-15 min, récupérer)         │
+├──────────────────────┼──────────────────────┼──────────────────────────────┤
+│ Temps de dev         │ ~2 jours             │ ~5-7 jours                   │
+├──────────────────────┼──────────────────────┼──────────────────────────────┤
+│ Maintenance          │ Zéro                 │ Gérer les snapshots, diffs,  │
+│                      │                      │ erreurs, retries             │
+├──────────────────────┼──────────────────────┼──────────────────────────────┤
+│ Fiabilité            │ Ils gèrent tout      │ Tu gères les edge cases      │
+├──────────────────────┼──────────────────────┼──────────────────────────────┤
+│ Risque légal         │ Eux assument         │ Eux assument (seul scraper   │
+│                      │                      │ qui a gagné en justice)       │
+├──────────────────────┼──────────────────────┼──────────────────────────────┤
+│ Latence              │ ~1.4s par appel      │ 5-15 min (async batch)       │
+├──────────────────────┼──────────────────────┼──────────────────────────────┤
+│ Discovery employés   │ Oui (recherche par   │ Non (il faut les URLs ou     │
+│ par entreprise+titre │ critères via API)    │ les noms en amont)           │
+├──────────────────────┼──────────────────────┼──────────────────────────────┤
+│ Taux de succès       │ Non communiqué       │ ~98% (documenté)             │
+│ (scraping)           │ (acteur plus récent) │                              │
+├──────────────────────┼──────────────────────┼──────────────────────────────┤
+│ Essai gratuit        │ 100 crédits          │ 20 appels API                │
+├──────────────────────┼──────────────────────┼──────────────────────────────┤
+│ Endpoints LinkedIn   │ 48+                  │ ~10 collectors               │
+├──────────────────────┼──────────────────────┼──────────────────────────────┤
+│ Conformité           │ GDPR + CCPA          │ GDPR + CCPA                  │
+└──────────────────────┴──────────────────────┴──────────────────────────────┘
+
+
+================================================================================
+BUDGET ANNUEL COMPARÉ
+================================================================================
+
+                        Netrows          Bright Data
+                        -------          -----------
+Abonnement annuel       588€             ~60-276$ (~55-255€)
+Temps de dev initial    2 jours          5-7 jours
+Maintenance annuelle    ~0 jours         ~5-10 jours (bugs, LinkedIn changes)
+Coût dev estimé*        400€             1 200€
+
+COÛT TOTAL AN 1         ~988€            ~1 255-1 455€
+COÛT TOTAL AN 2+        ~588€            ~255-455€
+
+* Estimé à 200€/jour de dev (coût d'opportunité pour un dev solo)
+
+→ Netrows est plus cher en abonnement mais MOINS CHER en coût total la première
+  année grâce au temps de dev économisé. À partir de l'année 2, Bright Data
+  devient moins cher si la maintenance reste faible.
+
+
+================================================================================
+RISQUES ET LIMITES COMMUNS
+================================================================================
+
+1. SCRAPING LINKEDIN EN 2026 EST FRAGILE POUR TOUT LE MONDE
+   LinkedIn renforce ses protections en continu (rate limits, détection
+   comportementale, captchas). Tous les providers non-officiels peuvent
+   casser quand LinkedIn change quelque chose.
+
+2. FIABILITÉ DES POSTS
+   Récupérer les posts "intéressants" de 150 entreprises demande un bon
+   filtrage côté Claude pour éliminer le bruit (posts RH génériques,
+   publications corporate sans valeur). Prévoir un prompt de scoring
+   des posts par pertinence.
+
+3. COUVERTURE
+   Les changements de poste ne sont détectés que si la personne met à jour
+   son profil LinkedIn. Délai possible de quelques jours à plusieurs semaines.
+
+4. VOLUME
+   150-300 entreprises est un volume raisonnable pour les deux solutions.
+   Au-delà de 1 000, il faudrait revoir l'architecture (batching, queues).
+
+
+================================================================================
+RECOMMANDATION
+================================================================================
+
+VERDICT : NETROWS (Option A)
+
+Raisons :
+• Le Radar avec webhooks est exactement le use case demandé — détection
+  automatique des changements de poste sans rien coder côté diff/snapshot
+• La discovery d'employés par entreprise + titre fonctionne via l'API
+  (contrairement à Bright Data qui ne propose pas ce collector)
+• 2 jours de dev vs 5-7 jours — en solo, c'est 3-5 jours gagnés
+• Zéro maintenance vs gestion de snapshots, diffs et erreurs
+• 49€/mois est dérisoire comparé au temps économisé
+
+PLAN D'ACTION :
+1. Créer un compte Netrows (100 crédits gratuits)
+2. Tester sur 5-10 entreprises françaises : vérifier que les profils RH
+   remontent, que le Radar détecte les changements, que les posts sont OK
+3. Si OK → intégrer dans SalesOS (2 jours de dev)
+4. Si KO (fiabilité insuffisante) → fallback sur Bright Data
+
+================================================================================
+Coachello · SalesOS · Document interne · Avril 2026
+================================================================================

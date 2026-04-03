@@ -5,8 +5,10 @@ import { KeyStatus } from "./_components/key-status";
 import { GmailConnect } from "./_components/gmail-connect";
 import { CalendarStatus } from "./_components/calendar-status";
 import { GuideEditor } from "./_components/guide-editor";
+import { LockedGuideEditor } from "./_components/locked-guide-editor";
 import { SlackNameInput } from "./_components/slack-name-input";
 import { HubspotOwnerInput } from "./_components/hubspot-owner-input";
+import { AlertSettings } from "./_components/alert-settings";
 import { DEFAULT_BOT_GUIDE } from "@/lib/guides/bot";
 import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/guides/prospection";
 import { DEFAULT_BRIEFING_GUIDE } from "@/lib/guides/briefing";
@@ -47,7 +49,7 @@ export default async function SettingsPage() {
   const { claudeActive, gmailConnected, slackDisplayName, hubspotOwnerId } = await getIntegrationStatus(user.id);
 
   const [{ data: guides }, { data: globalGuides }] = await Promise.all([
-    db.from("users").select("user_prompt, prospection_guide, briefing_guide, model_preferences").eq("id", user.id).single(),
+    db.from("users").select("user_prompt, prospection_guide, briefing_guide, model_preferences, alert_config").eq("id", user.id).single(),
     db.from("guide_defaults").select("key, content"),
   ]);
 
@@ -85,7 +87,7 @@ export default async function SettingsPage() {
           title="Gmail"
           description="Connecte ton compte Gmail pour envoyer des emails et analyser tes échanges."
           status={
-            <Suspense>
+            <Suspense fallback={<span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "#f5f5f5", color: "#aaa" }}>Vérification…</span>}>
               <GmailConnect initialConnected={gmailConnected} />
             </Suspense>
           }
@@ -173,30 +175,43 @@ export default async function SettingsPage() {
         <div>
           <h2 className="text-base font-semibold" style={{ color: "#111" }}>Guides IA</h2>
           <p className="text-xs mt-1" style={{ color: "#888" }}>
-            Personnalise les instructions données à Claude. Tes guides remplacent les défauts pour toi uniquement.
+            Ajoute tes instructions personnelles aux guides IA. Le guide admin reste toujours actif.
           </p>
         </div>
-        <GuideEditor
-          initialGuide={guides?.user_prompt ?? null}
-          defaultGuide={globalBotGuide}
+        <LockedGuideEditor
+          adminGuide={globalBotGuide}
+          initialUserInstructions={guides?.user_prompt ?? ""}
           endpoint="/api/settings/bot-guide"
           title="Guide bot"
-          description="System prompt du chat CoachelloGPT."
+          description="System prompt du chat CoachelloGPT. Le guide admin est fixe, ajoute tes instructions en complément."
         />
         <GuideEditor
           initialGuide={guides?.prospection_guide ?? null}
           defaultGuide={globalProspectionGuide}
           endpoint="/api/settings/guide"
           title="Guide de prospection"
-          description="Instructions pour générer les emails dans Prospection et Market Intel."
+          description="Instructions pour générer les emails. Entièrement personnalisable."
         />
-        <GuideEditor
-          initialGuide={guides?.briefing_guide ?? null}
-          defaultGuide={globalBriefingGuide}
+        <LockedGuideEditor
+          adminGuide={globalBriefingGuide}
+          initialUserInstructions={guides?.briefing_guide ?? ""}
           endpoint="/api/settings/briefing-guide"
           title="Guide de briefing"
-          description="Instructions pour préparer les briefings pré-meeting."
+          description="Instructions pour les briefings pré-meeting. Le guide admin est fixe, ajoute tes instructions en complément."
         />
+      </div>
+
+      {/* Alertes Market Intel */}
+      <div className="mt-8 space-y-3">
+        <div>
+          <h2 className="text-base font-semibold" style={{ color: "#111" }}>Alertes Market Intel</h2>
+          <p className="text-xs mt-1" style={{ color: "#888" }}>
+            Configure les alertes Slack pour les signaux d&apos;achat prioritaires.
+          </p>
+        </div>
+        <div className="rounded-xl border p-5" style={{ borderColor: "#eeeeee", background: "#fff" }}>
+          <AlertSettings initialDmEnabled={(guides?.alert_config as { dm_enabled?: boolean } | null)?.dm_enabled ?? false} />
+        </div>
       </div>
     </div>
   );

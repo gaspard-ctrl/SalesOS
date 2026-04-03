@@ -1,0 +1,240 @@
+================================================================================
+                     SALESOS — FEUILLE DE ROUTE Q2 2026
+                           (Avril -> Juin)
+================================================================================
+
+Derniere mise a jour : 2 avril 2026
+
+Principe directeur : en solo, on attaque d'abord ce qui ameliore la qualite
+des donnees et l'experience quotidienne de l'equipe commerciale, avant de
+construire de nouvelles pages.
+
+================================================================================
+PHASE 1 — QUICK WINS & SCORING (Avril, ~3 semaines)
+================================================================================
+Changements a fort ROI qui ameliorent immediatement ce qui existe deja.
+
+[ ] 1. Option "Better Thinking" sur le GPT (~1-2 jours)
+    - Toggle dans l'UI : envoyer la requete sur Opus au lieu de Haiku/Sonnet
+    - Afficher un badge "deep thinking" + avertissement cout (3x)
+    - Le modele est deja configurable par user
+    - Changements : switch frontend + parametre dans /api/chat
+
+[ ] 2. Refonte du scoring deals (~5-7 jours)
+    Coeur de la valeur de SalesOS.
+    - Baisser le score budget quand le budget n'est pas fixe/valide
+      (pas juste "mentionne")
+    - Ajouter une 7eme dimension "Competition"
+      -> Concurrent identifie ? Combien ? Positionnement ?
+      -> Ajouter un champ "Concurrent identifie ?" dans la qualification BANT+
+    - Durcir les criteres globalement
+      -> Un deal moyen devrait avoir ~45-55, pas 70+
+    - Integrer la competition dans les recommandations
+      -> Ex: "3 concurrents identifies -> proposer un POC differenciant"
+    - Fichiers a modifier :
+      -> deals/score/route.ts (prompt)
+      -> deal-scoring.ts (modele)
+
+[ ] 3. Briefing : ajouter une question a Claude (~1 jour)
+    - Input libre sous le briefing genere
+    - Questions de suivi type : "Quel angle pour relancer ?",
+      "Comment aborder le sujet budget ?"
+    - Appel streaming vers Claude avec le contexte du briefing en memoire
+    - Quick win, peu de dev
+
+[ ] 4. Entrainer le bot sur le coaching (~2-3 jours)
+    - Recuperer le market analyse de Bapt
+    - Recuperer les contenus pertinents de #general Slack
+    - Injecter dans le guide bot (lib/guides/bot.ts) ou knowledge base dedie
+    - Le bot pourra repondre sur : marche du coaching, positionnement
+      Coachello, personas, concurrents
+
+================================================================================
+PHASE 2 — MEETING COACH & DONNEES (Mai, ~4 semaines)
+================================================================================
+La feature la plus impactante, plus le branchement de donnees manquantes.
+
+[ ] 5. Page "Meeting Coach" (~2 semaines)
+    LE differenciateur de SalesOS.
+    Architecture :
+    - Input : lien Claap (ou transcript colle) + type de meeting
+      -> Types : disco, follow-up, closing, QBR
+    - Claude analyse avec une grille adaptee au type :
+      -> MEDDIC pour la disco
+      -> SPIN pour le follow-up
+      -> Challenger pour le closing
+    - Output structure :
+      -> Resume du meeting
+      -> Ce qui a bien marche
+      -> Ce qui manque (infos non collectees, objections non traitees)
+      -> Score par critere methodologique
+      -> Conseils pour le prochain meeting
+    - Historique des debriefs par deal
+    - API route : /api/meeting-coach/analyze
+    - Page : app/meeting-coach/page.tsx
+    - Si Claap a une API, integrer la recup automatique du transcript
+
+[ ] 6. Pluger les donnees recentes (~1 semaine)
+    - Connecter les donnees provider/coaching au bot et aux briefings
+    - Definir avec l'equipe les sources exactes
+      (Notion ? Google Sheets ? API interne ?)
+    - Creer un outil IA read_coaching_data dans le chat
+    - S'assurer que les briefings utilisent des donnees fraiches
+
+[ ] 7. Rapport hebdo automatique Slack (~2-3 jours)
+    - Chaque lundi matin, message Slack auto dans le canal sales :
+      -> Deals a risque (sante rouge/orange)
+      -> Meetings de la semaine
+      -> Signaux concurrentiels importants
+      -> Top actions recommandees
+    - Toutes les donnees existent deja, c'est un cron qui agrege + envoie
+    - Peu d'effort, cree un rendez-vous recurrent avec l'outil
+
+================================================================================
+PHASE 3 — AUTOMATISATION & ADMIN (Juin, ~4 semaines)
+================================================================================
+
+[ ] 8. Page "Messages Slack programmes" (~1 semaine)
+    - Table scheduled_messages en DB
+      (user_id, channel, message_template, schedule/cron, active)
+    - Page UI avec formulaire + liste des messages actifs
+    - Cron job qui envoie les messages
+    - Chaque user configure ses propres messages
+    - Option "canal partage" pour les admins
+    - Tests integres
+
+[ ] 9. HubSpot Cleanup (~1 semaine)
+    - Page d'audit qui identifie les problemes de donnees :
+      -> Contacts sans email
+      -> Deals sans montant
+      -> Deals stagnants (pas d'activite depuis X jours)
+      -> Contacts dupliques
+      -> Lifecycle stages incoherents
+    - Claude propose des corrections, l'utilisateur valide
+    - L'app corrige via API HubSpot
+    - Approche : audit read-only d'abord, actions correctives ensuite
+
+[ ] 10. Dashboard Admin Quentin (~3-5 jours)
+    - A cadrer avec Quentin, mais probablement :
+      -> Vue usage par user
+      -> KPIs pipeline (nombre deals, valeur, conversion par stage)
+      -> Activite equipe (emails envoyes, meetings, briefings generes)
+    - Base sur les donnees deja en DB + HubSpot
+
+
+================================================================================
+AMELIORER LA PARTIE COMPETITION (a reflechir plus amplement)
+================================================================================
+Le module competitive existe deja (battlecards, signaux, rapports, chat IA,
+analyse batch via Tavily). Voici ce qui manquerait pour en faire un vrai
+avantage concurrentiel.
+
+[ ] 11. Lien competition <-> deals
+    - Quand un concurrent est detecte sur un deal, l'afficher dans le
+      scoring ET dans la fiche deal
+    - Historique : sur quels deals on a croise tel concurrent ?
+    - Win rate par concurrent (on gagne combien de fois face a X ?)
+    - Quand on perd, pourquoi ? (lien avec Win/Loss analysis)
+
+[ ] 12. Alertes concurrentielles en temps reel
+    - Notification Slack/in-app quand un nouveau signal est detecte
+      (levee de fonds, lancement produit, recrutement massif)
+    - Seuil de confiance configurable (ne pas spammer)
+    - Digest quotidien vs alerte immediate selon la gravite
+
+[ ] 13. Trap questions / Landmines pour les commerciaux
+    - Pour chaque concurrent, generer des questions "pieges" a poser
+      en meeting pour exposer les faiblesses du concurrent
+    - Ex : "Comment gerent-ils le multi-langue ?" si c'est un point faible
+    - Integrer dans les battlecards existantes
+    - Adapter les questions au type de meeting (disco, demo, closing)
+
+[ ] 14. Matrice de positionnement dynamique
+    - Tableau comparatif features/pricing auto-genere
+    - Axes configurables (prix, maturite, vertical, taille cible)
+    - Mis a jour automatiquement quand de nouveaux signaux arrivent
+    - Exportable en PDF/image pour les decks commerciaux
+
+[ ] 15. Integration competition <-> Meeting Coach
+    - Quand un concurrent est mentionne dans un transcript,
+      le detecter automatiquement
+    - Analyser comment le commercial a reagi (a-t-il utilise
+      les arguments de la battlecard ? a-t-il pose les trap questions ?)
+    - Conseils post-meeting specifiques a la situation concurrentielle
+
+[ ] 16. Veille competitive automatisee enrichie
+    - Ajouter des sources au-dela de Tavily :
+      -> G2/Capterra (avis clients concurrents)
+      -> LinkedIn (recrutements, posts des dirigeants)
+      -> Crunchbase (funding, acquisitions)
+      -> ProductHunt (lancements)
+    - Timeline visuelle de l'activite de chaque concurrent
+    - Tendances sur 3/6/12 mois (le concurrent accelere ou ralentit ?)
+
+[ ] 17. Objection handling training
+    - Simulateur de conversation avec Claude qui joue le role
+      d'un prospect qui cite un concurrent
+    - Le commercial s'entraine a repondre aux objections
+    - Score et feedback sur la qualite des reponses
+    - Base sur les vraies objections rencontrees (historique deals)
+
+[ ] 18. Competitive intelligence partagee
+    - Quand un commercial apprend quelque chose sur un concurrent
+      en meeting, il peut le remonter en 1 clic
+    - Feed interne "intel terrain" visible par toute l'equipe
+    - Claude synthetise les remontees terrain + signaux web
+      pour mettre a jour les battlecards automatiquement
+
+
+================================================================================
+BACKLOG Q3+ (deprioritise mais note)
+================================================================================
+
+[ ] Marketing Dashboard
+    - Gros chantier, pas core sales
+    - A recadrer : qu'est-ce qu'on veut vraiment mesurer ?
+
+[ ] Pipeline Analytics
+    - Taux de conversion par stage, velocite des deals, bottlenecks
+    - Tres utile mais apres le scoring refait
+
+[ ] Win/Loss Analysis
+    - Quand un deal est Closed Won ou Lost, Claude analyse pourquoi
+    - Detecter les patterns sur les deals gagnes/perdus
+
+[ ] Email Tracking
+    - Savoir si les emails de prospection sont ouverts/cliques
+    - Necessite un service tiers type SendGrid ou pixel tracker
+
+[ ] Alertes proactives
+    - Notification Slack quand un deal change de sante
+      (vert->orange, orange->rouge)
+    - Alerte quand un concurrent est detecte
+
+[ ] Integration LinkedIn Sales Navigator
+    - Enrichissement contacts automatique
+
+[ ] Comparaison rep vs rep
+    - Benchmarking des commerciaux
+    - Scores moyens, win rate, activite
+
+[ ] Playbook generator
+    - Generer des playbooks de vente a partir des deals gagnes
+    - Patterns de succes
+
+[ ] Integration Claap native
+    - Lien direct meeting -> deal -> coaching
+
+================================================================================
+NOTES
+================================================================================
+
+- Le scoring et le Meeting Coach sont les deux features qui differencient
+  le plus SalesOS d'un simple CRM
+- Le scoring bien fait = l'equipe ouvre SalesOS tous les jours
+- Le Meeting Coach = transforme l'outil en vrai coach commercial
+- Le rapport hebdo Slack cree un rendez-vous recurrent avec l'outil
+  pour toute l'equipe (peu d'effort, gros impact)
+- Le marketing dashboard est repousse en Q3 : en solo, mieux a faire
+
+Stack : Next.js, Supabase, Claude API, HubSpot, Slack, Gmail

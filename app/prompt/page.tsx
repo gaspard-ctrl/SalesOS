@@ -2,18 +2,18 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, RotateCcw } from "lucide-react";
+import { ArrowLeft, Save, ChevronDown, ChevronRight } from "lucide-react";
 
 export default function PromptPage() {
   const router = useRouter();
-  const [content, setContent] = useState("");
-  const [globalDefault, setGlobalDefault] = useState("");
-  const [isPersonal, setIsPersonal] = useState(false);
+  const [adminGuide, setAdminGuide] = useState("");
+  const [instructions, setInstructions] = useState("");
   const [firstName, setFirstName] = useState("");
+  const [showAdmin, setShowAdmin] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const initialContent = useRef("");
+  const initialInstructions = useRef("");
 
   useEffect(() => {
     fetch("/api/prompt")
@@ -21,17 +21,16 @@ export default function PromptPage() {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then(({ prompt, firstName: fn, isPersonal: ip, globalDefault: gd }) => {
-        setContent(prompt);
-        setGlobalDefault(gd);
-        setIsPersonal(ip);
+      .then(({ adminGuide: ag, userInstructions: ui, firstName: fn }) => {
+        setAdminGuide(ag);
+        setInstructions(ui);
         setFirstName(fn);
-        initialContent.current = prompt;
+        initialInstructions.current = ui;
       })
       .catch((e) => setError(e.message));
   }, []);
 
-  const hasChanges = content !== initialContent.current;
+  const hasChanges = instructions !== initialInstructions.current;
 
   const save = async () => {
     setSaving(true);
@@ -40,36 +39,13 @@ export default function PromptPage() {
       const r = await fetch("/api/prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: content }),
+        body: JSON.stringify({ userInstructions: instructions.trim() }),
       });
       if (!r.ok) {
         const body = await r.json().catch(() => ({}));
         throw new Error(body.error ?? `HTTP ${r.status}`);
       }
-      setIsPersonal(true);
-      initialContent.current = content;
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur inconnue");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const resetToDefault = async () => {
-    setSaving(true);
-    setError(null);
-    try {
-      const r = await fetch("/api/prompt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: null }),
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      setContent(globalDefault);
-      setIsPersonal(false);
-      initialContent.current = globalDefault;
+      initialInstructions.current = instructions;
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
@@ -85,10 +61,8 @@ export default function PromptPage() {
       <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "#f0f0f0" }}>
         <button
           onClick={() => router.push("/")}
-          className="flex items-center gap-2 text-sm transition-colors"
+          className="flex items-center gap-2 text-sm transition-colors hover:text-[#111]"
           style={{ color: "#888" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "#111")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "#888")}
         >
           <ArrowLeft size={16} />
           Retour
@@ -98,58 +72,73 @@ export default function PromptPage() {
             Guide de {firstName || "…"}
           </h1>
           <p className="text-xs" style={{ color: "#aaa" }}>
-            {isPersonal ? "Guide personnalisé" : "Guide par défaut (admin)"}
+            Instructions personnelles ajoutées au guide admin
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {isPersonal && (
-            <button
-              onClick={resetToDefault}
-              disabled={saving}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors"
-              style={{ background: "#f5f5f5", color: "#666" }}
-            >
-              <RotateCcw size={12} />
-              Réinitialiser
-            </button>
-          )}
-          <button
-            onClick={save}
-            disabled={saving || !hasChanges}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors"
-            style={{ background: saved ? "#22c55e" : "#f01563", color: "#fff", opacity: saving || !hasChanges ? 0.5 : 1 }}
-          >
-            <Save size={12} />
-            {saved ? "Sauvegardé !" : saving ? "…" : "Sauvegarder"}
-          </button>
-        </div>
+        <button
+          onClick={save}
+          disabled={saving || !hasChanges}
+          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors"
+          style={{ background: saved ? "#22c55e" : "#f01563", color: "#fff", opacity: saving || !hasChanges ? 0.5 : 1 }}
+        >
+          <Save size={12} />
+          {saved ? "Sauvegardé !" : saving ? "…" : "Sauvegarder"}
+        </button>
       </div>
 
       {/* Editor */}
       <div className="flex-1 p-6 overflow-y-auto">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-3xl mx-auto space-y-4">
           {error && (
-            <p className="text-xs mb-3 px-3 py-2 rounded-lg" style={{ background: "#fff0f3", color: "#f01563" }}>
+            <p className="text-xs px-3 py-2 rounded-lg" style={{ background: "#fff0f3", color: "#f01563" }}>
               Erreur : {error}
             </p>
           )}
-          <p className="text-xs mb-3" style={{ color: "#aaa" }}>
-            Ce guide est envoyé à Claude en tant que prompt système. Modifie-le pour personnaliser les réponses, le ton, les priorités.
-          </p>
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="w-full rounded-xl border p-4 text-sm font-mono resize-none outline-none transition-all"
-            style={{
-              borderColor: "#e5e5e5",
-              color: "#111",
-              background: "#fafafa",
-              minHeight: "70vh",
-              lineHeight: 1.7,
-            }}
-            onFocus={(e) => (e.currentTarget.style.borderColor = "#f01563")}
-            onBlur={(e) => (e.currentTarget.style.borderColor = "#e5e5e5")}
-          />
+
+          {/* Admin guide (read-only, collapsible) */}
+          <div className="rounded-xl border" style={{ borderColor: "#e5e5e5", background: "#f9f9f9" }}>
+            <button
+              onClick={() => setShowAdmin((v) => !v)}
+              className="w-full flex items-center gap-2 px-4 py-3 text-left text-xs font-medium"
+              style={{ color: "#666" }}
+            >
+              {showAdmin ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              Guide admin (lecture seule)
+              <span className="text-[10px] px-2 py-0.5 rounded-full ml-auto" style={{ background: "#f0fdf4", color: "#15803d" }}>
+                Toujours actif
+              </span>
+            </button>
+            {showAdmin && (
+              <div className="px-4 pb-4">
+                <textarea
+                  readOnly
+                  value={adminGuide}
+                  className="w-full rounded-lg border p-3 text-xs font-mono resize-none outline-none cursor-default"
+                  style={{ borderColor: "#e5e5e5", color: "#888", background: "#fff", minHeight: "40vh", lineHeight: 1.7 }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* User instructions */}
+          <div>
+            <p className="text-xs mb-2" style={{ color: "#888" }}>
+              Tes instructions personnelles seront ajoutées au guide admin. Ajoute tes préférences, ton contexte, ou des règles spécifiques.
+            </p>
+            <textarea
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              placeholder="Ex: Toujours répondre en anglais, mentionner notre offre coaching leadership, privilégier un ton direct..."
+              className="w-full rounded-xl border p-4 text-sm font-mono resize-none outline-none transition-all focus:border-[#f01563]"
+              style={{
+                borderColor: "#e5e5e5",
+                color: "#111",
+                background: "#fff",
+                minHeight: "30vh",
+                lineHeight: 1.7,
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>

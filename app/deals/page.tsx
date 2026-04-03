@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, memo } from "react";
 import { X, ChevronRight, Mail, Zap, AlertCircle, CheckCircle, TrendingUp, Search, RefreshCw, Linkedin, Copy, Check } from "lucide-react";
 import { scoreBadge, reliabilityLabel, reliabilityColor, healthIndicator, type DealScore } from "@/lib/deal-scoring";
 
@@ -102,7 +102,7 @@ function engagementTypeBadge(type: string): string {
 
 // ─── Deal Card ─────────────────────────────────────────────────────────────────
 
-function DealCard({ deal, selected, onClick }: { deal: Deal; selected: boolean; onClick: () => void }) {
+const DealCard = memo(function DealCard({ deal, selected, onClick }: { deal: Deal; selected: boolean; onClick: () => void }) {
   const hasScore = deal.score !== null;
   const badge = hasScore ? scoreBadge(deal.score!.total) : null;
   const ref = deal.lastContacted || deal.lastModified;
@@ -159,11 +159,11 @@ function DealCard({ deal, selected, onClick }: { deal: Deal; selected: boolean; 
       </div>
     </div>
   );
-}
+});
 
 // ─── Kanban Column ─────────────────────────────────────────────────────────────
 
-function KanbanColumn({
+const KanbanColumn = memo(function KanbanColumn({
   stage, deals, selectedId, onSelect, color,
 }: {
   stage: Stage;
@@ -211,7 +211,7 @@ function KanbanColumn({
       </div>
     </div>
   );
-}
+});
 
 // ─── Deal Drawer ───────────────────────────────────────────────────────────────
 

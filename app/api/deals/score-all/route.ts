@@ -67,21 +67,26 @@ export async function POST(req: NextRequest) {
     let scored = 0;
     let errors = 0;
 
-    // Score sequentially to avoid rate limits
-    for (const dealId of toScore) {
-      try {
-        const result = await scoreOneDeal(dealId, userId);
-        await db.from("deal_scores").upsert({
-          deal_id: dealId,
-          score: { total: result.total, components: result.components, reliability: result.reliability },
-          reasoning: result.reasoning,
-          next_action: result.next_action,
-          qualification: result.qualification ?? null,
-          scored_at: new Date().toISOString(),
-        }, { onConflict: "deal_id" });
-        scored++;
-      } catch {
-        errors++;
+    // Process in parallel batches of 5 to balance speed vs rate limits
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < toScore.length; i += BATCH_SIZE) {
+      const batch = toScore.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(async (dealId) => {
+          const result = await scoreOneDeal(dealId, userId);
+          await db.from("deal_scores").upsert({
+            deal_id: dealId,
+            score: { total: result.total, components: result.components, reliability: result.reliability },
+            reasoning: result.reasoning,
+            next_action: result.next_action,
+            qualification: result.qualification ?? null,
+            scored_at: new Date().toISOString(),
+          }, { onConflict: "deal_id" });
+        })
+      );
+      for (const r of results) {
+        if (r.status === "fulfilled") scored++;
+        else errors++;
       }
     }
 
