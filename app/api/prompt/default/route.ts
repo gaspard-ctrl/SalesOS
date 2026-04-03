@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import { DEFAULT_BOT_GUIDE } from "@/lib/guides/bot";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const content = fs.readFileSync(path.join(process.cwd(), "prompt-guide.txt"), "utf-8");
-  return new NextResponse(content, {
+  return new NextResponse(DEFAULT_BOT_GUIDE, {
     headers: { "Content-Type": "text/plain; charset=utf-8" },
   });
 }

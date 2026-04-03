@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, memo } from "react";
 import { X, Trash2, MessageSquare } from "lucide-react";
 
 export interface Conversation {
@@ -22,7 +22,7 @@ function formatDate(iso: string): string {
   return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
 }
 
-export function ConversationHistoryModal({
+export const ConversationHistoryModal = memo(function ConversationHistoryModal({
   conversations,
   currentId,
   onSelect,
@@ -66,9 +66,8 @@ export function ConversationHistoryModal({
           </span>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg transition-colors"
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#f5f5f5")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+            aria-label="Fermer l'historique"
+            className="p-1 rounded-lg transition-colors hover:bg-[#f5f5f5]"
           >
             <X size={14} style={{ color: "#888" }} />
           </button>
@@ -89,16 +88,12 @@ export function ConversationHistoryModal({
               return (
                 <div
                   key={conv.id}
-                  className="group flex items-center justify-between px-4 py-3 cursor-pointer border-b transition-colors"
+                  className={`group flex items-center justify-between px-4 py-3 cursor-pointer border-b transition-colors ${
+                    active ? "" : "hover:bg-[#fafafa]"
+                  }`}
                   style={{
                     borderColor: "#f5f5f5",
                     background: active ? "#fde8ef" : "transparent",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!active) e.currentTarget.style.background = "#fafafa";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!active) e.currentTarget.style.background = "transparent";
                   }}
                   onClick={() => onSelect(conv.id)}
                 >
@@ -115,9 +110,8 @@ export function ConversationHistoryModal({
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); onDelete(conv.id); }}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all"
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#fde8ef")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    aria-label={`Supprimer la conversation ${conv.title}`}
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all hover:bg-[#fde8ef]"
                   >
                     <Trash2 size={12} style={{ color: "#f01563" }} />
                   </button>
@@ -129,4 +123,4 @@ export function ConversationHistoryModal({
       </div>
     </div>
   );
-}
+});

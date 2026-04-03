@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { ArrowUp, History, Plus } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -10,6 +10,34 @@ import { ConversationHistoryModal, type Conversation } from "./_components/conve
 
 type Message = { role: "user" | "assistant"; content: string };
 type ApiMessage = { role: "user" | "assistant"; content: unknown };
+
+// Memoized message bubble to avoid re-rendering all messages on each keystroke
+const MessageBubble = memo(function MessageBubble({ message }: { message: Message }) {
+  return (
+    <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+      {message.role === "assistant" && (
+        <Image src="/logo.png" alt="AI" width={28} height={28} quality={80} className="rounded-lg mr-3 mt-0.5 shrink-0 self-start" />
+      )}
+      <div
+        className="max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed"
+        style={
+          message.role === "user"
+            ? { background: "#f01563", color: "#fff", borderBottomRightRadius: 4 }
+            : { background: "#f5f5f5", color: "#111", borderBottomLeftRadius: 4 }
+        }
+      >
+        {message.role === "assistant" ? (
+          <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0 prose-table:text-xs">
+            <ReactMarkdown remarkPlugins={remarkPlugins}>{message.content}</ReactMarkdown>
+          </div>
+        ) : message.content}
+      </div>
+    </div>
+  );
+});
+
+// Stable reference for remark plugins array
+const remarkPlugins = [remarkGfm];
 
 export default function IntelligencePage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -24,7 +52,7 @@ export default function IntelligencePage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showHistory, setShowHistory] = useState(false);
 
-  const TOOL_LABELS: Record<string, string> = {
+  const TOOL_LABELS = useMemo<Record<string, string>>(() => ({
     search_contacts:           "Recherche de contacts…",
     search_deals:              "Recherche de deals…",
     get_deals:                 "Chargement du pipeline…",
@@ -40,7 +68,7 @@ export default function IntelligencePage() {
     search_drive:              "Recherche dans Google Drive…",
     read_drive_file:           "Lecture du document…",
     list_drive_folder:         "Navigation dans Drive…",
-  };
+  }), []);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -63,7 +91,9 @@ export default function IntelligencePage() {
         const { conversations: data } = await r.json();
         setConversations(data ?? []);
       }
-    } catch {}
+    } catch (e) {
+      console.error("Erreur chargement conversations:", e);
+    }
   }, []);
 
   useEffect(() => {
@@ -89,7 +119,9 @@ export default function IntelligencePage() {
       setApiHistory(history ?? []);
       setConversationId(id);
       setShowHistory(false);
-    } catch {}
+    } catch (e) {
+      console.error("Erreur chargement conversation:", e);
+    }
   };
 
   const deleteConversation = async (id: string) => {
@@ -97,7 +129,9 @@ export default function IntelligencePage() {
     if (conversationId === id) startNewConversation();
     try {
       await fetch(`/api/conversations/${id}`, { method: "DELETE" });
-    } catch {}
+    } catch (e) {
+      console.error("Erreur suppression conversation:", e);
+    }
   };
 
   const send = async () => {
@@ -232,10 +266,9 @@ export default function IntelligencePage() {
         {messages.length > 0 && (
           <button
             onClick={startNewConversation}
-            className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl border transition-all"
+            aria-label="Nouvelle conversation"
+            className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl border transition-all hover:border-[#f01563] hover:text-[#f01563] hover:bg-[#fff8fa]"
             style={{ borderColor: "#e5e5e5", color: "#666", background: "#fff" }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#f01563"; e.currentTarget.style.color = "#f01563"; e.currentTarget.style.background = "#fff8fa"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#e5e5e5"; e.currentTarget.style.color = "#666"; e.currentTarget.style.background = "#fff"; }}
           >
             <Plus size={14} />
             Nouveau
@@ -243,10 +276,9 @@ export default function IntelligencePage() {
         )}
         <button
           onClick={() => setShowHistory(true)}
-          className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl transition-all"
+          aria-label="Voir l'historique des conversations"
+          className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl transition-all hover:bg-[#333]"
           style={{ background: "#111", color: "#fff" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "#333"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "#111"; }}
         >
           <History size={14} />
           Historique
@@ -267,10 +299,8 @@ export default function IntelligencePage() {
                 <button
                   key={q}
                   onClick={() => { setInput(q); }}
-                  className="text-xs px-3 py-1.5 rounded-full border transition-colors"
+                  className="text-xs px-3 py-1.5 rounded-full border transition-colors hover:border-[#f01563] hover:text-[#f01563]"
                   style={{ borderColor: "#eee", color: "#888" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#f01563"; e.currentTarget.style.color = "#f01563"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#eee"; e.currentTarget.style.color = "#888"; }}
                 >
                   {q}
                 </button>
@@ -278,10 +308,8 @@ export default function IntelligencePage() {
             </div>
             <Link
               href="/prompt"
-              className="text-xs px-4 py-2 rounded-lg transition-opacity"
+              className="text-xs px-4 py-2 rounded-lg transition-opacity hover:opacity-85"
               style={{ background: "#f01563", color: "#fff" }}
-              onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
-              onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
             >
               Guide de réponse
             </Link>
@@ -301,32 +329,14 @@ export default function IntelligencePage() {
         ) : (
           <div className="max-w-2xl mx-auto space-y-4">
             {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                {m.role === "assistant" && (
-                  <Image src="/logo.png" alt="AI" width={28} height={28} quality={100} className="rounded-lg mr-3 mt-0.5 shrink-0 self-start" />
-                )}
-                <div
-                  className="max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed"
-                  style={
-                    m.role === "user"
-                      ? { background: "#f01563", color: "#fff", borderBottomRightRadius: 4 }
-                      : { background: "#f5f5f5", color: "#111", borderBottomLeftRadius: 4 }
-                  }
-                >
-                  {m.role === "assistant" ? (
-                    <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0 prose-table:text-xs">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
-                    </div>
-                  ) : m.content}
-                </div>
-              </div>
+              <MessageBubble key={i} message={m} />
             ))}
             {streamingText && (
               <div className="flex justify-start">
-                <img src="/logo.png" alt="AI" width={28} height={28} className="rounded-lg mr-3 mt-0.5 shrink-0 self-start" />
+                <Image src="/logo.png" alt="AI" width={28} height={28} quality={80} className="rounded-lg mr-3 mt-0.5 shrink-0 self-start" />
                 <div className="max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed" style={{ background: "#f5f5f5", color: "#111", borderBottomLeftRadius: 4 }}>
                   <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0 prose-table:text-xs">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingText}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={remarkPlugins}>{streamingText}</ReactMarkdown>
                   </div>
                 </div>
               </div>
@@ -372,7 +382,9 @@ export default function IntelligencePage() {
       {/* Input bar */}
       <div className="px-6 pb-6 pt-2">
         <div className="max-w-2xl mx-auto flex items-end gap-3 p-3 rounded-2xl border transition-all" style={{ background: "#fff", borderColor: "#e5e5e5" }}>
+          <label htmlFor="chat-input" className="sr-only">Message</label>
           <textarea
+            id="chat-input"
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -385,6 +397,7 @@ export default function IntelligencePage() {
           <button
             onClick={send}
             disabled={!input.trim() || loading}
+            aria-label="Envoyer le message"
             className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-opacity"
             style={{ background: "#f01563", opacity: !input.trim() || loading ? 0.4 : 1 }}
           >

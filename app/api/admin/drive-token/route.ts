@@ -28,7 +28,8 @@ export async function GET() {
   });
 
   return NextResponse.json({
-    refresh_token: refreshToken,
-    instruction: "Ajoute cette valeur comme GOOGLE_DRIVE_REFRESH_TOKEN dans ton .env",
+    success: true,
+    token_preview: `...${refreshToken.slice(-8)}`,
+    instruction: "Le refresh token a été vérifié. Utilise la console Supabase ou le dashboard pour le récupérer si nécessaire.",
   });
 }

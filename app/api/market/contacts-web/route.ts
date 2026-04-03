@@ -29,82 +29,75 @@ async function searchTavily(query: string): Promise<TavilyResult[]> {
   }
 }
 
+const contactsTool: Anthropic.Tool = {
+  name: "extract_contacts",
+  description: "Retourne les contacts identifiés",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      contacts: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Prénom Nom (ou titre de poste si inconnu)" },
+            title: { type: "string", description: "Poste dans l'entreprise" },
+            linkedin_url: { type: "string", description: "URL LinkedIn ou null" },
+            source_url: { type: "string", description: "URL de la source ou null" },
+          },
+          required: ["name", "title"],
+        },
+      },
+    },
+    required: ["contacts"],
+  },
+};
+
 async function extractFromSources(
   company: string,
   sourcesText: string,
   userId: string
-): Promise<{ name: string; title: string; linkedin_url: string | null; source_url: string; source: "web" }[]> {
+): Promise<{ name: string; title: string; linkedin_url: string | null; source_url: string | null; source: "web" }[]> {
   const client = new Anthropic();
   const message = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 1024,
-    system: `Tu extrais des informations sur des personnes à partir d'articles web. Tu retournes uniquement les personnes clairement nommées avec leur rôle chez ${company}.`,
-    messages: [{
-      role: "user",
-      content: `Entreprise : ${company}
-
-Sources :
-${sourcesText}
-
-Extrais toutes les personnes nommées qui travaillent ou ont travaillé chez ${company}, avec leur rôle.
-Concentre-toi sur les décideurs RH, L&D, direction générale, CPO, DRH.
-Ne génère que des personnes explicitement nommées dans les sources.
-
-Réponds UNIQUEMENT en JSON :
-{ "contacts": [ { "name": "Prénom Nom", "title": "Poste", "linkedin_url": null, "source_url": "URL" } ] }`,
-    }],
+    system: `Tu extrais des personnes nommées avec leur rôle chez ${company}. Focus : décideurs RH, L&D, direction. Ne génère que des personnes explicitement nommées dans les sources. Utilise l'outil extract_contacts.`,
+    messages: [{ role: "user", content: `Entreprise : ${company}\n\nSources :\n${sourcesText}` }],
+    tools: [contactsTool],
+    tool_choice: { type: "tool" as const, name: "extract_contacts" },
   });
 
   logUsage(userId, "claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens, "market_contacts");
 
-  const raw = message.content[0].type === "text" ? message.content[0].text : "";
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return [];
-  try {
-    const parsed = JSON.parse(jsonMatch[0]);
-    return (parsed.contacts ?? []).map((c: { name: string; title: string; linkedin_url: string | null; source_url: string }) => ({ ...c, source: "web" as const }));
-  } catch {
-    return [];
-  }
+  const toolBlock = message.content.find((b) => b.type === "tool_use");
+  if (!toolBlock || !("input" in toolBlock)) return [];
+  const result = toolBlock.input as { contacts: { name: string; title: string; linkedin_url?: string | null; source_url?: string | null }[] };
+  return (result.contacts ?? []).map((c) => ({ ...c, linkedin_url: c.linkedin_url ?? null, source_url: c.source_url ?? null, source: "web" as const }));
 }
 
 async function inferFromKnowledge(
   company: string,
   userId: string
-): Promise<{ name: string; title: string; linkedin_url: string | null; source_url: string; source: "ai" }[]> {
+): Promise<{ name: string; title: string; linkedin_url: string | null; source_url: string | null; source: "ai" }[]> {
   const client = new Anthropic();
   const message = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 1024,
-    system: `Tu es un assistant commercial. Tu utilises ta connaissance générale pour identifier les décideurs probables dans une entreprise, utile pour la prospection B2B en coaching.`,
-    messages: [{
-      role: "user",
-      content: `Entreprise : ${company}
-
-Tavily n'est pas disponible. En te basant sur ta connaissance de cette entreprise (ou d'entreprises similaires dans ce secteur), liste les décideurs RH, L&D, direction que tu connais ou qui sont probables.
-
-Si tu ne connais pas cette entreprise précisément, propose les profils types à cibler (ex: "DRH", "Chief People Officer", "Directeur Général") sans inventer de noms.
-
-RÈGLE : Si tu n'as aucune connaissance sur cette entreprise, retourne uniquement les titres de postes sans noms.
-
-Réponds UNIQUEMENT en JSON :
-{ "contacts": [ { "name": "Prénom Nom ou null si inconnu", "title": "Poste", "linkedin_url": null, "source_url": null, "note": "connaissance IA" } ] }`,
-    }],
+    system: `Tu identifies les décideurs probables dans une entreprise pour la prospection B2B en coaching. Si tu ne connais pas de noms précis, propose les titres de postes à cibler. Utilise l'outil extract_contacts.`,
+    messages: [{ role: "user", content: `Entreprise : ${company}\n\nTavily n'a rien trouvé. Liste les décideurs RH, L&D, direction connus ou probables.` }],
+    tools: [contactsTool],
+    tool_choice: { type: "tool" as const, name: "extract_contacts" },
   });
 
   logUsage(userId, "claude-haiku-4-5-20251001", message.usage.input_tokens, message.usage.output_tokens, "market_contacts");
 
-  const raw = message.content[0].type === "text" ? message.content[0].text : "";
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return [];
-  try {
-    const parsed = JSON.parse(jsonMatch[0]);
-    return (parsed.contacts ?? [])
-      .filter((c: { name: string }) => c.name && c.name !== "null")
-      .map((c: { name: string; title: string; linkedin_url: string | null; source_url: string | null }) => ({ ...c, source: "ai" as const, source_url: c.source_url ?? "" }));
-  } catch {
-    return [];
-  }
+  const toolBlock = message.content.find((b) => b.type === "tool_use");
+  if (!toolBlock || !("input" in toolBlock)) return [];
+  const result = toolBlock.input as { contacts: { name: string; title: string; linkedin_url?: string | null; source_url?: string | null }[] };
+  return (result.contacts ?? [])
+    .filter((c) => c.name && c.name !== "null")
+    .map((c) => ({ ...c, linkedin_url: c.linkedin_url ?? null, source_url: c.source_url ?? null, source: "ai" as const }));
 }
 
 export async function GET(req: NextRequest) {
@@ -115,7 +108,6 @@ export async function GET(req: NextRequest) {
     const company = req.nextUrl.searchParams.get("company")?.trim();
     if (!company) return NextResponse.json({ contacts: [] });
 
-    // 1. Try Tavily
     const searches = [
       `${company} directeur responsable RH ressources humaines`,
       `${company} CEO DG directeur général équipe dirigeante`,
@@ -132,7 +124,6 @@ export async function GET(req: NextRequest) {
       return true;
     });
 
-    // 2. If Tavily returned results → extract contacts from sources
     if (uniqueResults.length > 0) {
       const sourcesText = uniqueResults
         .map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.content.slice(0, 400)}`)
@@ -141,10 +132,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ contacts, fallback: false });
     }
 
-    // 3. Tavily empty → fall back to Claude knowledge
     const contacts = await inferFromKnowledge(company, user.id);
     return NextResponse.json({ contacts, fallback: true });
-
   } catch (e) {
     console.error("contacts-web error:", e);
     return NextResponse.json({ contacts: [], fallback: false });

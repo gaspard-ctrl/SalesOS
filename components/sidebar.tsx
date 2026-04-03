@@ -1,8 +1,9 @@
 "use client";
 
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings, ShieldCheck } from "lucide-react";
+import { Settings, ShieldCheck, Menu, X } from "lucide-react";
 import { useUser, UserButton } from "@clerk/nextjs";
 import Image from "next/image";
 
@@ -11,76 +12,83 @@ const nav = [
   { href: "/briefing", label: "Briefing" },
   { href: "/deals", label: "Deals" },
   { href: "/prospecting", label: "Prospection" },
-  { href: "/signals", label: "Market Intel (in progress)" },
-  { href: "/competitive", label: "Competition (in progress)" },
+  { href: "/signals", label: "Market Intel (coming)" },
+  //{ href: "/competitive", label: "Competition ()" },
 ];
 
-const ADMIN_EMAIL = "arthur@coachello.io";
+// Cache admin status in module scope to avoid refetching on re-renders
+let cachedAdminStatus: boolean | null = null;
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { user } = useUser();
+  const [isAdmin, setIsAdmin] = useState(cachedAdminStatus ?? false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  const isAdmin =
-    user?.emailAddresses.some((e) => e.emailAddress === ADMIN_EMAIL) ?? false;
+  useEffect(() => {
+    if (cachedAdminStatus !== null) return;
+    fetch("/api/user/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const adminVal = data?.is_admin ?? false;
+        cachedAdminStatus = adminVal;
+        setIsAdmin(adminVal);
+      })
+      .catch(() => {});
+  }, []);
 
-  return (
-    <aside
-      className="flex flex-col w-52 shrink-0 h-screen border-r"
-      style={{ background: "#ffffff", borderColor: "#eeeeee" }}
-    >
+  // Close mobile sidebar on navigation
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  const closeMobile = useCallback(() => setMobileOpen(false), []);
+  const openMobile = useCallback(() => setMobileOpen(true), []);
+
+  const sidebarContent = useMemo(() => (
+    <>
       {/* Logo */}
       <div
-        className="flex items-center gap-2.5 px-4 py-5 border-b"
+        className="flex items-center justify-between gap-2.5 px-4 py-5 border-b"
         style={{ borderColor: "#eeeeee" }}
       >
-        <Image
-          src="/logo.png"
-          alt="Coachello"
-          width={32}
-          height={32}
-          className="rounded-lg"
-          quality={100}
-        />
-        <span
-          className="font-semibold text-sm tracking-tight"
-          style={{ color: "#111" }}
+        <div className="flex items-center gap-2.5">
+          <Image
+            src="/logo.png"
+            alt="Coachello"
+            width={32}
+            height={32}
+            className="rounded-lg"
+            quality={80}
+          />
+          <span
+            className="font-semibold text-sm tracking-tight"
+            style={{ color: "#111" }}
+          >
+            SalesOS
+          </span>
+        </div>
+        <button
+          className="md:hidden p-1 rounded-lg sidebar-bottom-link"
+          onClick={() => setMobileOpen(false)}
+          aria-label="Fermer le menu"
         >
-          SalesOS
-        </span>
+          <X size={18} />
+        </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto" aria-label="Navigation principale">
         {nav.map(({ href, label }) => {
           const active = pathname === href;
           return (
             <Link
               key={href}
               href={href}
-              className="flex items-center px-3 py-2.5 rounded-lg text-sm transition-colors"
-              style={
-                active
-                  ? {
-                      background: "#fde8ef",
-                      color: "#f01563",
-                      borderLeft: "2px solid #f01563",
-                      paddingLeft: "10px",
-                    }
-                  : { color: "#888" }
-              }
-              onMouseEnter={(e) => {
-                if (!active) {
-                  e.currentTarget.style.background = "#f5f5f5";
-                  e.currentTarget.style.color = "#111";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!active) {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.color = "#888";
-                }
-              }}
+              className={`flex items-center px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                active ? "sidebar-link-active" : "sidebar-link"
+              }`}
+              aria-current={active ? "page" : undefined}
             >
               {label}
             </Link>
@@ -96,23 +104,9 @@ export default function Sidebar() {
         {isAdmin && (
           <Link
             href="/admin"
-            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors"
-            style={{
-              color: pathname === "/admin" ? "#f01563" : "#aaa",
-              background: pathname === "/admin" ? "#fde8ef" : "transparent",
-            }}
-            onMouseEnter={(e) => {
-              if (pathname !== "/admin") {
-                e.currentTarget.style.color = "#111";
-                e.currentTarget.style.background = "#f5f5f5";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (pathname !== "/admin") {
-                e.currentTarget.style.color = "#aaa";
-                e.currentTarget.style.background = "transparent";
-              }
-            }}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+              pathname === "/admin" ? "sidebar-link-active" : "sidebar-bottom-link"
+            }`}
           >
             <ShieldCheck size={14} />
             Admin
@@ -120,22 +114,15 @@ export default function Sidebar() {
         )}
         <Link
           href="/settings"
-          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors"
-          style={{ color: "#aaa" }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = "#111";
-            e.currentTarget.style.background = "#f5f5f5";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = "#aaa";
-            e.currentTarget.style.background = "transparent";
-          }}
+          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+            pathname === "/settings" ? "sidebar-link-active" : "sidebar-bottom-link"
+          }`}
         >
           <Settings size={14} />
           Settings
         </Link>
 
-        {/* User profile with Clerk UserButton */}
+        {/* User profile */}
         <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg">
           <UserButton
             appearance={{
@@ -151,12 +138,46 @@ export default function Sidebar() {
             >
               {user?.firstName ?? user?.username ?? "…"}
             </p>
-            <p className="text-[10px] truncate" style={{ color: "#aaa" }}>
+            <p className="text-[10px] truncate" style={{ color: "#666" }}>
               Coachello
             </p>
           </div>
         </div>
       </div>
-    </aside>
+    </>
+  ), [pathname, isAdmin, user, closeMobile]);
+
+  return (
+    <>
+      {/* Mobile hamburger button */}
+      <button
+        className="fixed top-4 left-4 z-50 md:hidden p-2 rounded-lg bg-white shadow-md"
+        onClick={openMobile}
+        aria-label="Ouvrir le menu"
+        style={{ display: mobileOpen ? "none" : undefined }}
+      >
+        <Menu size={20} style={{ color: "#111" }} />
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="sidebar-overlay"
+          onClick={closeMobile}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={`flex flex-col w-52 shrink-0 h-screen border-r bg-white
+          fixed md:relative z-50 md:z-auto
+          transition-transform duration-200 ease-in-out
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+        style={{ borderColor: "#eeeeee" }}
+      >
+        {sidebarContent}
+      </aside>
+    </>
   );
 }

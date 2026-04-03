@@ -14,21 +14,23 @@ export async function GET() {
     db.from("guide_defaults").select("content").eq("key", "bot").maybeSingle(),
   ]);
 
-  return NextResponse.json({
-    guide: userRes.data?.user_prompt ?? null,
-    default: globalGuide.data?.content ?? DEFAULT_BOT_GUIDE,
+  const response = NextResponse.json({
+    adminGuide: globalGuide.data?.content ?? DEFAULT_BOT_GUIDE,
+    userInstructions: userRes.data?.user_prompt ?? "",
   });
+  response.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=60");
+  return response;
 }
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const { guide } = await req.json();
+  const { userInstructions } = await req.json();
 
   await db
     .from("users")
-    .update({ user_prompt: guide ?? null })
+    .update({ user_prompt: userInstructions || null })
     .eq("id", user.id);
 
   return NextResponse.json({ ok: true });

@@ -14,31 +14,26 @@ export async function GET() {
     db.from("guide_defaults").select("content").eq("key", "bot").maybeSingle(),
   ]);
 
-  const globalDefault = globalGuide.data?.content ?? DEFAULT_BOT_GUIDE;
-  const prompt = userRes.data?.user_prompt ?? globalDefault;
+  const adminGuide = globalGuide.data?.content ?? DEFAULT_BOT_GUIDE;
+  const userInstructions = userRes.data?.user_prompt ?? "";
   const firstName = (userRes.data?.name ?? user.name ?? "").split(" ")[0] || "moi";
-  const isPersonal = !!userRes.data?.user_prompt;
 
-  return NextResponse.json({ prompt, firstName, isPersonal, globalDefault });
+  return NextResponse.json({ adminGuide, userInstructions, firstName });
 }
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const { prompt } = await req.json();
-  if (prompt !== null && typeof prompt !== "string") {
-    return NextResponse.json({ error: "Prompt invalide" }, { status: 400 });
-  }
+  const { userInstructions } = await req.json();
 
   const { error } = await db
     .from("users")
-    .update({ user_prompt: prompt })
+    .update({ user_prompt: userInstructions || null })
     .eq("id", user.id);
 
   if (error) {
-    console.error("[POST /api/prompt] Supabase error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Erreur lors de la sauvegarde" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

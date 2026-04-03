@@ -3,25 +3,23 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logUsage } from "@/lib/log-usage";
+import {
+  signalScoringTool,
+  SIGNAL_ANALYSIS_PROMPT,
+  deduplicateResults,
+  type TavilyResult,
+} from "@/lib/signal-scoring";
 
 export const dynamic = "force-dynamic";
 
-type TavilyResult = {
-  title: string;
-  url: string;
-  content: string;
-  score: number;
-  published_date?: string;
-};
-
-async function searchTavily(query: string, days = 30): Promise<TavilyResult[]> {
+async function searchTavily(query: string, days = 14): Promise<TavilyResult[]> {
   const apiKey = process.env.TAVILY_API_KEY;
   if (!apiKey) return [];
   try {
     const res = await fetch("https://api.tavily.com/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ api_key: apiKey, query, search_depth: "basic", max_results: 5, days }),
+      body: JSON.stringify({ api_key: apiKey, query, search_depth: "advanced", max_results: 8, days }),
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -31,30 +29,55 @@ async function searchTavily(query: string, days = 30): Promise<TavilyResult[]> {
   }
 }
 
-// GET — list signals for current user (last 100)
+// GET — list signals with advanced filters
 export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
   const { searchParams } = req.nextUrl;
   const type = searchParams.get("type");
+  const minScore = searchParams.get("minScore");
+  const isRead = searchParams.get("isRead");
+  const isActioned = searchParams.get("isActioned");
+  const limit = parseInt(searchParams.get("limit") ?? "100", 10);
 
   let query = db
     .from("market_signals")
     .select("*")
     .eq("user_id", user.id)
+    .order("score", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(limit);
 
   if (type) query = query.eq("signal_type", type);
+  if (minScore) query = query.gte("score", parseInt(minScore, 10));
+  if (isRead === "true") query = query.eq("is_read", true);
+  if (isRead === "false") query = query.eq("is_read", false);
+  if (isActioned === "true") query = query.eq("is_actioned", true);
+  if (isActioned === "false") query = query.eq("is_actioned", false);
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json(data ?? []);
+  // Stats for dashboard
+  const allSignals = data ?? [];
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const thisWeek = allSignals.filter((s) => new Date(s.created_at) >= weekAgo);
+
+  return NextResponse.json({
+    signals: allSignals,
+    stats: {
+      total: allSignals.length,
+      thisWeek: thisWeek.length,
+      highPriority: allSignals.filter((s) => (s.score ?? 0) >= 70).length,
+      actioned: allSignals.filter((s) => s.is_actioned).length,
+      actionRate: allSignals.length > 0 ? Math.round((allSignals.filter((s) => s.is_actioned).length / allSignals.length) * 100) : 0,
+    },
+  });
 }
 
-// POST — generate signals for a company via Tavily + Claude
+// POST — generate signals for a specific company (with scoring)
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
@@ -63,61 +86,23 @@ export async function POST(req: NextRequest) {
   if (!company?.trim()) return NextResponse.json({ error: "company manquant" }, { status: 400 });
 
   const today = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-  const monthAgo = new Date(Date.now() - 30 * 24 * 3600 * 1000).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 
-  // Parallel Tavily searches
   const searches = [
-    `${company} actualités`,
-    `${company} levée de fonds financement série`,
+    `${company} actualités 2026`,
+    `${company} levée de fonds financement`,
     `${company} recrutement DRH CPO nominations leadership`,
-    `${company} expansion ouverture bureau partenariat`,
-    `${company} restructuration licenciements réorganisation`,
+    `${company} expansion partenariat croissance`,
+    `${company} restructuration transformation`,
   ];
 
-  const allResultsNested = await Promise.all(searches.map((q) => searchTavily(q, 30)));
-  const allResults = allResultsNested.flat();
-
-  // Deduplicate by URL
-  const seen = new Set<string>();
-  const uniqueResults = allResults.filter((r) => {
-    if (seen.has(r.url)) return false;
-    seen.add(r.url);
-    return true;
-  });
+  const allResultsNested = await Promise.all(searches.map((q) => searchTavily(q, 14)));
+  const uniqueResults = deduplicateResults(allResultsNested.flat());
 
   const sourcesText = uniqueResults.length > 0
     ? uniqueResults.map((r, i) =>
-        `[${i + 1}] ${r.title}\nURL: ${r.url}${r.published_date ? `\nDate: ${r.published_date}` : ""}\n${r.content}`
+        `[${i + 1}] ${r.title}\nURL: ${r.url}${r.published_date ? `\nDate: ${r.published_date}` : ""}\n${r.content.slice(0, 400)}`
       ).join("\n\n---\n\n")
-    : "Aucun résultat trouvé pour cette période.";
-
-  const systemPrompt = `Tu es un analyste en intelligence commerciale pour Coachello, spécialiste du coaching B2B en France et en Europe.
-Ton rôle : détecter des signaux d'achat potentiels pour Coachello dans les actualités d'entreprises prospects.
-Les meilleurs signaux pour Coachello : levées de fonds (besoin de structurer les équipes), nominations RH/L&D (nouveau décideur à adresser), recrutements massifs (besoin de coaching managers), expansion (nouveaux besoins de développement leadership), restructurations (besoin d'accompagnement du changement).`;
-
-  const userPrompt = `Nous sommes le ${today}. Analyse les actualités du dernier mois (depuis le ${monthAgo}).
-
-Entreprise : ${company}
-
-Sources trouvées :
-${sourcesText}
-
-RÈGLES :
-1. Ne génère un signal QUE si une source contient un fait précis et documenté.
-2. Sources génériques (page À propos, articles sans date) → ignorées.
-3. Si rien de notable → retourne "signals": [].
-4. Chaque signal doit avoir une pertinence claire pour Coachello (coaching, leadership, RH, L&D).
-
-Pour chaque signal :
-- signal_type: 'funding' | 'hiring' | 'nomination' | 'expansion' | 'restructuring' | 'content'
-- title: titre court (< 80 caractères)
-- summary: 2-3 phrases factuelles avec détails concrets
-- signal_date: format "YYYY-MM" ou null
-- strength: 1 (faible) | 2 (moyen) | 3 (fort) selon la pertinence pour Coachello
-- source_url: URL de la source ou null
-
-Réponds UNIQUEMENT en JSON valide :
-{ "signals": [ { "signal_type": "...", "title": "...", "summary": "...", "signal_date": null, "strength": 2, "source_url": null } ] }`;
+    : "Aucun résultat trouvé.";
 
   const { data: modelPrefs } = await db.from("guide_defaults").select("content").eq("key", "model_preferences").single();
   const marketModel = (() => { try { return (JSON.parse(modelPrefs?.content ?? "{}") as Record<string, string>).market ?? "claude-haiku-4-5-20251001"; } catch { return "claude-haiku-4-5-20251001"; } })();
@@ -125,44 +110,74 @@ Réponds UNIQUEMENT en JSON valide :
   const client = new Anthropic();
   const message = await client.messages.create({
     model: marketModel,
-    max_tokens: 2048,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
+    max_tokens: 4096,
+    system: SIGNAL_ANALYSIS_PROMPT,
+    messages: [{
+      role: "user",
+      content: `Nous sommes le ${today}.\n\nEntreprise ciblée : ${company}\n\nSources trouvées :\n${sourcesText}\n\nAnalyse ces sources pour ${company}. Utilise l'outil score_signals.`,
+    }],
+    tools: [signalScoringTool],
+    tool_choice: { type: "tool" as const, name: "score_signals" },
   });
 
   logUsage(user.id, marketModel, message.usage.input_tokens, message.usage.output_tokens, "market_signals");
 
-  const raw = message.content[0].type === "text" ? message.content[0].text : "";
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return NextResponse.json({ signals: 0 });
+  const toolBlock = message.content.find((b) => b.type === "tool_use");
+  if (!toolBlock || !("input" in toolBlock)) {
+    return NextResponse.json({ signals: 0 });
+  }
 
-  const parsed = JSON.parse(jsonMatch[0]);
-  const signals: {
-    signal_type: string;
-    title: string;
-    summary: string;
-    signal_date: string | null;
-    strength: number;
-    source_url: string | null;
-  }[] = parsed.signals ?? [];
+  const result = toolBlock.input as { signals: {
+    company_name: string; signal_type: string; title: string; summary: string;
+    signal_date: string | null; source_url: string | null; source_domain: string | null;
+    score: number; score_breakdown: Record<string, number>;
+    why_relevant: string; suggested_action: string; action_type: string;
+  }[] };
 
-  // Delete old signals for this company+user, insert fresh ones
+  const signals = result.signals ?? [];
+
   await db.from("market_signals").delete().eq("user_id", user.id).eq("company_name", company);
 
   if (signals.length > 0) {
     await db.from("market_signals").insert(
       signals.map((s) => ({
         user_id: user.id,
-        company_name: company,
+        company_name: s.company_name ?? company,
         signal_type: s.signal_type,
         title: s.title,
         summary: s.summary,
         signal_date: s.signal_date ?? null,
-        strength: s.strength ?? 2,
+        strength: s.score >= 70 ? 3 : s.score >= 40 ? 2 : 1,
         source_url: s.source_url ?? null,
+        source_domain: s.source_domain ?? null,
+        score: s.score,
+        score_breakdown: s.score_breakdown,
+        why_relevant: s.why_relevant,
+        suggested_action: s.suggested_action,
+        action_type: s.action_type,
+        is_read: false,
+        is_actioned: false,
       }))
     );
   }
 
   return NextResponse.json({ signals: signals.length });
+}
+
+// PATCH — update signal state (read, actioned)
+export async function PATCH(req: NextRequest) {
+  const user = await getAuthenticatedUser();
+  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+
+  const { id, is_read, is_actioned } = await req.json();
+  if (!id) return NextResponse.json({ error: "id manquant" }, { status: 400 });
+
+  const update: Record<string, boolean> = {};
+  if (is_read !== undefined) update.is_read = is_read;
+  if (is_actioned !== undefined) update.is_actioned = is_actioned;
+
+  const { error } = await db.from("market_signals").update(update).eq("id", id).eq("user_id", user.id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
 }

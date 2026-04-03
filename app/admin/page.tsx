@@ -8,6 +8,7 @@ import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/guides/prospection";
 import { DEFAULT_BRIEFING_GUIDE } from "@/lib/guides/briefing";
 import { GuideEditor } from "../settings/_components/guide-editor";
 import { ModelPreferencesAdmin } from "./_components/model-preferences-admin";
+import { AlertConfigAdmin } from "./_components/alert-config-admin";
 import { ResetGuidesButton } from "./_components/reset-guides-button";
 import { Suspense } from "react";
 
@@ -121,6 +122,24 @@ export default async function AdminPage() {
         </div>
         <div className="rounded-xl border p-5" style={{ borderColor: "#eeeeee", background: "#fff" }}>
           <ModelPreferencesAdmin initialPreferences={globalModelPrefs} />
+        </div>
+      </div>
+
+      {/* Alertes Market Intel */}
+      <div>
+        <div className="mb-4">
+          <h2 className="text-base font-semibold" style={{ color: "#111" }}>Alertes Market Intel</h2>
+          <p className="text-xs mt-1" style={{ color: "#888" }}>
+            Configuration des alertes Slack pour les signaux prioritaires.
+          </p>
+        </div>
+        <div className="rounded-xl border p-5" style={{ borderColor: "#eeeeee", background: "#fff" }}>
+          <AlertConfigAdmin initialConfig={(() => {
+            try {
+              const raw = globalMap.alert_config;
+              return raw ? JSON.parse(raw) : null;
+            } catch { return null; }
+          })()} />
         </div>
       </div>
 

@@ -802,7 +802,11 @@ export async function POST(req: NextRequest) {
       db.from("guide_defaults").select("content").eq("key", "model_preferences").single(),
       db.from("users").select("hubspot_owner_id").eq("id", user.id).single(),
     ]);
-    systemPrompt = userData?.user_prompt ?? globalGuide?.content ?? DEFAULT_BOT_GUIDE;
+    const adminGuide = globalGuide?.content ?? DEFAULT_BOT_GUIDE;
+    const userInstructions = userData?.user_prompt?.trim() ?? "";
+    systemPrompt = userInstructions
+      ? `${adminGuide}\n\n--- INSTRUCTIONS PERSONNELLES DE L'UTILISATEUR ---\n${userInstructions}`
+      : adminGuide;
     userOwnerId = ownerRow?.hubspot_owner_id ?? null;
     try { if (globalModelEntry?.content) chatModel = (JSON.parse(globalModelEntry.content) as Record<string, string>).chat ?? chatModel; } catch { /* keep default */ }
   } else {

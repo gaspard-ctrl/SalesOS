@@ -45,12 +45,17 @@ export async function POST(req: NextRequest) {
   let analyzed = 0;
   let errors = 0;
 
-  for (const competitor of (competitors ?? []) as Competitor[]) {
-    try {
-      await analyzeOneCompetitor(competitor, competitor.user_id);
-      analyzed++;
-    } catch {
-      errors++;
+  // Process in parallel batches of 5
+  const items = (competitors ?? []) as Competitor[];
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const batch = items.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(
+      batch.map((competitor) => analyzeOneCompetitor(competitor, competitor.user_id))
+    );
+    for (const r of results) {
+      if (r.status === "fulfilled") analyzed++;
+      else errors++;
     }
   }
 
