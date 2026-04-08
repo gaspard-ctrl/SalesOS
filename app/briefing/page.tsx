@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useCalendarEvents } from "@/lib/hooks/use-calendar-events";
+import { useUserMe } from "@/lib/hooks/use-user-me";
 // import Link from "next/link";
 import { RefreshCw, Calendar, Mail, Send, ExternalLink } from "lucide-react";
 import { scoreBadge } from "@/lib/deal-scoring";
@@ -51,6 +53,7 @@ interface StrategicHistoryItem {
 interface BriefingResult {
   identity: { name: string; role: string; company: string; hubspotStage: string; lastContact: string };
   meetingType?: "discovery" | "follow_up";
+  isSalesMeeting?: boolean;
   objective?: string;
   contextSummary?: string;
   companyProfile?: CompanyProfile;
@@ -191,7 +194,7 @@ function formatBriefingForSlack(briefing: BriefingResult, eventTitle: string): s
     `*${briefing.identity?.name}* — ${briefing.identity?.role} @ ${briefing.identity?.company}`,
     `Statut CRM : ${briefing.identity?.hubspotStage || "—"} | Dernier contact : ${briefing.identity?.lastContact || "—"}`,
   ];
-  if (briefing.meetingType) {
+  if (briefing.isSalesMeeting !== false && briefing.meetingType) {
     lines.push("", `Type : ${briefing.meetingType === "discovery" ? "Découverte" : "Point de suivi"}`);
   }
   if (briefing.objective) {
@@ -235,9 +238,8 @@ function formatBriefingForSlack(briefing: BriefingResult, eventTitle: string): s
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function BriefingPage() {
-  const [calendarConnected, setCalendarConnected] = useState<boolean | null>(null);
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [loadingEvents, setLoadingEvents] = useState(true);
+  const { events, calendarConnected, isLoading: loadingEvents } = useCalendarEvents(7);
+  const { slackName } = useUserMe();
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [gatherState, setGatherState] = useState<LoadState>("idle");
   const [briefingState, setBriefingState] = useState<LoadState>("idle");
@@ -246,23 +248,6 @@ export default function BriefingPage() {
   const [sendingSlack, setSendingSlack] = useState(false);
   const [slackSent, setSlackSent] = useState(false);
   const [draftSent, setDraftSent] = useState(false);
-  const [slackName, setSlackName] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/calendar/events?days=7")
-      .then((r) => r.json())
-      .then((data) => {
-        setCalendarConnected(data.calendarConnected ?? false);
-        setEvents(data.events ?? []);
-      })
-      .catch(() => setCalendarConnected(false))
-      .finally(() => setLoadingEvents(false));
-
-    fetch("/api/user/me")
-      .then((r) => r.json())
-      .then((data) => setSlackName(data.slack_display_name ?? null))
-      .catch(() => null);
-  }, []);
 
   async function selectEvent(event: CalendarEvent, forceRefresh = false) {
     setSelectedEvent(event);
@@ -382,7 +367,7 @@ export default function BriefingPage() {
         {/* ── Vue calendrier semaine (plein écran) ── */}
         {!showCenter && (
           <div className="flex-1 overflow-hidden flex flex-col">
-            {calendarConnected === false && (
+            {!loadingEvents && calendarConnected === false && (
               <div className="m-4 rounded-xl p-4 text-center" style={{ background: "#fde8ef", border: "1px solid #f9b4cb" }}>
                 <Calendar size={20} style={{ color: "#f01563", margin: "0 auto 8px" }} />
                 <p className="text-xs font-semibold mb-1" style={{ color: "#c01252" }}>Calendar non connecté</p>
@@ -634,7 +619,7 @@ export default function BriefingPage() {
               <div className="flex gap-2 flex-wrap">
                 {[
                   { label: `${rawData.contacts.length} contact${rawData.contacts.length > 1 ? "s" : ""} HubSpot`, active: rawData.contacts.length > 0 },
-                  { label: `${rawData.deals.length} deal${rawData.deals.length > 1 ? "s" : ""}`, active: rawData.deals.length > 0 },
+                  ...(briefing?.isSalesMeeting !== false ? [{ label: `${rawData.deals.length} deal${rawData.deals.length > 1 ? "s" : ""}`, active: rawData.deals.length > 0 }] : []),
                   { label: `${rawData.gmailMessages.length} email${rawData.gmailMessages.length > 1 ? "s" : ""}`, active: rawData.gmailMessages.length > 0 },
                   { label: `${rawData.slackMessages.length} Slack`, active: rawData.slackMessages.length > 0 },
                   { label: `${rawData.webResults.length} web`, active: rawData.webResults.length > 0 },
@@ -680,8 +665,8 @@ export default function BriefingPage() {
               </div>
             )}
 
-            {/* Deal card (compact) */}
-            {gatherState === "done" && rawData && rawData.deals.length > 0 && (() => {
+            {/* Deal card (compact) — only for sales meetings */}
+            {gatherState === "done" && rawData && rawData.deals.length > 0 && briefing?.isSalesMeeting !== false && (() => {
               const deal = rawData.deals[0];
               const badge = deal.scoreTotal !== null ? scoreBadge(deal.scoreTotal) : null;
               const amount = deal.amount ? `${Number(deal.amount).toLocaleString("fr-FR")} €` : null;
@@ -745,8 +730,8 @@ export default function BriefingPage() {
                   </div>
                 )}
 
-                {/* Deal qualification checklist */}
-                {briefing.dealQualification && (() => {
+                {/* Deal qualification checklist — only for sales meetings */}
+                {briefing.isSalesMeeting !== false && briefing.dealQualification && (() => {
                   const fields: { key: keyof DealQualification; label: string }[] = [
                     { key: "budget",          label: "Budget" },
                     { key: "estimatedBudget", label: "Budget estimé" },
@@ -835,7 +820,7 @@ export default function BriefingPage() {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#aaa" }}>Qui tu rencontres</p>
-                    {briefing.meetingType && (
+                    {briefing.isSalesMeeting !== false && briefing.meetingType && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: briefing.meetingType === "discovery" ? "#eff6ff" : "#fef3c7", color: briefing.meetingType === "discovery" ? "#1e40af" : "#92400e" }}>
                         {briefing.meetingType === "discovery" ? "Découverte" : "Suivi"}
                       </span>

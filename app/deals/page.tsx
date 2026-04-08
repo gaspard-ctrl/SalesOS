@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, memo } from "react";
+import { useUserMe } from "@/lib/hooks/use-user-me";
+import { useDeals } from "@/lib/hooks/use-deals";
 import { X, ChevronRight, Mail, Zap, AlertCircle, CheckCircle, TrendingUp, Search, RefreshCw, Linkedin, Copy, Check } from "lucide-react";
 import { scoreBadge, reliabilityLabel, reliabilityColor, healthIndicator, type DealScore } from "@/lib/deal-scoring";
 
@@ -1037,51 +1039,22 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function DealsPage() {
-  const [stages, setStages] = useState<Stage[]>([]);
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [pipelineTotal, setPipelineTotal] = useState(0);
-  const [weightedTotal, setWeightedTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
-  const [details, setDetails] = useState<DealDetails | null>(null);
-  const [loadingDetails, setLoadingDetails] = useState(false);
-
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRelance, setFilterRelance] = useState(false);
   const [scoring, setScoring] = useState(false);
   const [scoreResult, setScoreResult] = useState<{ scored: number; total: number } | null>(null);
   const [ownerFilter, setOwnerFilter] = useState<"mine" | "all">("mine");
-  const [myOwnerId, setMyOwnerId] = useState<string | null>(null);
 
-  const load = useCallback(async (q = "", owner: "mine" | "all" = "mine") => {
-    setLoading(true);
-    setError("");
-    try {
-      const url = new URL("/api/deals/list", window.location.origin);
-      if (q) url.searchParams.set("q", q);
-      if (owner === "all") url.searchParams.set("owner", "all");
-      const r = await fetch(url.toString());
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "Erreur");
-      setStages(data.stages ?? []);
-      setDeals(data.deals ?? []);
-      setPipelineTotal(data.pipelineTotal ?? 0);
-      setWeightedTotal(data.weightedTotal ?? 0);
-      if (data.myOwnerId) setMyOwnerId(data.myOwnerId);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur de chargement");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // SWR-cached data fetching
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const { stages, deals, pipelineTotal, weightedTotal, myOwnerId, isLoading: loading, error, reload } = useDeals(appliedQuery, ownerFilter);
 
-  useEffect(() => {
-    // Auto-detect HubSpot owner if not set
-    fetch("/api/hubspot/auto-link-owner").catch(() => {});
-    load(searchQuery, ownerFilter);
-  }, [load, ownerFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+  const [details, setDetails] = useState<DealDetails | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  // Auto-detect HubSpot owner once
+  useEffect(() => { fetch("/api/hubspot/auto-link-owner").catch(() => {}); }, []);
 
   const scoreAll = useCallback(async () => {
     setScoring(true);
@@ -1095,13 +1068,12 @@ export default function DealsPage() {
       const data = await r.json();
       if (r.ok) {
         setScoreResult({ scored: data.scored, total: data.total });
-        // Reload to get updated scores
-        await load(searchQuery, ownerFilter);
+        await reload();
       }
     } catch { /* ignore */ } finally {
       setScoring(false);
     }
-  }, [load, searchQuery, ownerFilter]);
+  }, [reload]);
 
   const openDeal = useCallback(async (deal: Deal) => {
     setSelectedDeal(deal);
@@ -1212,7 +1184,7 @@ export default function DealsPage() {
 
         {/* Refresh */}
         <button
-          onClick={() => load(searchQuery, ownerFilter)}
+          onClick={() => { setAppliedQuery(searchQuery); reload(); }}
           style={{
             padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb",
             background: "white", color: "#6b7280", cursor: "pointer",
@@ -1297,11 +1269,7 @@ export default function DealsPage() {
             details={details}
             loading={loadingDetails}
             onClose={() => { setSelectedDeal(null); setDetails(null); }}
-            onRescore={(dealId, score, reasoning, next_action) => {
-              setDeals((prev) => prev.map((d) =>
-                d.id === dealId ? { ...d, score, reasoning, next_action, scoredAt: new Date().toISOString() } : d
-              ));
-            }}
+            onRescore={(_dealId, _score, _reasoning, _next_action) => { reload(); }}
             stageLabel={selectedStage?.label ?? ""}
             stageColor={stageColor(stageIdx)}
           />

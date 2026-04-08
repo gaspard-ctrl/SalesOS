@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useUserMe } from "@/lib/hooks/use-user-me";
 import {
   Search, RefreshCw, ExternalLink, Mail, Eye, Check, ChevronRight,
   TrendingUp, Users, Target, Zap, Building2, ArrowUpRight, Settings,
-  X, Copy, Loader2,
+  X, Copy, Loader2, Shield,
 } from "lucide-react";
 import { EditableList } from "@/app/admin/_components/editable-list";
 
@@ -46,6 +47,7 @@ const TYPE_CONFIG: Record<string, { label: string; bg: string; color: string; ic
   expansion: { label: "Expansion", bg: "#f5f3ff", color: "#7c3aed", icon: ArrowUpRight },
   restructuring: { label: "Restructuration", bg: "#fef2f2", color: "#dc2626", icon: Zap },
   job_change: { label: "Changement poste", bg: "#eef2ff", color: "#4f46e5", icon: Users },
+  linkedin_post: { label: "Post LinkedIn", bg: "#dbeafe", color: "#1d4ed8", icon: ExternalLink },
   content: { label: "Contenu", bg: "#f3f4f6", color: "#6b7280", icon: Building2 },
 };
 
@@ -87,6 +89,7 @@ export default function SignalsPage() {
   const [showConfig, setShowConfig] = useState(false);
   const [targetCompanies, setTargetCompanies] = useState<string[]>([]);
   const [targetRoles, setTargetRoles] = useState<string[]>([]);
+  const { isAdmin } = useUserMe();
   const [generatingEmail, setGeneratingEmail] = useState(false);
   const [generatedEmail, setGeneratedEmail] = useState<{ subject: string; body: string } | null>(null);
   const [emailCopied, setEmailCopied] = useState(false);
@@ -105,6 +108,7 @@ export default function SignalsPage() {
   }, [filterType, filterMinScore]);
 
   useEffect(() => { loadSignals(); }, [loadSignals]);
+
 
   useEffect(() => {
     if (!showConfig) return;
@@ -231,6 +235,14 @@ export default function SignalsPage() {
               <Settings size={12} />
               Cibles
             </button>
+            {isAdmin && (
+              <a href="/market-admin"
+                className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg font-medium transition-colors"
+                style={{ background: "#f5f5f5", color: "#555" }}>
+                <Shield size={12} />
+                Admin
+              </a>
+            )}
             <button
               onClick={runScan}
               disabled={scanning}
@@ -270,7 +282,7 @@ export default function SignalsPage() {
       {/* ── Filters ──────────────────────────────────────────────────────── */}
       <div className="px-6 py-2.5 flex items-center gap-3 border-b" style={{ background: "#fff", borderColor: "#eee" }}>
         <div className="flex items-center gap-1">
-          {["all", "funding", "hiring", "nomination", "job_change", "expansion", "restructuring", "content"].map((t) => {
+          {["all", "funding", "hiring", "nomination", "job_change", "linkedin_post", "expansion", "restructuring", "content"].map((t) => {
             const cfg = TYPE_CONFIG[t];
             const isActive = filterType === t;
             return (

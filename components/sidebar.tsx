@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Settings, ShieldCheck, Menu, X } from "lucide-react";
 import { useUser, UserButton } from "@clerk/nextjs";
 import Image from "next/image";
+import { useUserMe } from "@/lib/hooks/use-user-me";
 
 const nav = [
   { href: "/", label: "CoachelloGPT" },
@@ -16,31 +17,14 @@ const nav = [
   //{ href: "/competitive", label: "Competition ()" },
 ];
 
-// Cache admin status in module scope to avoid refetching on re-renders
-let cachedAdminStatus: boolean | null = null;
-
 export default function Sidebar() {
   const pathname = usePathname();
   const { user } = useUser();
-  const [isAdmin, setIsAdmin] = useState(cachedAdminStatus ?? false);
+  const { isAdmin } = useUserMe();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  useEffect(() => {
-    if (cachedAdminStatus !== null) return;
-    fetch("/api/user/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        const adminVal = data?.is_admin ?? false;
-        cachedAdminStatus = adminVal;
-        setIsAdmin(adminVal);
-      })
-      .catch(() => {});
-  }, []);
-
   // Close mobile sidebar on navigation
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
 
   const closeMobile = useCallback(() => setMobileOpen(false), []);
   const openMobile = useCallback(() => setMobileOpen(true), []);

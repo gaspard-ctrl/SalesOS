@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, KeyboardEvent } from "react";
+import { useGmailStatus } from "@/lib/hooks/use-gmail-status";
 import { useUser } from "@clerk/nextjs";
 import { Paperclip, Send, Save, X, Search, Loader2, Sparkles, RotateCcw, ChevronDown, ChevronRight, ChevronUp, Linkedin, Copy, Check, Mail, MailOpen, Phone, Calendar, MessageSquare } from "lucide-react";
 import Link from "next/link";
@@ -341,8 +342,8 @@ function ProspectCard({ result: r, onSelect }: { result: SearchResult; onSelect:
 export default function ProspectingPage() {
   const { user } = useUser();
 
-  // Gmail
-  const [gmailConnected, setGmailConnected] = useState<boolean | null>(null);
+  // Gmail (SWR-cached)
+  const { gmailConnected } = useGmailStatus();
 
   // Composer state
   const [to, setTo] = useState<string[]>([]);
@@ -415,10 +416,6 @@ export default function ProspectingPage() {
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/gmail/status")
-      .then((r) => r.json())
-      .then(({ connected }) => setGmailConnected(connected))
-      .catch(() => setGmailConnected(false));
     // Auto-detect HubSpot owner
     fetch("/api/hubspot/auto-link-owner").catch(() => {});
   }, []);
