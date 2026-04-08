@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
     const emails = externalAttendees.map((a) => a.email);
 
     // ── Parallel data fetching ────────────────────────────────────────────────
-    const [hsResult, gmailResult, slackResult, tavilyResult] = await Promise.allSettled([
+    const [hsResult, gmailResult, slackResult, tavilyResult, linkedinResult] = await Promise.allSettled([
 
       // HubSpot: contacts + deals + engagements
       (async () => {
@@ -346,6 +346,30 @@ export async function POST(req: NextRequest) {
 
         return { webResults, companyProfileResults, strategicResults };
       })(),
+
+      // LinkedIn: enrich attendee profiles via Netrows (search by name)
+      (async () => {
+        const profiles: unknown[] = [];
+        if (!process.env.NETROWS_API_KEY) return profiles;
+        const { searchPeople, getProfile } = await import("@/lib/netrows");
+        for (const attendee of externalAttendees.slice(0, 2)) {
+          const name = attendee.displayName?.trim();
+          if (!name) continue;
+          const parts = name.split(/\s+/);
+          const firstName = parts[0];
+          const lastName = parts.slice(1).join(" ");
+          if (!firstName || !lastName) continue;
+          try {
+            const result = await searchPeople({ firstName, lastName });
+            const found = result.data?.items?.[0];
+            if (found?.username) {
+              const full = await getProfile(found.username);
+              profiles.push(full);
+            }
+          } catch { /* ignore */ }
+        }
+        return profiles;
+      })(),
     ]);
 
     const tavilyData = tavilyResult.status === "fulfilled" ? tavilyResult.value : { webResults: [], companyProfileResults: [], strategicResults: [] };
@@ -360,6 +384,7 @@ export async function POST(req: NextRequest) {
       webResults: tavilyData.webResults ?? [],
       companyProfileResults: tavilyData.companyProfileResults ?? [],
       strategicResults: tavilyData.strategicResults ?? [],
+      linkedinProfiles: linkedinResult.status === "fulfilled" ? linkedinResult.value : [],
       errors: {
         hubspot: hsResult.status === "rejected" ? String(hsResult.reason) : null,
         gmail: gmailResult.status === "rejected" ? String(gmailResult.reason) : null,

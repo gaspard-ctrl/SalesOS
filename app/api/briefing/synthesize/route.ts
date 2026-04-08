@@ -28,6 +28,7 @@ const briefingTool: Anthropic.Tool = {
         required: ["name", "role", "company", "hubspotStage", "lastContact"],
       },
       meetingType: { type: "string", enum: ["discovery", "follow_up"] },
+      isSalesMeeting: { type: "boolean", description: "true si la réunion est commerciale (prospect, client, deal). false si interne, partenaire, coaching, support, etc." },
       objective: { type: "string", description: "1 phrase : objectif de ce rendez-vous" },
       contextSummary: { type: "string", description: "Markdown structuré : ## Situation, ## Derniers échanges. 1 phrase max par puce. Utiliser \\n pour les retours à la ligne." },
       companyProfile: {
@@ -42,6 +43,22 @@ const briefingTool: Anthropic.Tool = {
         },
       },
       personInsights: { type: "string", description: "Insights sur les interlocuteurs. Utiliser \\n pour séparer chaque personne." },
+      linkedinInsights: {
+        type: "array",
+        description: "Profils LinkedIn des interlocuteurs (si données LinkedIn disponibles). 1 objet par personne.",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Nom complet" },
+            currentRole: { type: "string", description: "Poste actuel (headline LinkedIn)" },
+            experience: { type: "string", description: "Parcours résumé : postes précédents, durées, entreprises. 2-3 lignes avec \\n." },
+            skills: { type: "string", description: "Compétences clés (top 5-8, séparées par des virgules)" },
+            education: { type: "string", description: "Formation principale" },
+            keyInsight: { type: "string", description: "1 phrase : ce qu'il faut retenir pour le meeting (ex: 'Expert L&D avec 10 ans en coaching, ex-DRH Danone')" },
+          },
+          required: ["name", "currentRole", "keyInsight"],
+        },
+      },
       recentNews: {
         type: "object",
         properties: {
@@ -108,7 +125,7 @@ const briefingTool: Anthropic.Tool = {
         },
       },
     },
-    required: ["identity", "meetingType", "objective", "contextSummary", "confidence"],
+    required: ["identity", "meetingType", "isSalesMeeting", "objective", "contextSummary", "confidence"],
   },
 };
 
@@ -132,6 +149,7 @@ export async function POST(req: NextRequest) {
         webResults: { title: string; url: string; content: string; published_date: string | null }[];
         companyProfileResults: { title: string; url: string; content: string; published_date: string | null }[];
         strategicResults: { title: string; url: string; content: string; published_date: string | null }[];
+        linkedinProfiles?: { firstName?: string; lastName?: string; headline?: string; summary?: string; position?: { companyName: string; title: string; description?: string; start?: { year?: number; month?: number }; end?: { year?: number; month?: number } }[]; skills?: { name: string }[]; educations?: { schoolName?: string; degree?: string; fieldOfStudy?: string }[] }[];
       };
     };
 
@@ -229,6 +247,30 @@ export async function POST(req: NextRequest) {
       ).join("\n\n"));
     }
 
+    if (rawData.linkedinProfiles && rawData.linkedinProfiles.length > 0) {
+      sections.push("=== PROFILS LINKEDIN (source LinkedIn — utiliser pour personInsights et linkedinInsights) ===\n" + rawData.linkedinProfiles.map((p) => {
+        const name = `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim();
+        const allPositions = (p.position ?? []).slice(0, 5).map((pos) => {
+          const start = pos.start ? `${pos.start.month ? pos.start.month + "/" : ""}${pos.start.year}` : "";
+          const end = pos.end?.year ? `${pos.end.month ? pos.end.month + "/" : ""}${pos.end.year}` : "présent";
+          return `- ${pos.title} @ ${pos.companyName} (${start} → ${end})${pos.description ? `\n  ${pos.description.slice(0, 200)}` : ""}`;
+        }).join("\n");
+        const skills = (p.skills ?? []).slice(0, 10).map((s: { name: string }) => s.name).join(", ");
+        const educations = (p.educations ?? []).slice(0, 2).map((e) =>
+          `${e.degree ?? ""} ${e.fieldOfStudy ?? ""} — ${e.schoolName ?? ""}`.trim()
+        ).join(", ");
+        return [
+          `Nom : ${name}`,
+          `Headline : ${p.headline ?? "—"}`,
+          `\nParcours professionnel :`,
+          allPositions || "Non disponible",
+          skills ? `\nCompétences : ${skills}` : "",
+          educations ? `Formation : ${educations}` : "",
+          p.summary ? `\nBio LinkedIn : ${p.summary.slice(0, 500)}` : "",
+        ].filter(Boolean).join("\n");
+      }).join("\n\n---\n\n"));
+    }
+
     const contextBlock = sections.join("\n\n");
 
     const systemPrompt = `${briefingGuide}
@@ -239,6 +281,12 @@ Tu prepares un briefing de reunion. Suis les instructions du guide ci-dessus.
 Tu recois des donnees issues de HubSpot, Gmail, Slack et du web.
 Si tu manques de donnees pour une section, dis-le explicitement — ne fabrique rien.
 REGLE ABSOLUE : chaque point = 1 phrase max. Pas de paragraphes. Tout structuré.
+
+IMPORTANT — isSalesMeeting :
+- Mets isSalesMeeting=true UNIQUEMENT si la réunion est clairement commerciale : prospect, client, deal en cours, démo, closing.
+- Mets isSalesMeeting=false pour les réunions internes, partenaires, coaching, support, onboarding, ou si le contexte ne montre pas de lien commercial clair.
+- Si isSalesMeeting=false, NE REMPLIS PAS dealQualification (laisse null/undefined).
+
 Utilise l'outil generate_briefing pour retourner le briefing.`;
 
     const eventDate = eventStart ? new Date(eventStart).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "";
