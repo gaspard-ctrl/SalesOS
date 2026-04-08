@@ -473,7 +473,18 @@ function DealDrawer({
                         {/* AI reasoning */}
                         {activeReasoning && (
                           <div style={{ padding: "6px 10px", background: "#f8fafc", borderRadius: 6, border: "1px solid #e2e8f0", marginBottom: 6 }}>
-                            <p style={{ fontSize: 12, color: "#64748b", margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>{activeReasoning}</p>
+                            {activeReasoning.includes("✓") || activeReasoning.includes("✗") || activeReasoning.includes("⚠") ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                {activeReasoning.split("\n").filter(Boolean).map((line, i) => {
+                                  const color = line.startsWith("✓") ? "#16a34a" : line.startsWith("✗") ? "#dc2626" : line.startsWith("⚠") ? "#d97706" : "#64748b";
+                                  return (
+                                    <p key={i} style={{ fontSize: 12, color, margin: 0, lineHeight: 1.5 }}>{line}</p>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p style={{ fontSize: 12, color: "#64748b", margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>{activeReasoning}</p>
+                            )}
                           </div>
                         )}
 
