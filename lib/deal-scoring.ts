@@ -185,11 +185,11 @@ export function calcScore(deal: DealForScoring): DealScore {
   const strategicEarned = scoreStrategicFit(deal.strategic_fit);
 
   const components: ScoreComponent[] = [
+    { name: names[4], earned: engagementEarned, max: ENGAGEMENT_MAX[model], filled: true }, // auto
     { name: names[0], earned: authorityEarned, max: AUTHORITY_MAX[model], filled: !!deal.authority_status },
+    { name: names[3], earned: needEarned, max: NEED_MAX[model], filled: !!deal.business_need_level },
     { name: names[1], earned: budgetEarned, max: BUDGET_MAX[model], filled: !!deal.budget_status },
     { name: names[2], earned: timelineEarned, max: TIMELINE_MAX[model], filled: !!deal.decision_timeline },
-    { name: names[3], earned: needEarned, max: NEED_MAX[model], filled: !!deal.business_need_level },
-    { name: names[4], earned: engagementEarned, max: ENGAGEMENT_MAX[model], filled: true }, // auto
     { name: names[5], earned: strategicEarned, max: 10, filled: !!deal.strategic_fit },
   ];
 
