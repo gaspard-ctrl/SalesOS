@@ -1,0 +1,42 @@
+name: Scheduled tasks
+
+on:
+  schedule:
+    # Score all deals — dimanche 22h UTC
+    - cron: "0 22 * * 0"
+    # Competitive analysis — lundi 7h UTC
+    - cron: "0 7 * * 1"
+    # Market scan — lundi 8h UTC
+    - cron: "0 8 * * 1"
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  run-crons:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Score all deals (dimanche 22h)
+        if: github.event.schedule == '0 22 * * 0' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -s -X POST "${{ secrets.SITE_URL }}/api/deals/score-all" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{"forceAll": false}' \
+            --max-time 300
+
+      - name: Competitive analysis (lundi 7h)
+        if: github.event.schedule == '0 7 * * 1' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -s -X POST "${{ secrets.SITE_URL }}/api/competitive/analyze-all" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            --max-time 300
+
+      - name: Market scan (lundi 8h)
+        if: github.event.schedule == '0 8 * * 1' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -s -X POST "${{ secrets.SITE_URL }}/api/market/scan-all" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            --max-time 300
