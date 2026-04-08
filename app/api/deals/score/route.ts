@@ -239,7 +239,8 @@ IMPORTANT : un seul email envoyé sans réponse la semaine dernière = ~5 pts ma
 === INSTRUCTIONS ===
 - Sois STRICT et EXIGEANT. Un score élevé doit être justifié par des éléments CONCRETS dans les conversations ou les champs CRM.
 - Si une dimension manque totalement d'informations (pas de champ CRM, pas de conversation), donne 0 — pas un score "par défaut".
-- Si un champ CRM contredit les conversations, mentionne-le dans le reasoning.
+- Si un champ CRM contredit les conversations, mentionne-le dans crm_alert.
+- REASONING : chaque point doit faire 5-8 mots MAX. Pas d'explication, pas de détail. Concentre-toi sur la DYNAMIQUE du deal (momentum, engagement, progression), PAS sur la qualification (budget, authority, etc. sont déjà dans les scores et la qualification). Max 3 strengths, 3 weaknesses.
 - Réponds UNIQUEMENT en JSON valide :
 {
   "authority": X,
@@ -248,7 +249,11 @@ IMPORTANT : un seul email envoyé sans réponse la semaine dernière = ~5 pts ma
   "business_need": X,
   "engagement": X,
   "strategic_fit": X,
-  "reasoning": "explication globale en 2-3 phrases : points forts, points faibles, et incohérences CRM/conversations si détectées",
+  "reasoning": {
+    "strengths": ["signal positif court (5-8 mots max)", "autre signal"],
+    "weaknesses": ["signal négatif court (5-8 mots max)", "autre signal"],
+    "crm_alert": "incohérence CRM en une phrase courte, ou null"
+  },
   "next_action": "conseil concret et actionnable en 1-2 phrases pour faire avancer ce deal",
   "qualification": {
     "budget": "valeur/fourchette connue ou null",
@@ -265,7 +270,7 @@ IMPORTANT : un seul email envoyé sans réponse la semaine dernière = ~5 pts ma
   const client = new Anthropic();
   const message = await client.messages.create({
     model: claudeModel,
-    max_tokens: 768,
+    max_tokens: 1500,
     system: systemPrompt,
     messages: [{ role: "user", content: context }],
   });
@@ -301,7 +306,17 @@ IMPORTANT : un seul email envoyé sans réponse la semaine dernière = ~5 pts ma
   const reliability = Math.min(contextFields, 5) as 0 | 1 | 2 | 3 | 4 | 5;
 
   const score: DealScore = { total, components, reliability };
-  const reasoning: string = ai.reasoning ?? "";
+  // Format reasoning as structured bullet points
+  let reasoning: string;
+  if (typeof ai.reasoning === "object" && ai.reasoning !== null) {
+    const lines: string[] = [];
+    for (const s of ai.reasoning.strengths ?? []) lines.push(`✓ ${s}`);
+    for (const w of ai.reasoning.weaknesses ?? []) lines.push(`✗ ${w}`);
+    if (ai.reasoning.crm_alert && ai.reasoning.crm_alert !== "null") lines.push(`⚠ ${ai.reasoning.crm_alert}`);
+    reasoning = lines.join("\n");
+  } else {
+    reasoning = ai.reasoning ?? "";
+  }
   const next_action: string = ai.next_action ?? "";
   const qualification: Record<string, string | null> = {
     budget:         ai.qualification?.budget         ?? null,
@@ -344,6 +359,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result);
   } catch (e) {
+    console.error("[deals/score] ERROR:", e instanceof Error ? e.stack : e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur" }, { status: 500 });
   }
 }
