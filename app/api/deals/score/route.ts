@@ -288,11 +288,11 @@ IMPORTANT : un seul email envoyé sans réponse la semaine dernière = ~5 pts ma
   const total = authority + budget + timeline + business_need + engagement + strategic_fit;
 
   const components = [
+    { name: names[4], earned: engagement, max: maxes.engagement, filled: true },
     { name: names[0], earned: authority, max: maxes.authority, filled: true },
+    { name: names[3], earned: business_need, max: maxes.business_need, filled: true },
     { name: names[1], earned: budget, max: maxes.budget, filled: true },
     { name: names[2], earned: timeline, max: maxes.timeline, filled: true },
-    { name: names[3], earned: business_need, max: maxes.business_need, filled: true },
-    { name: names[4], earned: engagement, max: maxes.engagement, filled: true },
     { name: names[5], earned: strategic_fit, max: maxes.strategic_fit, filled: true },
   ];
 
