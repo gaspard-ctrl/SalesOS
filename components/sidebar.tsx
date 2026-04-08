@@ -131,6 +131,8 @@ export default function Sidebar() {
     </>
   ), [pathname, isAdmin, user, closeMobile]);
 
+  if (pathname?.startsWith("/pokedex")) return null;
+
   return (
     <>
       {/* Mobile hamburger button */}
