@@ -59,6 +59,7 @@ interface BriefingResult {
   companyProfile?: CompanyProfile;
   companyInsights?: string; // backward compat for cached briefings
   personInsights?: string;
+  linkedinInsights?: { name: string; currentRole: string; experience?: string; skills?: string; education?: string; keyInsight: string }[];
   recentNews: { items: { type: string; text: string; url?: string; date: string }[] };
   strategicHistory?: StrategicHistoryItem[];
   growthDynamics?: { summary: string } | null;
@@ -925,15 +926,77 @@ export default function BriefingPage() {
                 </div>
               )}
 
-              {/* Person insights */}
-              {briefing.personInsights && (
-                <div className="rounded-xl border p-4" style={{ borderColor: "#e5e5e5", borderLeft: "2px solid #e5e5e5", background: "#fff" }}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: "#aaa" }}>Interlocuteur</p>
-                  <div className="text-xs leading-relaxed space-y-1" style={{ color: "#555" }}>
-                    {briefing.personInsights.split("\n").filter(Boolean).map((line, i) => (
-                      <p key={i}>{line}</p>
-                    ))}
+              {/* Interlocuteur (personInsights + LinkedIn) */}
+              {(briefing.personInsights || (briefing.linkedinInsights && briefing.linkedinInsights.length > 0)) && (
+                <div className="rounded-xl border p-4" style={{
+                  borderColor: "#e5e5e5",
+                  borderLeft: briefing.linkedinInsights?.length ? "2px solid #1d4ed8" : "2px solid #e5e5e5",
+                  background: "#fff",
+                }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#aaa" }}>Interlocuteur</p>
+                    {briefing.linkedinInsights?.length && (
+                      <div className="flex items-center gap-1">
+                        <svg viewBox="0 0 24 24" width={10} height={10} fill="#1d4ed8"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                        <span className="text-[9px] font-medium" style={{ color: "#1d4ed8" }}>LinkedIn</span>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Person insights (HubSpot/Claude) — only if no LinkedIn data */}
+                  {briefing.personInsights && !briefing.linkedinInsights?.length && (
+                    <div className="text-xs leading-relaxed space-y-1" style={{ color: "#555" }}>
+                      {briefing.personInsights.split("\n").filter(Boolean).map((line, i) => (
+                        <p key={i}>{line}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* LinkedIn insights */}
+                  {briefing.linkedinInsights?.map((li, i) => (
+                    <div key={i} className="space-y-2">
+                      <div>
+                        <p className="text-xs font-semibold" style={{ color: "#111" }}>{li.name}</p>
+                        <p className="text-[11px]" style={{ color: "#1d4ed8" }}>{li.currentRole}</p>
+                      </div>
+                      {li.keyInsight && (
+                        <p className="text-[11px] px-2.5 py-1.5 rounded-lg" style={{ background: "#eff6ff", color: "#1e40af" }}>
+                          {li.keyInsight}
+                        </p>
+                      )}
+                      {li.experience && (
+                        <div>
+                          <p className="text-[9px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: "#aaa" }}>Parcours</p>
+                          <div className="text-[11px] leading-relaxed" style={{ color: "#555" }}>
+                            {li.experience.split("\\n").map((line, j) => <p key={j}>{line}</p>)}
+                          </div>
+                        </div>
+                      )}
+                      {li.skills && (
+                        <div>
+                          <p className="text-[9px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: "#aaa" }}>Compétences</p>
+                          <p className="text-[11px]" style={{ color: "#555" }}>{li.skills}</p>
+                        </div>
+                      )}
+                      {li.education && (
+                        <div>
+                          <p className="text-[9px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: "#aaa" }}>Formation</p>
+                          <p className="text-[11px]" style={{ color: "#555" }}>{li.education}</p>
+                        </div>
+                      )}
+                      {/* personInsights as complement below LinkedIn */}
+                      {briefing.personInsights && i === (briefing.linkedinInsights?.length ?? 1) - 1 && (
+                        <div className="pt-2 border-t" style={{ borderColor: "#f0f0f0" }}>
+                          <p className="text-[9px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: "#aaa" }}>Notes CRM</p>
+                          <div className="text-[11px] leading-relaxed" style={{ color: "#888" }}>
+                            {briefing.personInsights.split("\n").filter(Boolean).map((line, j) => (
+                              <p key={j}>{line}</p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
 

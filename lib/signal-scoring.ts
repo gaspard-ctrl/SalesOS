@@ -16,7 +16,7 @@ export const signalScoringTool: Anthropic.Tool = {
             company_name: { type: "string", description: "Nom exact de l'entreprise mentionnée dans l'article" },
             signal_type: {
               type: "string",
-              enum: ["funding", "hiring", "nomination", "expansion", "restructuring", "content", "job_change"],
+              enum: ["funding", "hiring", "nomination", "expansion", "restructuring", "content", "job_change", "linkedin_post"],
               description: "Type de signal détecté",
             },
             title: { type: "string", description: "Titre concis < 80 caractères, fait concret" },
