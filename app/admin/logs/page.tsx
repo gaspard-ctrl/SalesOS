@@ -60,7 +60,7 @@ export default async function AdminLogsPage() {
     db.from("usage_logs")
       .select("id, user_id, model, feature, input_tokens, output_tokens, created_at")
       .order("created_at", { ascending: false })
-      .limit(1000),
+      .limit(5000),
     db.from("users").select("id, name, email"),
     db.from("guide_defaults").select("content").eq("key", "model_preferences").single(),
   ]);
@@ -120,7 +120,7 @@ export default async function AdminLogsPage() {
 
   const allFeatures = byFeatureSerial.map((f) => f.feature);
 
-  const rawLogs = (logs ?? []).slice(0, 200).map((l) => ({
+  const rawLogs = (logs ?? []).map((l) => ({
     ...l,
     userName: userMap.get(l.user_id)?.name ?? userMap.get(l.user_id)?.email ?? l.user_id,
     featureLabel: FEATURE_LABELS[l.feature ?? ""] ?? l.feature ?? "—",
