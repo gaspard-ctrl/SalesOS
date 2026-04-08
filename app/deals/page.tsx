@@ -1253,7 +1253,7 @@ export default function DealsPage() {
             details={details}
             loading={loadingDetails}
             onClose={() => { setSelectedDeal(null); setDetails(null); }}
-            onRescore={(_dealId, _score, _reasoning, _next_action) => { reload(); }}
+            onRescore={() => {}}
             stageLabel={selectedStage?.label ?? ""}
             stageColor={stageColor(stageIdx)}
           />
