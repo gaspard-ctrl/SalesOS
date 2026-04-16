@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, memo } from "react";
 import { useUserMe } from "@/lib/hooks/use-user-me";
 import { useDeals } from "@/lib/hooks/use-deals";
-import { X, ChevronRight, Mail, Zap, AlertCircle, CheckCircle, TrendingUp, Search, RefreshCw, Linkedin, Copy, Check } from "lucide-react";
+import { X, ChevronRight, Mail, Zap, AlertCircle, CheckCircle, TrendingUp, Search, RefreshCw, Linkedin, Copy, Check, Send } from "lucide-react";
 import { scoreBadge, reliabilityLabel, reliabilityColor, healthIndicator, type DealScore } from "@/lib/deal-scoring";
+import { AskClaudeButton, AskClaudePanel } from "@/components/ask-claude";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -215,6 +216,76 @@ const KanbanColumn = memo(function KanbanColumn({
   );
 });
 
+// ─── Format deal for Slack ────────────────────────────────────────────────────
+
+function formatDealForSlack(details: DealDetails, stageLabel: string, score: DealScore | null, reasoning: string | null, nextAction: string | null, qualification: Record<string, string | null> | null): string {
+  const lines: string[] = [
+    `*Deal — ${details.dealname}*`,
+    "",
+    `*Stage :* ${stageLabel}`,
+  ];
+  if (details.amount) lines.push(`*Montant :* ${parseFloat(details.amount).toLocaleString("fr-FR")}€`);
+  if (details.closedate) lines.push(`*Clôture :* ${new Date(details.closedate).toLocaleDateString("fr-FR")}`);
+  if (details.ownerName) lines.push(`*Owner :* ${details.ownerName}`);
+
+  // Score
+  if (score) {
+    const badge = scoreBadge(score.total);
+    lines.push("", `*Score :* ${score.total}/100 — ${badge.label}`);
+    if (score.components?.length) {
+      lines.push(...score.components.map((c) => `  • ${c.name} : ${c.earned}/${c.max}`));
+    }
+  }
+
+  // Reasoning
+  if (reasoning) {
+    lines.push("", `*Analyse :*`, reasoning);
+  }
+
+  // Next action
+  if (nextAction) {
+    lines.push("", `*Prochaine action :* ${nextAction}`);
+  }
+
+  // Qualification
+  if (qualification) {
+    const QUAL_LABELS: Record<string, string> = {
+      budget: "Budget", estimatedBudget: "Budget estimé", authority: "Autorité",
+      need: "Besoin", champion: "Champion", needDetailed: "Besoin détaillé",
+      timeline: "Timeline", strategicFit: "Fit stratégique",
+    };
+    const entries = Object.entries(qualification).filter(([, v]) => !!v);
+    if (entries.length > 0) {
+      lines.push("", `*Qualification :*`);
+      entries.forEach(([k, v]) => {
+        lines.push(`  • ${QUAL_LABELS[k] ?? k} : ${v}`);
+      });
+    }
+  }
+
+  // Company
+  if (details.company?.name) {
+    const cp = details.company;
+    const companyParts = [
+      cp.name,
+      cp.industry ? `Secteur : ${cp.industry}` : null,
+      cp.employees ? `Effectifs : ${cp.employees}` : null,
+    ].filter(Boolean);
+    lines.push("", `*Entreprise :*`, ...companyParts.map((p) => `  • ${p}`));
+  }
+
+  // Contacts
+  if (details.contacts?.length > 0) {
+    lines.push("", `*Contacts :*`);
+    details.contacts.forEach((c) => {
+      const parts = [c.name, c.jobTitle, c.email].filter(Boolean);
+      lines.push(`  • ${parts.join(" — ")}`);
+    });
+  }
+
+  return lines.join("\n");
+}
+
 // ─── Deal Drawer ───────────────────────────────────────────────────────────────
 
 function DealDrawer({
@@ -224,6 +295,7 @@ function DealDrawer({
   onRescore,
   stageLabel,
   stageColor: color,
+  slackName,
 }: {
   details: DealDetails | null;
   loading: boolean;
@@ -231,10 +303,13 @@ function DealDrawer({
   onRescore: (dealId: string, score: DealScore, reasoning: string, next_action: string) => void;
   stageLabel: string;
   stageColor: string;
+  slackName: string | null;
 }) {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState("");
+  const [slackSending, setSlackSending] = useState(false);
+  const [slackSent, setSlackSent] = useState(false);
 
   const [emailDraft, setEmailDraft] = useState<{ subject: string; body: string; toEmail: string } | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -245,6 +320,7 @@ function DealDrawer({
   const [sent, setSent] = useState(false);
   const [showComposer, setShowComposer] = useState(false);
   const [showEngagements, setShowEngagements] = useState(false);
+  const [claudeOpen, setClaudeOpen] = useState(false);
   const [rescoring, setRescoring] = useState(false);
   const [localScore, setLocalScore] = useState<{ score: DealScore; reasoning: string; next_action: string; scoredAt: string; qualification: Record<string, string | null> | null } | null>(null);
 
@@ -256,7 +332,9 @@ function DealDrawer({
     setShowComposer(false);
     setSent(false);
     setShowEngagements(false);
+    setClaudeOpen(false);
     setLocalScore(null);
+    setSlackSent(false);
   }, [details?.id]);
 
   // Sync email fields when draft arrives
@@ -358,6 +436,32 @@ function DealDrawer({
     }
   }, [details]);
 
+  const sendToSlack = useCallback(async () => {
+    if (!details) return;
+    setSlackSending(true);
+    try {
+      const activeScore = localScore?.score ?? details.score;
+      const activeReasoning = localScore?.reasoning ?? details.reasoning;
+      const activeNextAction = localScore?.next_action ?? details.next_action;
+      const activeQualification = localScore?.qualification ?? details.qualification;
+      const text = formatDealForSlack(details, stageLabel, activeScore, activeReasoning, activeNextAction, activeQualification);
+      const r = await fetch("/api/deals/send-slack", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!r.ok) {
+        const data = await r.json();
+        throw new Error(data.error ?? "Erreur");
+      }
+      setSlackSent(true);
+    } catch (e) {
+      console.error("send-slack error:", e);
+    } finally {
+      setSlackSending(false);
+    }
+  }, [details, localScore, stageLabel]);
+
   const riskColors: Record<string, string> = { Faible: "#16a34a", Moyen: "#ca8a04", Élevé: "#dc2626" };
 
   return (
@@ -392,6 +496,28 @@ function DealDrawer({
             </>
           ) : null}
         </div>
+        {details && slackName && (
+          slackSent ? (
+            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#16a34a", flexShrink: 0 }}>
+              <CheckCircle size={13} /> Envoyé
+            </span>
+          ) : (
+            <button
+              onClick={sendToSlack}
+              disabled={slackSending}
+              title="Envoyer le topo en DM Slack"
+              style={{
+                padding: "5px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                background: slackSending ? "#f3f4f6" : "#f8fafc",
+                color: slackSending ? "#9ca3af" : "#374151",
+                border: "1px solid #e5e7eb", cursor: slackSending ? "not-allowed" : "pointer",
+                display: "flex", alignItems: "center", gap: 4, flexShrink: 0,
+              }}
+            >
+              {slackSending ? <><RefreshCw size={12} className="animate-spin" /> Envoi…</> : <><Send size={12} /> Slack</>}
+            </button>
+          )
+        )}
         <button onClick={onClose} style={{ padding: 4, color: "#9ca3af", cursor: "pointer", background: "none", border: "none", flexShrink: 0 }}>
           <X size={18} />
         </button>
@@ -591,36 +717,135 @@ function DealDrawer({
 
             </div>
 
-            {/* ── Contacts + Company side by side ── */}
-            {(details.contacts.length > 0 || details.company.name || details.company.industry) && (
-              <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-                {details.contacts.length > 0 && (
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <Section title="Contacts">
-                      {details.contacts.map((c) => (
-                        <ContactRow key={c.id} contact={c} />
-                      ))}
-                    </Section>
+            {/* ── Contacts ── */}
+            {details.contacts.length > 0 && (
+              <Section title="Contacts">
+                {details.contacts.map((c) => (
+                  <ContactRow key={c.id} contact={c} />
+                ))}
+              </Section>
+            )}
+
+            {/* ── Quick actions: Email + Claude ── */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+              <button
+                onClick={generateEmail}
+                disabled={generating}
+                style={{
+                  flex: 1,
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "none",
+                  background: "#f3f4f6",
+                  cursor: generating ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  transition: "background 0.15s",
+                }}
+                onMouseEnter={(e) => { if (!generating) e.currentTarget.style.background = "#e5e7eb"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#f3f4f6"; }}
+              >
+                <Mail size={16} style={{ color: "#6366f1", flexShrink: 0 }} />
+                <div style={{ textAlign: "left" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>
+                    {generating ? "Génération…" : "Email de suivi"}
                   </div>
-                )}
-                {(details.company.name || details.company.industry) && (
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <Section title="Entreprise">
-                      {details.company.name && <InfoRow label="Nom" value={details.company.name} />}
-                      {details.company.industry && <InfoRow label="Secteur" value={details.company.industry} />}
-                      {details.company.employees && <InfoRow label="Effectifs" value={details.company.employees} />}
-                      {details.company.website && (
-                        <InfoRow label="Site" value={
-                          <a href={details.company.website.startsWith("http") ? details.company.website : `https://${details.company.website}`}
-                             target="_blank" rel="noreferrer"
-                             style={{ color: "#6366f1", textDecoration: "none" }}>
-                            {details.company.website}
-                          </a>
-                        } />
-                      )}
-                    </Section>
-                  </div>
-                )}
+                  <div style={{ fontSize: 10, color: "#9ca3af" }}>Rédiger un follow-up</div>
+                </div>
+              </button>
+              <AskClaudeButton onClick={() => setClaudeOpen(true)} />
+            </div>
+
+            {/* ── Claude chat panel (expands below) ── */}
+            {claudeOpen && (
+              <AskClaudePanel
+                context={{
+                  deal: {
+                    name: details.dealname,
+                    stage: stageLabel,
+                    amount: details.amount,
+                    closeDate: details.closedate,
+                    probability: details.probability,
+                    type: details.dealType,
+                    description: details.description,
+                    score: details.score,
+                    reasoning: details.reasoning,
+                    nextAction: details.next_action,
+                    qualification: details.qualification,
+                  },
+                  contacts: details.contacts,
+                  company: details.company,
+                  engagements: details.engagements,
+                  analysis: analysis ?? undefined,
+                }}
+                placeholder="Poser une question sur ce deal…"
+                onClose={() => setClaudeOpen(false)}
+              />
+            )}
+
+            {/* ── Email composer (expands when generated) ── */}
+            {sent && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#16a34a", fontSize: 13, marginBottom: 16 }}>
+                <CheckCircle size={14} /> Email envoyé avec succès
+              </div>
+            )}
+
+            {showComposer && !sent && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+                <input
+                  value={emailTo}
+                  onChange={(e) => setEmailTo(e.target.value)}
+                  placeholder="À (email)"
+                  style={{
+                    fontSize: 12, padding: "6px 10px", borderRadius: 6,
+                    border: "1px solid #e5e7eb", outline: "none", width: "100%",
+                  }}
+                />
+                <input
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  placeholder="Objet"
+                  style={{
+                    fontSize: 12, padding: "6px 10px", borderRadius: 6,
+                    border: "1px solid #e5e7eb", outline: "none", width: "100%",
+                  }}
+                />
+                <textarea
+                  value={emailBody}
+                  onChange={(e) => setEmailBody(e.target.value)}
+                  rows={8}
+                  style={{
+                    fontSize: 12, padding: "8px 10px", borderRadius: 6,
+                    border: "1px solid #e5e7eb", outline: "none",
+                    resize: "vertical", fontFamily: "inherit", lineHeight: 1.5, width: "100%",
+                  }}
+                />
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    onClick={sendEmail}
+                    disabled={sending || !emailTo}
+                    style={{
+                      flex: 1, padding: "8px", borderRadius: 6,
+                      background: sending || !emailTo ? "#f3f4f6" : "#6366f1",
+                      color: sending || !emailTo ? "#9ca3af" : "white",
+                      border: "none", fontSize: 12, fontWeight: 600,
+                      cursor: sending || !emailTo ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {sending ? "Envoi…" : "Envoyer via Gmail"}
+                  </button>
+                  <button
+                    onClick={() => setShowComposer(false)}
+                    style={{
+                      padding: "8px 12px", borderRadius: 6,
+                      background: "none", border: "1px solid #e5e7eb",
+                      color: "#6b7280", fontSize: 12, cursor: "pointer",
+                    }}
+                  >
+                    Annuler
+                  </button>
+                </div>
               </div>
             )}
 
@@ -849,93 +1074,7 @@ function DealDrawer({
               )}
             </Section>
 
-            {/* ── Email composer ── */}
-            <Section title="Email de suivi">
-              {!showComposer && !sent && (
-                <button
-                  onClick={generateEmail}
-                  disabled={generating}
-                  style={{
-                    width: "100%", padding: "10px", borderRadius: 8,
-                    background: generating ? "#f3f4f6" : "white",
-                    color: generating ? "#9ca3af" : "#374151",
-                    border: "1px solid #e5e7eb",
-                    fontSize: 13, fontWeight: 600, cursor: generating ? "not-allowed" : "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                  }}
-                >
-                  {generating ? (
-                    <><RefreshCw size={14} className="animate-spin" /> Génération…</>
-                  ) : (
-                    <><Mail size={14} /> Rédiger un email de suivi</>
-                  )}
-                </button>
-              )}
 
-              {sent && (
-                <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#16a34a", fontSize: 13 }}>
-                  <CheckCircle size={14} /> Email envoyé avec succès
-                </div>
-              )}
-
-              {showComposer && !sent && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <input
-                    value={emailTo}
-                    onChange={(e) => setEmailTo(e.target.value)}
-                    placeholder="À (email)"
-                    style={{
-                      fontSize: 12, padding: "6px 10px", borderRadius: 6,
-                      border: "1px solid #e5e7eb", outline: "none", width: "100%",
-                    }}
-                  />
-                  <input
-                    value={emailSubject}
-                    onChange={(e) => setEmailSubject(e.target.value)}
-                    placeholder="Objet"
-                    style={{
-                      fontSize: 12, padding: "6px 10px", borderRadius: 6,
-                      border: "1px solid #e5e7eb", outline: "none", width: "100%",
-                    }}
-                  />
-                  <textarea
-                    value={emailBody}
-                    onChange={(e) => setEmailBody(e.target.value)}
-                    rows={8}
-                    style={{
-                      fontSize: 12, padding: "8px 10px", borderRadius: 6,
-                      border: "1px solid #e5e7eb", outline: "none",
-                      resize: "vertical", fontFamily: "inherit", lineHeight: 1.5, width: "100%",
-                    }}
-                  />
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button
-                      onClick={sendEmail}
-                      disabled={sending || !emailTo}
-                      style={{
-                        flex: 1, padding: "8px", borderRadius: 6,
-                        background: sending || !emailTo ? "#f3f4f6" : "#6366f1",
-                        color: sending || !emailTo ? "#9ca3af" : "white",
-                        border: "none", fontSize: 12, fontWeight: 600,
-                        cursor: sending || !emailTo ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      {sending ? "Envoi…" : "Envoyer via Gmail"}
-                    </button>
-                    <button
-                      onClick={() => setShowComposer(false)}
-                      style={{
-                        padding: "8px 12px", borderRadius: 6,
-                        background: "none", border: "1px solid #e5e7eb",
-                        color: "#6b7280", fontSize: 12, cursor: "pointer",
-                      }}
-                    >
-                      Annuler
-                    </button>
-                  </div>
-                </div>
-              )}
-            </Section>
           </>
         ) : null}
       </div>
@@ -1063,7 +1202,7 @@ export default function DealsPage() {
   const [details, setDetails] = useState<DealDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
-  const { isAdmin } = useUserMe();
+  const { isAdmin, slackName } = useUserMe();
 
   // Auto-detect HubSpot owner once
   useEffect(() => { fetch("/api/hubspot/auto-link-owner").catch(() => {}); }, []);
@@ -1256,6 +1395,7 @@ export default function DealsPage() {
             onRescore={() => {}}
             stageLabel={selectedStage?.label ?? ""}
             stageColor={stageColor(stageIdx)}
+            slackName={slackName}
           />
         )}
       </div>
