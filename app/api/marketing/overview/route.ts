@@ -68,8 +68,19 @@ export async function GET(req: NextRequest) {
         source: "ga4",
       });
     } catch (e) {
-      console.error("[marketing/overview] GA4 failed, falling back to mock:", e);
-      // Fall through to mock data
+      const errMsg = e instanceof Error ? e.message : String(e);
+      console.error("[marketing/overview] GA4 failed, falling back to mock:", errMsg);
+      // Return mock but include the error so we can debug
+      const trafficData = MOCK_TRAFFIC_DATA.slice(-validPeriod);
+      return NextResponse.json({
+        kpis: MOCK_KPIS,
+        trafficData,
+        trafficSources: MOCK_TRAFFIC_SOURCES,
+        topPages: [],
+        articleMarkers: MOCK_ARTICLE_MARKERS,
+        source: "mock",
+        ga4Error: errMsg,
+      });
     }
   }
 
