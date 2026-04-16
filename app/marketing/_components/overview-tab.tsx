@@ -12,18 +12,6 @@ interface OverviewTabProps {
   onArticleClick: (articleId: string) => void;
 }
 
-const TOP_ARTICLES_MAP: Record<string, string> = {
-  "ia-coaching-duo-gagnant": "a7",
-  "coaching-commercial-closer": "a8",
-  "roi-coaching-entreprise": "a2",
-  "coaching-performance-commerciale": "a1",
-  "onboarding-coaching-turnover": "a5",
-  "leadership-coaching-competences": "a3",
-  "mesurer-impact-coaching": "a6",
-  "coaching-digital-vs-presentiel": "a4",
-  "tendances-coaching-2025": "a9",
-  "investir-coaching-equipe": "a10",
-};
 
 function formatDuration(secs: number) {
   const m = Math.floor(secs / 60);
@@ -78,19 +66,8 @@ export default function OverviewTab({ onArticleClick }: OverviewTabProps) {
       });
   }, [trafficData, articleMarkers]);
 
-  // Top articles from traffic data (mock — use articles from markers)
-  const topArticles = useMemo(() => [
-    { rank: 1, title: "Intelligence artificielle et coaching", slug: "ia-coaching-duo-gagnant", sessions: 2340, clicks: 504, ctr: 7.0, position: 2.8 },
-    { rank: 2, title: "Coaching commercial : 7 techniques", slug: "coaching-commercial-closer", sessions: 1890, clicks: 348, ctr: 6.0, position: 3.5 },
-    { rank: 3, title: "ROI du coaching en entreprise", slug: "roi-coaching-entreprise", sessions: 1650, clicks: 312, ctr: 6.0, position: 3.1 },
-    { rank: 4, title: "Coaching transforme la performance", slug: "coaching-performance-commerciale", sessions: 1420, clicks: 420, ctr: 5.0, position: 4.2 },
-    { rank: 5, title: "Onboarding et coaching", slug: "onboarding-coaching-turnover", sessions: 1280, clicks: 190, ctr: 5.0, position: 7.1 },
-    { rank: 6, title: "Leadership et coaching", slug: "leadership-coaching-competences", sessions: 980, clicks: 244, ctr: 4.0, position: 5.8 },
-    { rank: 7, title: "Mesurer l'impact du coaching", slug: "mesurer-impact-coaching", sessions: 890, clicks: 116, ctr: 4.0, position: 8.3 },
-    { rank: 8, title: "Coaching digital vs présentiel", slug: "coaching-digital-vs-presentiel", sessions: 760, clicks: 215, ctr: 5.0, position: 6.4 },
-    { rank: 9, title: "Tendances du coaching 2025", slug: "tendances-coaching-2025", sessions: 420, clicks: 63, ctr: 2.1, position: 18.4 },
-    { rank: 10, title: "Investir dans le coaching d'équipe", slug: "investir-coaching-equipe", sessions: 310, clicks: 47, ctr: 1.8, position: 22.1 },
-  ], []);
+  // Top articles — use real GA4 data if available
+  const hasLiveTopPages = topPages.length > 0;
 
   if (isLoading) return <div className="text-sm" style={{ color: "#888" }}>Loading...</div>;
 
@@ -228,7 +205,12 @@ export default function OverviewTab({ onArticleClick }: OverviewTabProps) {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         {/* Sources */}
         <div className="lg:col-span-2 rounded-xl" style={{ background: "#fff", border: "1px solid #eeeeee", padding: "20px" }}>
-          <h3 className="font-semibold mb-4" style={{ color: "#111" }}>Traffic Sources</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold" style={{ color: "#111" }}>Traffic Sources</h3>
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: source === "ga4" ? "#f0fdf4" : "#f5f5f5", color: source === "ga4" ? "#16a34a" : "#888" }}>
+              {source === "ga4" ? "Live" : "Mock"}
+            </span>
+          </div>
           <div className="flex justify-center">
             <PieChart width={200} height={200}>
               <Pie
@@ -265,45 +247,56 @@ export default function OverviewTab({ onArticleClick }: OverviewTabProps) {
 
         {/* Top Articles */}
         <div className="lg:col-span-3 rounded-xl overflow-hidden" style={{ background: "#fff", border: "1px solid #eeeeee" }}>
-          <div className="px-4 py-3" style={{ background: "#f9f9f9", borderBottom: "1px solid #eeeeee" }}>
-            <h3 className="font-semibold text-sm" style={{ color: "#111" }}>Top 10 Articles</h3>
+          <div className="px-4 py-3 flex items-center justify-between" style={{ background: "#f9f9f9", borderBottom: "1px solid #eeeeee" }}>
+            <h3 className="font-semibold text-sm" style={{ color: "#111" }}>Top Blog Articles</h3>
+            <span
+              className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+              style={{
+                background: hasLiveTopPages ? "#f0fdf4" : "#f5f5f5",
+                color: hasLiveTopPages ? "#16a34a" : "#888",
+              }}
+            >
+              {hasLiveTopPages ? `Live — ${topPages.length} pages from GA4` : "No data"}
+            </span>
           </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: "1px solid #eeeeee" }}>
-                <th className="text-left px-4 py-2 font-medium text-[10px] uppercase tracking-wider" style={{ color: "#888" }}>#</th>
-                <th className="text-left px-4 py-2 font-medium text-[10px] uppercase tracking-wider" style={{ color: "#888" }}>Title</th>
-                <th className="text-right px-4 py-2 font-medium text-[10px] uppercase tracking-wider" style={{ color: "#888" }}>Sessions</th>
-                <th className="text-right px-4 py-2 font-medium text-[10px] uppercase tracking-wider" style={{ color: "#888" }}>Clicks</th>
-                <th className="text-right px-4 py-2 font-medium text-[10px] uppercase tracking-wider" style={{ color: "#888" }}>CTR</th>
-                <th className="text-right px-4 py-2 font-medium text-[10px] uppercase tracking-wider" style={{ color: "#888" }}>Position</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topArticles.map((a) => {
-                const posStyle = positionBadgeStyle(a.position);
-                return (
+          {topPages.length > 0 ? (
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: "1px solid #eeeeee" }}>
+                  <th className="text-left px-4 py-2 font-medium text-[10px] uppercase tracking-wider" style={{ color: "#888" }}>#</th>
+                  <th className="text-left px-4 py-2 font-medium text-[10px] uppercase tracking-wider" style={{ color: "#888" }}>Title</th>
+                  <th className="text-left px-4 py-2 font-medium text-[10px] uppercase tracking-wider" style={{ color: "#888" }}>Path</th>
+                  <th className="text-right px-4 py-2 font-medium text-[10px] uppercase tracking-wider" style={{ color: "#888" }}>Sessions</th>
+                  <th className="text-right px-4 py-2 font-medium text-[10px] uppercase tracking-wider" style={{ color: "#888" }}>Page Views</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topPages.map((page, i) => (
                   <tr
-                    key={a.rank}
-                    onClick={() => onArticleClick(TOP_ARTICLES_MAP[a.slug] || "")}
-                    className="cursor-pointer transition-colors"
+                    key={page.path}
+                    className="transition-colors"
                     style={{ borderBottom: "1px solid #f5f5f5" }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#fafafa"; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
                   >
-                    <td className="px-4 py-2.5 font-medium" style={{ color: "#bbb" }}>{a.rank}</td>
-                    <td className="px-4 py-2.5 font-medium" style={{ color: "#111", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.title}</td>
-                    <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#555" }}>{formatNumber(a.sessions)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#555" }}>{formatNumber(a.clicks)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#555" }}>{a.ctr}%</td>
-                    <td className="px-4 py-2.5 text-right">
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={posStyle}>{a.position.toFixed(1)}</span>
+                    <td className="px-4 py-2.5 font-medium" style={{ color: "#bbb" }}>{i + 1}</td>
+                    <td className="px-4 py-2.5 font-medium" style={{ color: "#111", maxWidth: 250, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {page.title || page.path}
                     </td>
+                    <td className="px-4 py-2.5" style={{ color: "#aaa", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <code className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#f5f5f5" }}>{page.path}</code>
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#555" }}>{formatNumber(page.sessions)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono" style={{ color: "#555" }}>{formatNumber(page.pageViews)}</td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="flex items-center justify-center py-10">
+              <p className="text-xs" style={{ color: "#aaa" }}>Connect Google Analytics to see your top blog articles</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
