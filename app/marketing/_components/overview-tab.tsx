@@ -53,7 +53,7 @@ const PERIODS = [
 
 export default function OverviewTab({ onArticleClick }: OverviewTabProps) {
   const [period, setPeriod] = useState<7 | 14 | 30 | 90 | 365>(30);
-  const { kpis, trafficData, articleMarkers, trafficSources, topPages, source, isLoading } = useMarketingOverview(period);
+  const { kpis, trafficData, articleMarkers, trafficSources, topPages, source, ga4Error, isLoading } = useMarketingOverview(period);
 
   const kpiCards = useMemo(() => {
     if (!kpis) return [];
@@ -116,15 +116,22 @@ export default function OverviewTab({ onArticleClick }: OverviewTabProps) {
             </button>
           ))}
         </div>
-        <span
-          className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-          style={{
-            background: source === "ga4" ? "#f0fdf4" : "#f5f5f5",
-            color: source === "ga4" ? "#16a34a" : "#888",
-          }}
-        >
-          {source === "ga4" ? "Live — Google Analytics" : "Mock Data"}
-        </span>
+        <div className="flex items-center gap-2">
+          {ga4Error && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "#fef2f2", color: "#dc2626" }}>
+              GA4: {ga4Error.slice(0, 80)}
+            </span>
+          )}
+          <span
+            className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+            style={{
+              background: source === "ga4" ? "#f0fdf4" : "#f5f5f5",
+              color: source === "ga4" ? "#16a34a" : "#888",
+            }}
+          >
+            {source === "ga4" ? "Live — Google Analytics" : "Mock Data"}
+          </span>
+        </div>
       </div>
 
       {/* KPI Cards */}

@@ -39,6 +39,7 @@ interface OverviewResponse {
   trafficSources: TrafficSource[];
   topPages?: GA4TopArticle[];
   source?: "ga4" | "mock";
+  ga4Error?: string;
 }
 
 export function useMarketingOverview(period: 7 | 14 | 30 | 90 | 365) {
@@ -53,6 +54,7 @@ export function useMarketingOverview(period: 7 | 14 | 30 | 90 | 365) {
     trafficSources: data?.trafficSources ?? [],
     topPages: data?.topPages ?? [],
     source: data?.source ?? "mock",
+    ga4Error: data?.ga4Error ?? null,
     isLoading,
     error: error ? "Loading error" : "",
   };
