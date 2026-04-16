@@ -14,6 +14,7 @@ const nav = [
   { href: "/deals", label: "Deals" },
   { href: "/prospecting", label: "Prospection" },
   { href: "/signals", label: "Market Intel (coming)" },
+  //{ href: "/marketing", label: "Marketing" },
   //{ href: "/competitive", label: "Competition ()" },
 ];
 
