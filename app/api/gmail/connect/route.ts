@@ -17,6 +17,8 @@ export async function GET() {
       "https://www.googleapis.com/auth/gmail.compose",
       "https://www.googleapis.com/auth/calendar.readonly",
       "https://www.googleapis.com/auth/drive.readonly",
+      "https://www.googleapis.com/auth/analytics.readonly",
+      "https://www.googleapis.com/auth/webmasters.readonly",
       "openid",
       "email",
       "profile",

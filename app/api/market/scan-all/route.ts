@@ -18,17 +18,25 @@ export const maxDuration = 300;
 
 async function searchTavily(query: string, days = 14): Promise<TavilyResult[]> {
   const apiKey = process.env.TAVILY_API_KEY;
-  if (!apiKey) return [];
+  if (!apiKey) {
+    console.warn("[tavily] TAVILY_API_KEY manquante");
+    return [];
+  }
   try {
     const res = await fetch("https://api.tavily.com/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ api_key: apiKey, query, search_depth: "advanced", max_results: 8, days }),
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error(`[tavily] ${res.status} pour "${query.slice(0, 60)}": ${text.slice(0, 200)}`);
+      return [];
+    }
     const data = await res.json();
     return (data.results ?? []) as TavilyResult[];
-  } catch {
+  } catch (e) {
+    console.error("[tavily] erreur réseau:", e);
     return [];
   }
 }

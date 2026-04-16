@@ -148,15 +148,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Engagements : batch + meetings + calls + notes (Claap)
+    // ── Engagements + Supabase (score + model) en parallèle ──────────────
     let engagementLines = "";
-    if (engagementAssoc.status === "fulfilled") {
-      const allIds: string[] = (engagementAssoc.value?.results ?? []).map((r: { id: string }) => r.id);
-      if (allIds.length > 0) {
-        try {
-          const [batchRes, meetingsRes, callsRes, notesRes] = await Promise.allSettled([
+    let scoreContext = "Score IA : non disponible (deal non scoré)";
+    let analyzeModel = DEFAULT_ANALYZE_MODEL;
+
+    const engIds: string[] = engagementAssoc.status === "fulfilled"
+      ? (engagementAssoc.value?.results ?? []).map((r: { id: string }) => r.id)
+      : [];
+
+    const [engResult, scoreResult, modelResult] = await Promise.allSettled([
+      // Engagements HubSpot (all 4 calls in parallel)
+      engIds.length > 0
+        ? Promise.allSettled([
             hubspot("/crm/v3/objects/engagements/batch/read", "POST", {
-              inputs: allIds.map((id) => ({ id })),
+              inputs: engIds.map((id) => ({ id })),
               properties: ["hs_engagement_type", "hs_body_preview", "hs_createdate"],
             }),
             hubspot("/crm/v3/objects/meetings/search", "POST", {
@@ -174,70 +180,73 @@ export async function POST(req: NextRequest) {
               properties: ["hs_note_body", "hs_timestamp"],
               limit: 10,
             }),
-          ]);
+          ])
+        : Promise.resolve(null),
+      // Supabase: cached AI score
+      process.env.SUPABASE_URL
+        ? db.from("deal_scores").select("score, reasoning, next_action, scored_at").eq("deal_id", dealId).maybeSingle()
+        : Promise.resolve({ data: null }),
+      // Supabase: model preferences
+      db.from("guide_defaults").select("content").eq("key", "model_preferences").single(),
+    ]);
 
-          const engLines = batchRes.status === "fulfilled"
-            ? (batchRes.value.results ?? [])
-              .map((e: { properties: Record<string, string> }) => {
-                const ep = e.properties ?? {};
-                const type = ep.hs_engagement_type ?? "Activité";
-                const date = ep.hs_createdate ? new Date(ep.hs_createdate).toLocaleDateString("fr-FR") : "";
-                const body = stripHtml(ep.hs_body_preview ?? "").slice(0, 500);
-                return body ? `[${type} ${date}] ${body}` : "";
-              })
-              .filter(Boolean)
-            : [];
+    // Parse engagements
+    if (engResult.status === "fulfilled" && engResult.value) {
+      const [batchRes, meetingsRes, callsRes, notesRes] = engResult.value as PromiseSettledResult<{ results: { properties: Record<string, string> }[] }>[];
 
-          const meetingLines = meetingsRes.status === "fulfilled"
-            ? (meetingsRes.value.results ?? [])
-              .map((m: { properties: Record<string, string> }) => {
-                const mp = m.properties ?? {};
-                const date = mp.hs_timestamp ? new Date(mp.hs_timestamp).toLocaleDateString("fr-FR") : "";
-                const title = mp.hs_meeting_title ?? "Réunion";
-                const body = stripHtml(mp.hs_meeting_body ?? "").slice(0, 2000);
-                return body ? `[MEETING ${date}] ${title}\n${body}` : "";
-              })
-              .filter(Boolean)
-            : [];
+      const engLines = batchRes.status === "fulfilled"
+        ? (batchRes.value.results ?? [])
+          .map((e) => {
+            const ep = e.properties ?? {};
+            const type = ep.hs_engagement_type ?? "Activité";
+            const date = ep.hs_createdate ? new Date(ep.hs_createdate).toLocaleDateString("fr-FR") : "";
+            const body = stripHtml(ep.hs_body_preview ?? "").slice(0, 500);
+            return body ? `[${type} ${date}] ${body}` : "";
+          })
+          .filter(Boolean)
+        : [];
 
-          const callLines = callsRes.status === "fulfilled"
-            ? (callsRes.value.results ?? [])
-              .map((c: { properties: Record<string, string> }) => {
-                const cp = c.properties ?? {};
-                const date = cp.hs_timestamp ? new Date(cp.hs_timestamp).toLocaleDateString("fr-FR") : "";
-                const title = cp.hs_call_title ?? "Appel";
-                const body = stripHtml(cp.hs_call_body ?? "").slice(0, 2000);
-                return body ? `[CALL ${date}] ${title}\n${body}` : "";
-              })
-              .filter(Boolean)
-            : [];
+      const meetingLines = meetingsRes.status === "fulfilled"
+        ? (meetingsRes.value.results ?? [])
+          .map((m) => {
+            const mp = m.properties ?? {};
+            const date = mp.hs_timestamp ? new Date(mp.hs_timestamp).toLocaleDateString("fr-FR") : "";
+            const title = mp.hs_meeting_title ?? "Réunion";
+            const body = stripHtml(mp.hs_meeting_body ?? "").slice(0, 2000);
+            return body ? `[MEETING ${date}] ${title}\n${body}` : "";
+          })
+          .filter(Boolean)
+        : [];
 
-          const noteLines = notesRes.status === "fulfilled"
-            ? (notesRes.value.results ?? [])
-              .map((n: { properties: Record<string, string> }) => {
-                const np = n.properties ?? {};
-                const date = np.hs_timestamp ? new Date(np.hs_timestamp).toLocaleDateString("fr-FR") : "";
-                const body = stripHtml(np.hs_note_body ?? "").slice(0, 3000);
-                return body ? `[NOTE ${date}] ${body}` : "";
-              })
-              .filter(Boolean)
-            : [];
+      const callLines = callsRes.status === "fulfilled"
+        ? (callsRes.value.results ?? [])
+          .map((c) => {
+            const cp = c.properties ?? {};
+            const date = cp.hs_timestamp ? new Date(cp.hs_timestamp).toLocaleDateString("fr-FR") : "";
+            const title = cp.hs_call_title ?? "Appel";
+            const body = stripHtml(cp.hs_call_body ?? "").slice(0, 2000);
+            return body ? `[CALL ${date}] ${title}\n${body}` : "";
+          })
+          .filter(Boolean)
+        : [];
 
-          engagementLines = [...meetingLines, ...callLines, ...noteLines, ...engLines].join("\n\n");
-        } catch {
-          // fallback: skip engagements if batch fails
-        }
-      }
+      const noteLines = notesRes.status === "fulfilled"
+        ? (notesRes.value.results ?? [])
+          .map((n) => {
+            const np = n.properties ?? {};
+            const date = np.hs_timestamp ? new Date(np.hs_timestamp).toLocaleDateString("fr-FR") : "";
+            const body = stripHtml(np.hs_note_body ?? "").slice(0, 3000);
+            return body ? `[NOTE ${date}] ${body}` : "";
+          })
+          .filter(Boolean)
+        : [];
+
+      engagementLines = [...meetingLines, ...callLines, ...noteLines, ...engLines].join("\n\n");
     }
 
-    // Fetch cached AI score from deal_scores table
-    let scoreContext = "Score IA : non disponible (deal non scoré)";
-    if (process.env.SUPABASE_URL) {
-      const { data: cached } = await db
-        .from("deal_scores")
-        .select("score, reasoning, next_action, scored_at")
-        .eq("deal_id", dealId)
-        .maybeSingle();
+    // Parse score
+    if (scoreResult.status === "fulfilled") {
+      const cached = (scoreResult.value as { data: { score: unknown; reasoning: string; next_action: string } | null })?.data;
       if (cached?.score) {
         const s = cached.score as { total: number; components: { name: string; earned: number; max: number }[]; reliability: number };
         const componentLines = (s.components ?? [])
@@ -252,6 +261,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Parse model preference
+    if (modelResult.status === "fulfilled") {
+      const entry = (modelResult.value as { data: { content: string } | null })?.data;
+      if (entry?.content) {
+        analyzeModel = (JSON.parse(entry.content) as Record<string, string>).deals_analyze ?? DEFAULT_ANALYZE_MODEL;
+      }
+    }
+
     const contextBlock = [
       `Deal : ${p.dealname ?? "?"} | Stage : ${p.dealstage ?? "?"} | Montant : ${p.amount ? `${parseFloat(p.amount).toLocaleString("fr-FR")}€` : "?"}`,
       `Clôture : ${p.closedate ? new Date(p.closedate).toLocaleDateString("fr-FR") : "?"} | Probabilité : ${p.hs_deal_stage_probability ?? "?"}%`,
@@ -259,21 +276,12 @@ export async function POST(req: NextRequest) {
       contactLines ? `Contacts : ${contactLines}` : "Contacts : aucun",
       `\n${scoreContext}`,
       engagementLines ? `\nTous les échanges HubSpot :\n${engagementLines}` : "\nÉchanges : aucun enregistré",
-    ].filter(Boolean).join("\n");
+    ].filter(Boolean).join("\n").slice(0, 12000); // Cap context to avoid slow Claude responses
 
-    // Model from model_preferences
-    let analyzeModel = DEFAULT_ANALYZE_MODEL;
-    try {
-      const { data: globalModelEntry } = await db.from("guide_defaults").select("content").eq("key", "model_preferences").single();
-      if (globalModelEntry?.content) {
-        analyzeModel = (JSON.parse(globalModelEntry.content) as Record<string, string>).deals_analyze ?? DEFAULT_ANALYZE_MODEL;
-      }
-    } catch { /* keep default */ }
-
-    const client = new Anthropic();
+    const client = new Anthropic({ timeout: 90_000 });
     const message = await client.messages.create({
       model: analyzeModel,
-      max_tokens: 3000,
+      max_tokens: 2500,
       system: `Tu es un expert en vente B2B pour Coachello (coaching professionnel).
 Analyse ce deal commercial en profondeur à partir de TOUTES les données disponibles (score IA, échanges, contacts, contexte).
 Sois hyper précis et factuel — base chaque analyse sur des éléments concrets tirés des échanges.
@@ -291,11 +299,16 @@ Utilise l'outil deal_analysis pour retourner ton analyse.`,
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erreur";
     console.error("[analyze] error:", msg);
-    // Detect HTML responses from overloaded APIs
     const isHtml = msg.includes("<HTML") || msg.includes("<html") || msg.includes("<!DOCTYPE");
+    const isTimeout = msg.includes("timed out") || msg.includes("timeout") || msg.includes("ETIMEDOUT") || msg.includes("AbortError");
+    const userMsg = isTimeout
+      ? "L'analyse a pris trop de temps. Réessaie dans un moment."
+      : isHtml
+        ? "L'API Claude est temporairement surchargée. Réessaie dans quelques secondes."
+        : msg;
     return NextResponse.json(
-      { error: isHtml ? "L'API Claude est temporairement surchargée. Réessaie dans quelques secondes." : msg },
-      { status: isHtml ? 503 : 500 },
+      { error: userMsg },
+      { status: isTimeout ? 504 : isHtml ? 503 : 500 },
     );
   }
 }
