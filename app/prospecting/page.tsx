@@ -362,6 +362,7 @@ export default function ProspectingPage() {
   // Agent state
   const [agentStep, setAgentStep] = useState<1 | 2 | 3>(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [simpleQuery, setSimpleQuery] = useState("");
   const [filterLifecycle, setFilterLifecycle] = useState("");
   const [filterIndustry, setFilterIndustry] = useState("");
   const [filterCountry, setFilterCountry] = useState("");
@@ -521,7 +522,7 @@ export default function ProspectingPage() {
   // ── Agent helpers ──
   const buildSearchUrl = (cursor?: string) => {
     const params = new URLSearchParams();
-    if (searchQuery.trim()) params.set("q", searchQuery.trim());
+    if (simpleQuery.trim()) params.set("q", simpleQuery.trim());
     if (filterLifecycle) params.set("lifecyclestage", filterLifecycle);
     if (filterIndustry) params.set("industry", filterIndustry);
     if (filterCountry) params.set("country", filterCountry);
@@ -536,52 +537,70 @@ export default function ProspectingPage() {
     return `/api/prospection/search?${params.toString()}`;
   };
 
-  const search = async () => {
+  const searchSimple = async () => {
     setSearching(true);
+    setIsAiSearch(false);
     setSearchError(null);
     setSearchResults([]);
     setNextCursor(null);
     setTotalResults(null);
     setAiExplanation(null);
-    const useAI = searchQuery.trim().length > 0;
-    setIsAiSearch(useAI);
     try {
-      if (useAI) {
-        const r = await fetch("/api/prospection/ai-search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query: searchQuery.trim(),
-            lifecyclestage: filterLifecycle || undefined,
-            industry: filterIndustry || undefined,
-            country: filterCountry || undefined,
-            leadstatus: filterLeadStatus || undefined,
-            contacted: filterContacted || undefined,
-            companysize: filterCompanySize || undefined,
-            source: filterSource || undefined,
-            createdyear: filterCreatedYear || undefined,
-            ownerFilter: ownerFilter === "all" ? "all" : undefined,
-          }),
-        });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error);
-        setSearchResults(data.results ?? []);
-        setAiExplanation(data.explanation ?? null);
-        if ((data.results ?? []).length === 0) setSearchError("Aucun prospect trouvé.");
-      } else {
-        const r = await fetch(buildSearchUrl());
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error);
-        setSearchResults(data.results ?? []);
-        setNextCursor(data.nextCursor ?? null);
-        setTotalResults(data.total ?? null);
-        if ((data.results ?? []).length === 0) setSearchError("Aucun prospect trouvé.");
-      }
+      const r = await fetch(buildSearchUrl());
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error);
+      setSearchResults(data.results ?? []);
+      setNextCursor(data.nextCursor ?? null);
+      setTotalResults(data.total ?? null);
+      if ((data.results ?? []).length === 0) setSearchError("Aucun prospect trouvé.");
     } catch (e) {
       setSearchError(e instanceof Error ? e.message : "Erreur de recherche");
     } finally {
       setSearching(false);
     }
+  };
+
+  const searchAI = async () => {
+    if (!searchQuery.trim()) return;
+    setSearching(true);
+    setIsAiSearch(true);
+    setSearchError(null);
+    setSearchResults([]);
+    setNextCursor(null);
+    setTotalResults(null);
+    setAiExplanation(null);
+    try {
+      const r = await fetch("/api/prospection/ai-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: searchQuery.trim(),
+          lifecyclestage: filterLifecycle || undefined,
+          industry: filterIndustry || undefined,
+          country: filterCountry || undefined,
+          leadstatus: filterLeadStatus || undefined,
+          contacted: filterContacted || undefined,
+          companysize: filterCompanySize || undefined,
+          source: filterSource || undefined,
+          createdyear: filterCreatedYear || undefined,
+          ownerFilter: ownerFilter === "all" ? "all" : undefined,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error);
+      setSearchResults(data.results ?? []);
+      setAiExplanation(data.explanation ?? null);
+      if ((data.results ?? []).length === 0) setSearchError("Aucun prospect trouvé.");
+    } catch (e) {
+      setSearchError(e instanceof Error ? e.message : "Erreur de recherche");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const search = () => {
+    if (searchQuery.trim()) return searchAI();
+    return searchSimple();
   };
 
   const loadMore = async () => {
@@ -1030,38 +1049,55 @@ export default function ProspectingPage() {
                   <p className="text-xs" style={{ color: "#aaa" }}>Tape un nom, email ou une requête en langage naturel</p>
                 </div>
 
-                {/* Search bar */}
+                {/* Search bars */}
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && search()}
-                    placeholder="Nom, email, entreprise — ou demande à l'IA…"
-                    className="flex-1 rounded-xl border px-4 py-2.5 text-sm outline-none transition-all"
-                    style={{ borderColor: "#e5e5e5", color: "#111", background: "#fff" }}
-                    onFocus={(e) => (e.currentTarget.style.borderColor = "#f01563")}
-                    onBlur={(e) => (e.currentTarget.style.borderColor = "#e5e5e5")}
-                  />
-                  <button
-                    onClick={search}
-                    disabled={searching}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-opacity"
-                    style={{
-                      background: searching && isAiSearch ? "#7c3aed" : "#f01563",
-                      color: "#fff",
-                      opacity: searching ? 0.7 : 1,
-                    }}
-                  >
-                    {searching ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : searchQuery.trim() ? (
-                      <Sparkles size={14} />
-                    ) : (
-                      <Search size={14} />
-                    )}
-                    {searching && isAiSearch ? "IA…" : "Rechercher"}
-                  </button>
+                  {/* Simple search */}
+                  <div className="flex-1 flex gap-1.5">
+                    <input
+                      type="text"
+                      value={simpleQuery}
+                      onChange={(e) => setSimpleQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && searchSimple()}
+                      placeholder="Nom, email, entreprise…"
+                      className="flex-1 rounded-xl border px-3 py-2.5 text-sm outline-none transition-all"
+                      style={{ borderColor: "#e5e5e5", color: "#111", background: "#fff" }}
+                      onFocus={(e) => (e.currentTarget.style.borderColor = "#f01563")}
+                      onBlur={(e) => (e.currentTarget.style.borderColor = "#e5e5e5")}
+                    />
+                    <button
+                      onClick={searchSimple}
+                      disabled={searching}
+                      className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-opacity whitespace-nowrap"
+                      style={{ background: "#f01563", color: "#fff", opacity: searching && !isAiSearch ? 0.7 : 1 }}
+                    >
+                      {searching && !isAiSearch ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                      Rechercher
+                    </button>
+                  </div>
+
+                  {/* AI search */}
+                  <div className="flex-1 flex gap-1.5">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && searchAI()}
+                      placeholder="Demande à l'IA…"
+                      className="flex-1 rounded-xl border px-3 py-2.5 text-sm outline-none transition-all"
+                      style={{ borderColor: "#e5e5e5", color: "#111", background: "#fff" }}
+                      onFocus={(e) => (e.currentTarget.style.borderColor = "#7c3aed")}
+                      onBlur={(e) => (e.currentTarget.style.borderColor = "#e5e5e5")}
+                    />
+                    <button
+                      onClick={searchAI}
+                      disabled={searching || !searchQuery.trim()}
+                      className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-opacity whitespace-nowrap"
+                      style={{ background: "#7c3aed", color: "#fff", opacity: searching && isAiSearch ? 0.7 : !searchQuery.trim() ? 0.5 : 1 }}
+                    >
+                      {searching && isAiSearch ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                      IA
+                    </button>
+                  </div>
                 </div>
 
                 {/* AI status message */}
