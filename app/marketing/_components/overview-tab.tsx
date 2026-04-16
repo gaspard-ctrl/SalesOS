@@ -119,7 +119,7 @@ export default function OverviewTab({ onArticleClick }: OverviewTabProps) {
         <div className="flex items-center gap-2">
           {ga4Error && (
             <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "#fef2f2", color: "#dc2626" }}>
-              GA4: {ga4Error.slice(0, 80)}
+              GA4: {ga4Error}
             </span>
           )}
           <span
