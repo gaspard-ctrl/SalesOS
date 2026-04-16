@@ -23,6 +23,12 @@ async function hubspot(path: string, method = "GET", body?: unknown) {
   return res.json();
 }
 
+// Strip lone surrogates that break JSON serialization
+function sanitizeString(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+}
+
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
@@ -81,7 +87,7 @@ export async function POST(req: NextRequest) {
             const ep = (e as PromiseFulfilledResult<{ properties: Record<string, string> }>).value?.properties ?? {};
             const type = ep.hs_engagement_type ?? "Activité";
             const date = ep.hs_createdate ? new Date(ep.hs_createdate).toLocaleDateString("fr-FR") : "";
-            const preview = (ep.hs_body_preview ?? "").slice(0, 300);
+            const preview = sanitizeString((ep.hs_body_preview ?? "").slice(0, 300));
             return preview ? `[${type} ${date}] ${preview}` : "";
           })
           .filter(Boolean)
@@ -96,7 +102,7 @@ export async function POST(req: NextRequest) {
     const contextBlock = [
       `Deal : ${p.dealname ?? "?"} | Stage : ${p.dealstage ?? "?"} | Montant : ${p.amount ? `${parseFloat(p.amount).toLocaleString("fr-FR")}€` : "?"}`,
       `Clôture prévue : ${p.closedate ? new Date(p.closedate).toLocaleDateString("fr-FR") : "?"}`,
-      p.description ? `Description : ${p.description}` : null,
+      p.description ? `Description : ${sanitizeString(p.description)}` : null,
       contactName ? `Contact principal : ${contactName}${contactTitle ? ` — ${contactTitle}` : ""}` : null,
       toEmail ? `Email : ${toEmail}` : null,
       engagementLines ? `\nHistorique des échanges :\n${engagementLines}` : null,

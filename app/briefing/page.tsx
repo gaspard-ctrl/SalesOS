@@ -7,6 +7,7 @@ import { useUserMe } from "@/lib/hooks/use-user-me";
 import { RefreshCw, Calendar, Mail, Send, ExternalLink } from "lucide-react";
 import { scoreBadge } from "@/lib/deal-scoring";
 import type { CalendarEvent } from "@/lib/google-calendar";
+import { AskClaude } from "@/components/ask-claude";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface GatheredData {
@@ -1088,6 +1089,22 @@ export default function BriefingPage() {
               <RefreshCw size={11} />
               Régénérer le briefing
             </button>
+            <AskClaude
+              context={{
+                meeting: selectedEvent.title,
+                briefing,
+                rawData: rawData ? {
+                  contacts: rawData.contacts,
+                  deals: rawData.deals,
+                  engagements: rawData.engagements,
+                  company: rawData.companyHubspot,
+                  gmailMessages: rawData.gmailMessages,
+                  slackMessages: rawData.slackMessages,
+                  webResults: rawData.webResults,
+                } : undefined,
+              }}
+              placeholder="Poser une question sur ce meeting…"
+            />
           </div>
         )}
       </div>
