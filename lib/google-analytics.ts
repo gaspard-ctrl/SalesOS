@@ -85,7 +85,7 @@ async function runReport(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`GA4 API error ${res.status}: ${text.slice(0, 200)}`);
+    throw new Error(`GA4 API error ${res.status}: ${text.slice(0, 500)}`);
   }
 
   return res.json();
