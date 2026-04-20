@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { logUsage } from "@/lib/log-usage";
-import { fetchTopPages, fetchKPIs } from "@/lib/google-analytics";
+import { db } from "@/lib/db";
+import { fetchTopPages } from "@/lib/google-analytics";
 import { fetchKeywords } from "@/lib/google-search-console";
 import { fetchAllArticles } from "@/lib/wordpress";
 
@@ -49,9 +50,165 @@ interface Draft {
   internalLinks: { fr: InternalLink[]; en: InternalLink[] };
 }
 
-let analysisResult: Analysis | null = null;
-let recommendations: Recommendation[] = [];
-const drafts = new Map<string, Draft>();
+// ─── Supabase helpers ────────────────────────────────────────────────────────
+
+async function loadAnalysis(userId: string): Promise<Analysis | null> {
+  const { data } = await db
+    .from("marketing_content_analysis")
+    .select("analysis")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return (data?.analysis as Analysis) ?? null;
+}
+
+async function saveAnalysis(userId: string, analysis: Analysis): Promise<void> {
+  await db
+    .from("marketing_content_analysis")
+    .upsert({ user_id: userId, analysis, created_at: new Date().toISOString() }, { onConflict: "user_id" });
+}
+
+interface DbRec {
+  id: string;
+  topic: string;
+  target_keyword: string;
+  justification: string | null;
+  estimated_traffic: number | null;
+  difficulty: string | null;
+  priority: string | null;
+  status: string;
+}
+
+async function loadRecommendations(userId: string): Promise<Recommendation[]> {
+  const { data } = await db
+    .from("marketing_content_recommendations")
+    .select("id, topic, target_keyword, justification, estimated_traffic, difficulty, priority, status")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+
+  return ((data as DbRec[] | null) ?? []).map((r) => ({
+    id: r.id,
+    topic: r.topic,
+    targetKeyword: r.target_keyword,
+    justification: r.justification ?? "",
+    estimatedTraffic: r.estimated_traffic ?? 0,
+    difficulty: (r.difficulty as Recommendation["difficulty"]) ?? "medium",
+    priority: (r.priority as Recommendation["priority"]) ?? "medium",
+    status: (r.status as Recommendation["status"]) ?? "recommended",
+  }));
+}
+
+async function saveRecommendations(userId: string, recs: Recommendation[]): Promise<Recommendation[]> {
+  // Delete old pending ones (keep approved/published)
+  await db
+    .from("marketing_content_recommendations")
+    .delete()
+    .eq("user_id", userId)
+    .in("status", ["recommended"]);
+
+  if (recs.length === 0) return [];
+
+  const rows = recs.map((r) => ({
+    user_id: userId,
+    topic: r.topic,
+    target_keyword: r.targetKeyword,
+    justification: r.justification,
+    estimated_traffic: r.estimatedTraffic,
+    difficulty: r.difficulty,
+    priority: r.priority,
+    status: r.status,
+  }));
+
+  const { data } = await db
+    .from("marketing_content_recommendations")
+    .insert(rows)
+    .select("id, topic, target_keyword, justification, estimated_traffic, difficulty, priority, status");
+
+  return ((data as DbRec[] | null) ?? []).map((r) => ({
+    id: r.id,
+    topic: r.topic,
+    targetKeyword: r.target_keyword,
+    justification: r.justification ?? "",
+    estimatedTraffic: r.estimated_traffic ?? 0,
+    difficulty: (r.difficulty as Recommendation["difficulty"]) ?? "medium",
+    priority: (r.priority as Recommendation["priority"]) ?? "medium",
+    status: (r.status as Recommendation["status"]) ?? "recommended",
+  }));
+}
+
+async function updateRecStatus(userId: string, recId: string, status: Recommendation["status"]): Promise<void> {
+  await db
+    .from("marketing_content_recommendations")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", recId)
+    .eq("user_id", userId);
+}
+
+async function deleteRec(userId: string, recId: string): Promise<void> {
+  await db
+    .from("marketing_content_recommendations")
+    .delete()
+    .eq("id", recId)
+    .eq("user_id", userId);
+}
+
+async function getRec(userId: string, recId: string): Promise<Recommendation | null> {
+  const { data } = await db
+    .from("marketing_content_recommendations")
+    .select("id, topic, target_keyword, justification, estimated_traffic, difficulty, priority, status")
+    .eq("id", recId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!data) return null;
+  const r = data as DbRec;
+  return {
+    id: r.id,
+    topic: r.topic,
+    targetKeyword: r.target_keyword,
+    justification: r.justification ?? "",
+    estimatedTraffic: r.estimated_traffic ?? 0,
+    difficulty: (r.difficulty as Recommendation["difficulty"]) ?? "medium",
+    priority: (r.priority as Recommendation["priority"]) ?? "medium",
+    status: (r.status as Recommendation["status"]) ?? "recommended",
+  };
+}
+
+interface DbDraft {
+  recommendation_id: string | null;
+  content: Draft["content"];
+  wordpress_format: Draft["wordpressFormat"];
+  internal_links: Draft["internalLinks"] | null;
+  style_match_score: number | null;
+}
+
+async function loadDrafts(userId: string): Promise<Draft[]> {
+  const { data } = await db
+    .from("marketing_content_drafts")
+    .select("recommendation_id, content, wordpress_format, internal_links, style_match_score")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  return ((data as DbDraft[] | null) ?? []).map((d) => ({
+    recommendationId: d.recommendation_id ?? "",
+    content: d.content,
+    wordpressFormat: d.wordpress_format,
+    internalLinks: d.internal_links ?? { fr: [], en: [] },
+    styleMatchScore: d.style_match_score ?? 0,
+  }));
+}
+
+async function saveDraft(userId: string, rec: Recommendation, draft: Draft, structureNotes?: string): Promise<void> {
+  await db.from("marketing_content_drafts").insert({
+    user_id: userId,
+    recommendation_id: rec.id,
+    topic: rec.topic,
+    target_keyword: rec.targetKeyword,
+    content: draft.content,
+    wordpress_format: draft.wordpressFormat,
+    internal_links: draft.internalLinks,
+    style_match_score: draft.styleMatchScore,
+    structure_notes: structureNotes ?? null,
+  });
+}
 
 // ─── GET ─────────────────────────────────────────────────────────────────────
 
@@ -59,11 +216,13 @@ export async function GET() {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  return NextResponse.json({
-    analysis: analysisResult,
-    recommendations,
-    drafts: Array.from(drafts.values()),
-  });
+  const [analysis, recommendations, drafts] = await Promise.all([
+    loadAnalysis(user.id),
+    loadRecommendations(user.id),
+    loadDrafts(user.id),
+  ]);
+
+  return NextResponse.json({ analysis, recommendations, drafts });
 }
 
 // ─── POST ────────────────────────────────────────────────────────────────────
@@ -84,14 +243,15 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "approve" && recommendationId) {
-    const rec = recommendations.find((r) => r.id === recommendationId);
-    if (rec) rec.status = "approved";
-    return NextResponse.json({ success: true, recommendations });
+    await updateRecStatus(user.id, recommendationId, "approved");
+    const recs = await loadRecommendations(user.id);
+    return NextResponse.json({ success: true, recommendations: recs });
   }
 
   if (action === "reject" && recommendationId) {
-    recommendations = recommendations.filter((r) => r.id !== recommendationId);
-    return NextResponse.json({ success: true, recommendations });
+    await deleteRec(user.id, recommendationId);
+    const recs = await loadRecommendations(user.id);
+    return NextResponse.json({ success: true, recommendations: recs });
   }
 
   if (action === "generate" && recommendationId) {
@@ -103,9 +263,9 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "publish" && recommendationId) {
-    const rec = recommendations.find((r) => r.id === recommendationId);
-    if (rec) rec.status = "published";
-    return NextResponse.json({ success: true, recommendations });
+    await updateRecStatus(user.id, recommendationId, "published");
+    const recs = await loadRecommendations(user.id);
+    return NextResponse.json({ success: true, recommendations: recs });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
@@ -232,7 +392,7 @@ Return ONLY valid JSON:
 
   const parsed = JSON.parse(jsonMatch[0]) as { contentGaps: Analysis["contentGaps"]; summary: string };
 
-  analysisResult = {
+  const analysis: Analysis = {
     topPerformers,
     risingTrends,
     contentGaps: parsed.contentGaps,
@@ -244,16 +404,15 @@ Return ONLY valid JSON:
     },
   };
 
-  // Build recommendations from content gaps
-  recommendations = parsed.contentGaps.map((gap, i) => {
-    // Find matching keyword for traffic estimate
-    const matchedKw = keywords.find((k) => k.keyword === gap.targetKeyword);
-    const estimatedTraffic = matchedKw
-      ? Math.round(matchedKw.impressions * 0.05) // assume 5% of impressions converting to clicks if we rank well
-      : 0;
+  // Persist analysis
+  await saveAnalysis(userId, analysis);
 
+  // Build recommendations from content gaps
+  const newRecs: Recommendation[] = parsed.contentGaps.map((gap, i) => {
+    const matchedKw = keywords.find((k) => k.keyword === gap.targetKeyword);
+    const estimatedTraffic = matchedKw ? Math.round(matchedKw.impressions * 0.05) : 0;
     return {
-      id: `rec-${Date.now()}-${i}`,
+      id: "", // will be assigned by DB
       topic: gap.topic,
       targetKeyword: gap.targetKeyword,
       justification: gap.rationale,
@@ -264,10 +423,9 @@ Return ONLY valid JSON:
     };
   });
 
-  return NextResponse.json({
-    analysis: analysisResult,
-    recommendations,
-  });
+  const savedRecs = await saveRecommendations(userId, newRecs);
+
+  return NextResponse.json({ analysis, recommendations: savedRecs });
 }
 
 // ─── Generation ──────────────────────────────────────────────────────────────
@@ -324,10 +482,10 @@ function analyzeStructure(html: string): {
 }
 
 async function runGeneration(userId: string, recommendationId: string) {
-  const rec = recommendations.find((r) => r.id === recommendationId);
+  const rec = await getRec(userId, recommendationId);
   if (!rec) return NextResponse.json({ error: "Recommendation not found" }, { status: 404 });
 
-  rec.status = "writing";
+  await updateRecStatus(userId, rec.id, "writing");
 
   // ── Fetch all articles (we'll pick the top performers) ─────────────────────
   const allArticles = await fetchAllArticles(100);
@@ -512,6 +670,15 @@ Return ONLY valid JSON, no markdown, no preamble:
   if (!jsonMatch) throw new Error("Claude returned invalid JSON");
 
   const parsed = JSON.parse(jsonMatch[0]);
+
+  // Validate Claude output structure before persisting
+  if (!parsed.content?.fr || !parsed.content?.en) {
+    throw new Error("Claude returned incomplete content (missing fr or en)");
+  }
+  if (!parsed.wordpressFormat?.fr || !parsed.wordpressFormat?.en) {
+    throw new Error("Claude returned incomplete WordPress metadata");
+  }
+
   const draft: Draft = {
     recommendationId: rec.id,
     content: parsed.content,
@@ -520,11 +687,14 @@ Return ONLY valid JSON, no markdown, no preamble:
     internalLinks: parsed.internalLinks || { fr: [], en: [] },
   };
 
-  drafts.set(rec.id, draft);
+  // Persist draft to Supabase (so it survives redeploys)
+  await saveDraft(userId, rec, draft, parsed.structureNotes);
+
+  const recs = await loadRecommendations(userId);
 
   return NextResponse.json({
     success: true,
     draft,
-    recommendations,
+    recommendations: recs,
   });
 }
