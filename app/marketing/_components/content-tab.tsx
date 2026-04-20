@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { Sparkles, TrendingUp, AlertCircle, Search, Check, Upload, Link2, Loader2 } from "lucide-react";
+import { useState, useCallback, useEffect, Component, type ReactNode } from "react";
+import { Sparkles, TrendingUp, AlertCircle, Search, Check, Download, Link2, Loader2 } from "lucide-react";
 import { useMarketingContent } from "@/lib/hooks/use-marketing";
 import type { ArticleRecommendation, ArticleDraft, ContentAnalysis } from "@/lib/marketing-types";
 
@@ -13,7 +13,41 @@ const PRIORITY_STYLES = {
 
 const DIFFICULTY_LABELS = { easy: "Easy", medium: "Medium", hard: "Hard" };
 
-export default function ContentTab() {
+class ContentErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error("[ContentTab crash]", error, info);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="rounded-xl p-6" style={{ background: "#fef2f2", border: "1px solid #fecaca" }}>
+          <p className="text-sm font-semibold" style={{ color: "#dc2626" }}>Content Factory error</p>
+          <p className="text-xs mt-2 font-mono" style={{ color: "#888", whiteSpace: "pre-wrap" }}>{this.state.error.message}</p>
+          {this.state.error.stack && (
+            <details className="mt-3">
+              <summary className="text-xs cursor-pointer" style={{ color: "#888" }}>Stack trace</summary>
+              <pre className="text-[10px] mt-2 overflow-auto" style={{ color: "#666", maxHeight: 300 }}>{this.state.error.stack}</pre>
+            </details>
+          )}
+          <button onClick={() => this.setState({ error: null })} className="mt-4 text-xs px-3 py-1.5 rounded-lg" style={{ background: "#f01563", color: "#fff" }}>Retry</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function ContentTabWrapper() {
+  return (
+    <ContentErrorBoundary>
+      <ContentTab />
+    </ContentErrorBoundary>
+  );
+}
+
+function ContentTab() {
   const { analysis: initialAnalysis, recommendations: initialRecs, drafts: initialDrafts, isLoading } = useMarketingContent();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [analysis, setAnalysis] = useState<ContentAnalysis | null>(null);
@@ -24,7 +58,6 @@ export default function ContentTab() {
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [generateErrors, setGenerateErrors] = useState<Map<string, string>>(new Map());
   const [previewLang, setPreviewLang] = useState<"fr" | "en">("fr");
-  const [publishedIds, setPublishedIds] = useState<Set<string>>(new Set());
 
   // Load persisted analysis/recommendations on mount
   useEffect(() => {
@@ -103,13 +136,30 @@ export default function ContentTab() {
     }
   }, []);
 
-  const handlePublish = useCallback((id: string) => {
-    setPublishedIds((prev) => new Set(prev).add(id));
-    fetch("/api/marketing/content", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "publish", recommendationId: id }),
-    });
+  const handleDownload = useCallback((draft: ArticleDraft, lang: "fr" | "en") => {
+    const meta = draft.wordpressFormat[lang];
+    const html = `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+<meta charset="utf-8">
+<title>${meta.slug}</title>
+<meta name="description" content="${meta.excerpt.replace(/"/g, "&quot;")}">
+<meta name="category" content="${meta.category}">
+<meta name="keywords" content="${meta.tags.join(", ")}">
+</head>
+<body>
+${draft.content[lang]}
+</body>
+</html>`;
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${meta.slug || draft.recommendationId}-${lang}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }, []);
 
   const approvedCount = localRecs.filter((r) => r.status === "approved" || r.status === "writing" || r.status === "published").length;
@@ -411,7 +461,6 @@ export default function ContentTab() {
             .filter((r) => r.status === "approved" || r.status === "writing" || r.status === "published")
             .map((rec) => {
               const draft = generatedDrafts.get(rec.id);
-              const isPublished = publishedIds.has(rec.id);
               const isGenerating = generatingIds.has(rec.id);
               const generateError = generateErrors.get(rec.id);
               const hasDraft = !!draft;
@@ -440,7 +489,7 @@ export default function ContentTab() {
                     </div>
                   )}
 
-                  {hasDraft && draft && (
+                  {hasDraft && draft && draft.content && draft.wordpressFormat && (
                     <div>
                       {/* Language toggle */}
                       <div className="flex items-center justify-end gap-1 mb-4">
@@ -465,7 +514,7 @@ export default function ContentTab() {
                           <div
                             className="prose prose-sm max-w-none"
                             style={{ color: "#333" }}
-                            dangerouslySetInnerHTML={{ __html: draft.content[previewLang] }}
+                            dangerouslySetInnerHTML={{ __html: draft.content[previewLang] || "" }}
                           />
                         </div>
 
@@ -477,25 +526,25 @@ export default function ContentTab() {
                               <div>
                                 <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "#aaa" }}>Category</p>
                                 <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#f0f0f0", color: "#555" }}>
-                                  {draft.wordpressFormat[previewLang].category}
+                                  {draft.wordpressFormat?.[previewLang]?.category || "—"}
                                 </span>
                               </div>
                               <div>
                                 <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "#aaa" }}>Tags</p>
                                 <div className="flex flex-wrap gap-1">
-                                  {draft.wordpressFormat[previewLang].tags.map((t) => (
+                                  {(draft.wordpressFormat?.[previewLang]?.tags || []).map((t) => (
                                     <span key={t} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#f0f0f0", color: "#666" }}>{t}</span>
                                   ))}
                                 </div>
                               </div>
                               <div>
                                 <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "#aaa" }}>Excerpt</p>
-                                <p className="text-xs" style={{ color: "#555" }}>{draft.wordpressFormat[previewLang].excerpt}</p>
+                                <p className="text-xs" style={{ color: "#555" }}>{draft.wordpressFormat?.[previewLang]?.excerpt || ""}</p>
                               </div>
                               <div>
                                 <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "#aaa" }}>Slug</p>
                                 <code className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#f0f0f0", color: "#555" }}>
-                                  /{draft.wordpressFormat[previewLang].slug}
+                                  /{draft.wordpressFormat?.[previewLang]?.slug || ""}
                                 </code>
                               </div>
                               <div>
@@ -529,40 +578,26 @@ export default function ContentTab() {
                         </div>
                       </div>
 
-                      {/* Publish buttons */}
-                      {!isPublished ? (
-                        <div className="flex items-center gap-3 mt-4">
-                          <button
-                            onClick={() => handlePublish(rec.id)}
-                            className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2"
-                            style={{ background: "#f01563", color: "#fff" }}
-                          >
-                            <Upload size={14} />
-                            Publish FR as Draft
-                          </button>
-                          <button
-                            onClick={() => handlePublish(rec.id)}
-                            className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2"
-                            style={{ background: "#3b82f6", color: "#fff" }}
-                          >
-                            <Upload size={14} />
-                            Publish EN as Draft
-                          </button>
-                          <button
-                            onClick={() => handlePublish(rec.id)}
-                            className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2"
-                            style={{ background: "#111", color: "#fff" }}
-                          >
-                            Publish Both Versions
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 mt-4 text-sm font-medium" style={{ color: "#16a34a" }}>
-                          <Check size={16} />
-                          Published as draft on WordPress
-                        </div>
-                      )}
-                      <p className="text-xs mt-2" style={{ color: "#888" }}>Will be saved as a draft in WordPress</p>
+                      {/* Download buttons */}
+                      <div className="flex items-center gap-3 mt-4">
+                        <button
+                          onClick={() => handleDownload(draft, "fr")}
+                          className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2"
+                          style={{ background: "#f01563", color: "#fff" }}
+                        >
+                          <Download size={14} />
+                          Download FR (.html)
+                        </button>
+                        <button
+                          onClick={() => handleDownload(draft, "en")}
+                          className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2"
+                          style={{ background: "#3b82f6", color: "#fff" }}
+                        >
+                          <Download size={14} />
+                          Download EN (.html)
+                        </button>
+                      </div>
+                      <p className="text-xs mt-2" style={{ color: "#888" }}>HTML file ready to paste into WordPress or any CMS.</p>
                     </div>
                   )}
                 </div>
