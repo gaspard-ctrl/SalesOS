@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { BarChart3, Search, FileText, Sparkles, Lightbulb, BookOpen } from "lucide-react";
+import { BarChart3, Search, FileText, Sparkles, BookOpen } from "lucide-react";
 import OverviewTab from "./_components/overview-tab";
 import SeoTab from "./_components/seo-tab";
 import ArticlesTab from "./_components/articles-tab";
 import ContentTab from "./_components/content-tab";
-import RecommendationsTab from "./_components/recommendations-tab";
 import BlogTab from "./_components/blog-tab";
 const TABS = [
   { id: "overview", label: "Overview", icon: BarChart3 },
@@ -14,7 +13,6 @@ const TABS = [
   { id: "seo", label: "SEO", icon: Search },
   { id: "articles", label: "Articles", icon: FileText },
   { id: "content", label: "Content Factory", icon: Sparkles },
-  { id: "recommendations", label: "Recommendations", icon: Lightbulb },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -73,7 +71,6 @@ export default function MarketingPage() {
           />
         )}
         {tab === "content" && <ContentTab />}
-        {tab === "recommendations" && <RecommendationsTab />}
       </div>
     </div>
   );
