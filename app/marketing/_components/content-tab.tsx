@@ -195,58 +195,103 @@ export default function ContentTab() {
             </div>
           )}
 
-          <div className="rounded-xl" style={{ background: "#fff", border: "1px solid #eeeeee", padding: "24px" }}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold" style={{ color: "#111" }}>Blog Analysis</h3>
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: "#f0fdf4", color: "#16a34a" }}>Live — Claude + GA4 + Search Console + WordPress</span>
+          {/* Data sources badges */}
+          {analysis.dataSources && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{
+                background: analysis.dataSources.ga4.ok ? "#f0fdf4" : "#fef2f2",
+                color: analysis.dataSources.ga4.ok ? "#16a34a" : "#dc2626",
+              }}>
+                GA4: {analysis.dataSources.ga4.ok ? `${analysis.dataSources.ga4.pagesCount} pages` : "unavailable"}
+              </span>
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{
+                background: analysis.dataSources.searchConsole.ok ? "#f0fdf4" : "#fef2f2",
+                color: analysis.dataSources.searchConsole.ok ? "#16a34a" : "#dc2626",
+              }}>
+                Search Console: {analysis.dataSources.searchConsole.ok ? `${analysis.dataSources.searchConsole.keywordsCount} keywords` : "unavailable"}
+              </span>
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{
+                background: analysis.dataSources.wordpress.ok ? "#f0fdf4" : "#fef2f2",
+                color: analysis.dataSources.wordpress.ok ? "#16a34a" : "#dc2626",
+              }}>
+                WordPress: {analysis.dataSources.wordpress.ok ? `${analysis.dataSources.wordpress.articlesCount} articles` : "unavailable"}
+              </span>
             </div>
+          )}
+
+          <div className="rounded-xl" style={{ background: "#fff", border: "1px solid #eeeeee", padding: "24px" }}>
+            <h3 className="font-semibold mb-4" style={{ color: "#111" }}>Blog Analysis</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Top performers */}
               <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#888" }}>Top performers (30d)</h4>
-                <div className="space-y-2">
-                  {analysis.topPerformers.map((p, i) => (
-                    <div key={`${p.title}-${i}`} className="text-sm">
-                      <p className="font-medium leading-tight" style={{ color: "#111", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.title}</p>
-                      <div className="flex items-center gap-2 mt-1 text-xs" style={{ color: "#888" }}>
-                        <span className="font-mono">{p.sessions.toLocaleString()} sessions</span>
-                        {p.trend !== 0 && (
-                          <span className="flex items-center gap-0.5" style={{ color: p.trend > 0 ? "#16a34a" : "#dc2626" }}>
-                            <TrendingUp size={10} />
-                            {p.trend > 0 ? "+" : ""}{p.trend}%
-                          </span>
-                        )}
+                <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#888" }}>
+                  Top performers (30d)
+                  <span className="ml-1 text-[9px] font-normal" style={{ color: "#16a34a" }}>GA4</span>
+                </h4>
+                {analysis.topPerformers.length > 0 ? (
+                  <div className="space-y-2">
+                    {analysis.topPerformers.map((p, i) => (
+                      <div key={`${p.path}-${i}`} className="text-sm">
+                        <p className="font-medium leading-tight" style={{ color: "#111", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.title}</p>
+                        <div className="flex items-center gap-2 mt-1 text-xs" style={{ color: "#888" }}>
+                          <span className="font-mono font-semibold" style={{ color: "#111" }}>{p.sessions.toLocaleString()} sessions</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs" style={{ color: "#aaa" }}>No GA4 data available</p>
+                )}
               </div>
-              {/* Rising trends */}
+              {/* Rising trends — real Search Console data */}
               <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#888" }}>Rising keyword trends</h4>
-                <div className="space-y-2">
-                  {analysis.risingTrends.map((t, i) => (
-                    <div key={`${t.keyword}-${i}`} className="flex items-center gap-2 text-sm">
-                      <TrendingUp size={14} className="shrink-0" style={{ color: "#16a34a" }} />
-                      <span className="flex-1" style={{ color: "#111" }}>{t.keyword}</span>
-                      {t.growth > 0 && (
-                        <span className="ml-auto text-xs font-medium shrink-0" style={{ color: "#16a34a" }}>+{t.growth}%</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#888" }}>
+                  Top opportunity keywords
+                  <span className="ml-1 text-[9px] font-normal" style={{ color: "#16a34a" }}>Search Console</span>
+                </h4>
+                {analysis.risingTrends.length > 0 ? (
+                  <div className="space-y-2.5">
+                    {analysis.risingTrends.map((t, i) => (
+                      <div key={`${t.keyword}-${i}`} className="text-sm">
+                        <div className="flex items-start gap-2">
+                          <TrendingUp size={12} className="shrink-0 mt-0.5" style={{ color: "#16a34a" }} />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium leading-tight" style={{ color: "#111" }}>{t.keyword}</p>
+                            <div className="flex flex-wrap items-center gap-x-2 mt-0.5 text-[10px]" style={{ color: "#888" }}>
+                              <span className="font-mono">{t.impressions.toLocaleString()} imp.</span>
+                              <span>·</span>
+                              <span className="font-mono">pos. {t.position.toFixed(1)}</span>
+                              <span>·</span>
+                              <span className="font-mono">{t.ctr}% CTR</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs" style={{ color: "#aaa" }}>No Search Console data available</p>
+                )}
               </div>
-              {/* Content gaps */}
+              {/* Content gaps — Claude analysis */}
               <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#888" }}>Content gaps</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#888" }}>
+                  Content gaps
+                  <span className="ml-1 text-[9px] font-normal" style={{ color: "#3b82f6" }}>Claude</span>
+                </h4>
                 <div className="space-y-3">
                   {analysis.contentGaps.map((g, i) => (
                     <div key={`${g.topic}-${i}`} className="text-sm">
                       <div className="flex items-start gap-2">
                         <AlertCircle size={14} className="shrink-0 mt-0.5" style={{ color: "#d97706" }} />
-                        <div>
-                          <p className="font-medium" style={{ color: "#111" }}>{g.topic}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium leading-tight" style={{ color: "#111" }}>{g.topic}</p>
                           <p className="text-xs mt-1 leading-relaxed" style={{ color: "#888" }}>{g.rationale}</p>
+                          {g.targetKeyword && (
+                            <span className="inline-block mt-1.5 text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#f5f5f5", color: "#555" }}>
+                              🎯 {g.targetKeyword}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
