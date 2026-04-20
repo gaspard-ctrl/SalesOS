@@ -5,7 +5,7 @@ export default async () => {
   const res = await fetch(`${siteUrl}/api/deals/score-all`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.CRON_SECRET}`,
+      "X-Cron-Secret": process.env.CRON_SECRET ?? "",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ forceAll: false }),

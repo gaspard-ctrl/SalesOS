@@ -26,13 +26,8 @@ async function hubspot(path: string, method = "GET", body?: unknown) {
 export async function POST(req: NextRequest) {
   // Accept either a logged-in user OR the Vercel cron secret
   const cronSecret = process.env.CRON_SECRET;
-  const authHeader = req.headers.get("authorization");
-  const isCron = cronSecret && authHeader === `Bearer ${cronSecret}`;
-
-  console.log("[score-all] cronSecret defined:", !!cronSecret, "len:", cronSecret?.length);
-  console.log("[score-all] authHeader:", authHeader);
-  console.log("[score-all] expected:", cronSecret ? `Bearer ${cronSecret}` : "(no secret set)");
-  console.log("[score-all] isCron:", !!isCron);
+  const cronHeader = req.headers.get("x-cron-secret");
+  const isCron = !!cronSecret && cronHeader === cronSecret;
 
   let userId: string | null = null;
   if (!isCron) {
