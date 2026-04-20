@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
+import { fetchArticleById } from "@/lib/wordpress";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +29,10 @@ interface WPCategory {
 interface WPMedia {
   id: number;
   source_url: string;
-  alt_text: string;
 }
 
-// Cache categories & media in memory (they rarely change)
 let categoriesCache: Map<number, WPCategory> | null = null;
-let mediaCacheMap: Map<number, string> = new Map();
+const mediaCacheMap: Map<number, string> = new Map();
 
 async function fetchCategories(): Promise<Map<number, WPCategory>> {
   if (categoriesCache) return categoriesCache;
@@ -51,7 +50,6 @@ async function fetchCategories(): Promise<Map<number, WPCategory>> {
 async function fetchMediaUrls(ids: number[]): Promise<Map<number, string>> {
   const missing = ids.filter((id) => id > 0 && !mediaCacheMap.has(id));
   if (missing.length > 0) {
-    // Batch fetch in groups of 20
     for (let i = 0; i < missing.length; i += 20) {
       const batch = missing.slice(i, i + 20);
       try {
@@ -72,12 +70,20 @@ export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
+  // Single article fetch with full content
+  const articleId = req.nextUrl.searchParams.get("id");
+  if (articleId) {
+    const article = await fetchArticleById(parseInt(articleId, 10));
+    if (!article) return NextResponse.json({ error: "Article not found" }, { status: 404 });
+    return NextResponse.json({ article });
+  }
+
+  // List articles (no full content for performance)
   const page = parseInt(req.nextUrl.searchParams.get("page") || "1", 10);
   const perPage = parseInt(req.nextUrl.searchParams.get("per_page") || "50", 10);
   const category = req.nextUrl.searchParams.get("category") || "";
   const search = req.nextUrl.searchParams.get("search") || "";
 
-  // Build WP query
   const params = new URLSearchParams({
     per_page: String(Math.min(perPage, 100)),
     page: String(page),
@@ -90,22 +96,15 @@ export async function GET(req: NextRequest) {
 
   try {
     const res = await fetch(`${WP_API}/posts?${params.toString()}`);
-    if (!res.ok) {
-      return NextResponse.json({ error: `WordPress API error: ${res.status}` }, { status: 502 });
-    }
+    if (!res.ok) return NextResponse.json({ error: `WordPress API error: ${res.status}` }, { status: 502 });
 
     const posts: WPPost[] = await res.json();
     const totalPosts = parseInt(res.headers.get("X-WP-Total") || "0", 10);
     const totalPages = parseInt(res.headers.get("X-WP-TotalPages") || "1", 10);
 
-    // Fetch categories and media in parallel
     const mediaIds = posts.map((p) => p.featured_media).filter((id) => id > 0);
-    const [categories, mediaMap] = await Promise.all([
-      fetchCategories(),
-      fetchMediaUrls(mediaIds),
-    ]);
+    const [categories, mediaMap] = await Promise.all([fetchCategories(), fetchMediaUrls(mediaIds)]);
 
-    // Transform posts
     const articles = posts.map((p) => ({
       id: p.id,
       title: p.title.rendered.replace(/&#038;/g, "&").replace(/&#8217;/g, "'").replace(/&#8211;/g, "–"),
@@ -118,7 +117,6 @@ export async function GET(req: NextRequest) {
       categoryIds: p.categories,
     }));
 
-    // Also return category list for filters
     const allCategories = Array.from(categories.values())
       .filter((c) => c.count > 0)
       .sort((a, b) => b.count - a.count)
@@ -131,7 +129,7 @@ export async function GET(req: NextRequest) {
       currentPage: page,
       categories: allCategories,
     });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "Failed to fetch WordPress articles" }, { status: 500 });
   }
 }

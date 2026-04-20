@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Search, ExternalLink, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, ExternalLink, Calendar, ChevronLeft, ChevronRight, ArrowLeft, Loader2 } from "lucide-react";
 import useSWR from "swr";
 
 interface BlogArticle {
@@ -30,19 +30,41 @@ interface BlogResponse {
   categories: Category[];
 }
 
+interface FullArticle {
+  id: number;
+  title: string;
+  slug: string;
+  date: string;
+  link: string;
+  excerpt: string;
+  contentHtml: string;
+  contentText: string;
+  categoryIds: number[];
+}
+
+interface SingleArticleResponse {
+  article: FullArticle;
+}
+
 export default function BlogTab() {
   const [page, setPage] = useState(1);
   const [categoryFilter, setCategoryFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [openArticleId, setOpenArticleId] = useState<number | null>(null);
 
   const params = new URLSearchParams({ page: String(page), per_page: "18" });
   if (categoryFilter) params.set("category", categoryFilter);
   if (searchQuery) params.set("search", searchQuery);
 
   const { data, isLoading } = useSWR<BlogResponse>(
-    `/api/marketing/blog?${params.toString()}`,
+    openArticleId ? null : `/api/marketing/blog?${params.toString()}`,
     { revalidateOnFocus: false, dedupingInterval: 30_000 },
+  );
+
+  const { data: singleData, isLoading: isLoadingArticle } = useSWR<SingleArticleResponse>(
+    openArticleId ? `/api/marketing/blog?id=${openArticleId}` : null,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
 
   const articles = data?.articles ?? [];
@@ -59,6 +81,103 @@ export default function BlogTab() {
     setCategoryFilter(catId);
     setPage(1);
   }, []);
+
+  // Article detail view
+  if (openArticleId) {
+    const article = singleData?.article;
+    return (
+      <div className="space-y-5">
+        {/* Top bar */}
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setOpenArticleId(null)}
+            className="flex items-center gap-1.5 text-sm font-medium transition-colors"
+            style={{ color: "#555" }}
+          >
+            <ArrowLeft size={16} />
+            Back to articles
+          </button>
+          {article && (
+            <a
+              href={article.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg"
+              style={{ color: "#f01563", border: "1px solid #f01563" }}
+            >
+              <ExternalLink size={12} />
+              Open on site
+            </a>
+          )}
+        </div>
+
+        {isLoadingArticle || !article ? (
+          <div className="flex items-center justify-center py-20 rounded-xl" style={{ background: "#fff", border: "1px solid #eee" }}>
+            <Loader2 size={20} className="animate-spin" style={{ color: "#f01563" }} />
+          </div>
+        ) : (
+          <div className="rounded-xl" style={{ background: "#fff", border: "1px solid #eeeeee", padding: "32px 40px" }}>
+            {/* Article meta */}
+            <div className="flex items-center gap-2 mb-4 text-xs" style={{ color: "#888" }}>
+              <Calendar size={12} />
+              {new Date(article.date).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" })}
+              <span style={{ color: "#ddd" }}>·</span>
+              <code className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#f5f5f5", color: "#666" }}>/blog/{article.slug}/</code>
+              <span style={{ color: "#ddd" }}>·</span>
+              <span>{article.contentText.split(" ").length} words</span>
+            </div>
+
+            {/* Title */}
+            <h1 className="text-2xl font-bold mb-4" style={{ color: "#111" }}>{article.title}</h1>
+
+            {/* Excerpt (if present) */}
+            {article.excerpt && (
+              <p className="text-base leading-relaxed mb-6 italic" style={{ color: "#555" }}>
+                {article.excerpt}
+              </p>
+            )}
+
+            {/* Article content */}
+            {article.contentHtml ? (
+              <div
+                className="blog-content"
+                style={{ color: "#333", lineHeight: 1.7, fontSize: 15 }}
+                dangerouslySetInnerHTML={{ __html: article.contentHtml }}
+              />
+            ) : (
+              <div className="text-sm py-8 text-center" style={{ color: "#aaa" }}>
+                No content available for this article.
+              </div>
+            )}
+          </div>
+        )}
+
+        <style jsx global>{`
+          .blog-content h1, .blog-content h2, .blog-content h3, .blog-content h4 {
+            color: #111;
+            font-weight: 700;
+            margin-top: 1.5em;
+            margin-bottom: 0.6em;
+            line-height: 1.3;
+          }
+          .blog-content h2 { font-size: 1.4em; }
+          .blog-content h3 { font-size: 1.15em; }
+          .blog-content p { margin-bottom: 1em; }
+          .blog-content ul, .blog-content ol { margin: 1em 0; padding-left: 1.5em; }
+          .blog-content li { margin-bottom: 0.4em; }
+          .blog-content a { color: #f01563; text-decoration: underline; }
+          .blog-content a:hover { opacity: 0.8; }
+          .blog-content strong, .blog-content b { font-weight: 600; color: #111; }
+          .blog-content em, .blog-content i { font-style: italic; }
+          .blog-content table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 0.9em; }
+          .blog-content th, .blog-content td { border: 1px solid #eee; padding: 8px 12px; text-align: left; }
+          .blog-content th { background: #f9f9f9; font-weight: 600; }
+          .blog-content img { max-width: 100%; height: auto; border-radius: 8px; margin: 1em 0; }
+          .blog-content blockquote { border-left: 3px solid #f01563; padding-left: 1em; margin: 1em 0; font-style: italic; color: #555; }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -138,12 +257,10 @@ export default function BlogTab() {
       {!isLoading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {articles.map((article) => (
-            <a
+            <div
               key={article.id}
-              href={article.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-xl overflow-hidden transition-all group"
+              onClick={() => setOpenArticleId(article.id)}
+              className="rounded-xl overflow-hidden transition-all group cursor-pointer"
               style={{ background: "#fff", border: "1px solid #eeeeee" }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#f01563"; (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 12px rgba(0,0,0,0.06)"; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#eeeeee"; (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}
@@ -205,7 +322,7 @@ export default function BlogTab() {
                   {new Date(article.date).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
                 </div>
               </div>
-            </a>
+            </div>
           ))}
         </div>
       )}
