@@ -93,6 +93,38 @@ function ContentTab() {
     }
   }, []);
 
+  const [themeInput, setThemeInput] = useState("");
+  const [suggestingTheme, setSuggestingTheme] = useState(false);
+  const [themeSummary, setThemeSummary] = useState<string | null>(null);
+  const [themeError, setThemeError] = useState<string | null>(null);
+
+  const handleSuggestTheme = useCallback(async () => {
+    const theme = themeInput.trim();
+    if (!theme) return;
+    setSuggestingTheme(true);
+    setThemeError(null);
+    setThemeSummary(null);
+    try {
+      const res = await fetch("/api/marketing/content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "suggest_theme", theme }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setThemeError(data.error);
+      } else {
+        if (data.recommendations) setLocalRecs(data.recommendations);
+        if (data.summary) setThemeSummary(data.summary);
+        setThemeInput("");
+      }
+    } catch (e) {
+      setThemeError(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setSuggestingTheme(false);
+    }
+  }, [themeInput]);
+
   const handleApprove = useCallback((id: string) => {
     setLocalRecs((prev) => prev.map((r) => r.id === id ? { ...r, status: "approved" as const } : r));
     fetch("/api/marketing/content", {
@@ -374,6 +406,47 @@ ${draft.content[lang]}
       {/* Step 2 — Recommendations */}
       {step === 2 && (
         <div className="space-y-4">
+          {/* Theme input */}
+          <div className="rounded-xl" style={{ background: "#fff", border: "1px solid #eeeeee", padding: "16px 20px" }}>
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles size={14} style={{ color: "#f01563" }} />
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#888" }}>Suggest articles on your own theme</p>
+            </div>
+            <p className="text-xs mb-3" style={{ color: "#888" }}>
+              Not happy with these recommendations? Enter a theme and Claude will generate new ideas tailored to it, using real Coachello data (WordPress articles + Search Console keywords).
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={themeInput}
+                onChange={(e) => setThemeInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !suggestingTheme && handleSuggestTheme()}
+                placeholder="e.g. manager burnout, AI-driven coaching, team resilience..."
+                disabled={suggestingTheme}
+                className="flex-1 text-sm rounded-lg px-3 py-2 outline-none disabled:opacity-70"
+                style={{ border: "1px solid #ddd", color: "#555" }}
+              />
+              <button
+                onClick={handleSuggestTheme}
+                disabled={!themeInput.trim() || suggestingTheme}
+                className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 disabled:opacity-50"
+                style={{ background: "#f01563", color: "#fff", cursor: suggestingTheme ? "wait" : "pointer" }}
+              >
+                {suggestingTheme ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                {suggestingTheme ? "Thinking..." : "Suggest"}
+              </button>
+            </div>
+            {themeError && (
+              <p className="text-xs mt-2" style={{ color: "#dc2626" }}>{themeError}</p>
+            )}
+            {themeSummary && (
+              <div className="mt-3 rounded-lg flex items-start gap-2" style={{ background: "#f0f7ff", border: "1px solid #bfdbfe", padding: "10px 14px" }}>
+                <Sparkles size={12} className="shrink-0 mt-0.5" style={{ color: "#3b82f6" }} />
+                <p className="text-xs" style={{ color: "#1e3a8a", lineHeight: 1.5 }}>{themeSummary}</p>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {localRecs.map((rec) => {
               const pStyle = PRIORITY_STYLES[rec.priority];

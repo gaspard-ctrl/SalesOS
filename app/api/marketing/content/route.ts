@@ -242,6 +242,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (action === "suggest_theme") {
+    const theme = (body.theme || "").toString().trim();
+    if (!theme) return NextResponse.json({ error: "Theme is required" }, { status: 400 });
+    try {
+      return await runThemeSuggestion(user.id, theme);
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : "Theme suggestion failed" }, { status: 500 });
+    }
+  }
+
   if (action === "approve" && recommendationId) {
     await updateRecStatus(user.id, recommendationId, "approved");
     const recs = await loadRecommendations(user.id);
@@ -426,6 +436,124 @@ Return ONLY valid JSON:
   const savedRecs = await saveRecommendations(userId, newRecs);
 
   return NextResponse.json({ analysis, recommendations: savedRecs });
+}
+
+// ─── Theme-based suggestion ──────────────────────────────────────────────────
+
+async function runThemeSuggestion(userId: string, theme: string) {
+  // Fetch the same real data context as runAnalysis
+  const [keywordsResult, articlesResult] = await Promise.allSettled([
+    fetchKeywords(userId, 28, true),
+    fetchAllArticles(100),
+  ]);
+
+  const keywords = keywordsResult.status === "fulfilled" ? keywordsResult.value : [];
+  const articles = articlesResult.status === "fulfilled" ? articlesResult.value : [];
+
+  if (articles.length === 0) {
+    return NextResponse.json({ error: "Cannot suggest: WordPress articles unavailable." }, { status: 400 });
+  }
+
+  const articlesText = articles.slice(0, 60).map((a) => `- ${a.title}`).join("\n");
+  const keywordsText = keywords.length > 0
+    ? keywords.slice(0, 50).map((k) => `- "${k.keyword}" — ${k.impressions} imp., ${k.clicks} clicks, CTR ${k.ctr}%, pos. ${k.position}`).join("\n")
+    : "Search Console data unavailable — suggest based on topic relevance and existing article gaps.";
+
+  const themeTool: Anthropic.Tool = {
+    name: "suggest_articles_on_theme",
+    description: "Suggests 3-5 specific article ideas aligned with the user's theme, grounded in Coachello's real data",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary: { type: "string", description: "1-2 sentence explanation of how these suggestions fit the theme" },
+        recommendations: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              topic: { type: "string", description: "Specific article title, not a generic topic" },
+              targetKeyword: { type: "string", description: "Target keyword — prefer one from the Search Console list if relevant, otherwise a natural keyword for the theme" },
+              rationale: { type: "string", description: "Data-backed justification citing real numbers when available, or explaining how it fills a content gap" },
+              difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
+              priority: { type: "string", enum: ["high", "medium", "low"] },
+            },
+            required: ["topic", "targetKeyword", "rationale", "difficulty", "priority"],
+          },
+        },
+      },
+      required: ["summary", "recommendations"],
+    },
+  };
+
+  const prompt = `You are a senior content strategist for Coachello (B2B leadership coaching platform, human coaches + AI).
+
+The user wants article recommendations around this theme: "${theme}"
+
+Generate 3-5 specific article ideas that:
+1. Fit the user's theme closely — do not stray into unrelated topics
+2. Complement what Coachello has already published (avoid duplicates)
+3. Leverage real search demand when possible (use keywords from the Search Console list)
+4. Are specific article TITLES, not vague topics
+
+## All published Coachello articles (${articles.length} total — avoid duplicating these)
+${articlesText}
+
+## Top Search Console keywords (real impressions/clicks/position data)
+${keywordsText}
+
+## Rules
+- Do NOT invent metrics. If citing a number, cite from the keywords list above.
+- Each recommendation needs a data-backed rationale (keyword impressions, content gap vs existing articles, etc.)
+- Target keyword should come from the Search Console list when there's a relevant match
+- Write in English, for a B2B HR/L&D audience
+
+Call the \`suggest_articles_on_theme\` tool with your output.`;
+
+  const client = new Anthropic();
+  const message = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 3000,
+    tools: [themeTool],
+    tool_choice: { type: "tool", name: "suggest_articles_on_theme" },
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  logUsage(userId, "claude-sonnet-4-6", message.usage.input_tokens, message.usage.output_tokens, "marketing_content_theme");
+
+  const toolUse = message.content.find((c) => c.type === "tool_use");
+  if (!toolUse || toolUse.type !== "tool_use") {
+    throw new Error(`Claude did not return a tool_use block. stop_reason: ${message.stop_reason}`);
+  }
+
+  const parsed = toolUse.input as {
+    summary: string;
+    recommendations: { topic: string; targetKeyword: string; rationale: string; difficulty: string; priority: string }[];
+  };
+
+  // Build new recommendations and persist them (appending to existing, not replacing approved ones)
+  const newRecs: Recommendation[] = parsed.recommendations.map((r) => {
+    const matchedKw = keywords.find((k) => k.keyword.toLowerCase() === r.targetKeyword.toLowerCase());
+    const estimatedTraffic = matchedKw ? Math.round(matchedKw.impressions * 0.05) : 0;
+    return {
+      id: "", // assigned by DB
+      topic: r.topic,
+      targetKeyword: r.targetKeyword,
+      justification: r.rationale,
+      estimatedTraffic,
+      difficulty: (r.difficulty as Recommendation["difficulty"]) || "medium",
+      priority: (r.priority as Recommendation["priority"]) || "medium",
+      status: "recommended",
+    };
+  });
+
+  // Insert new recs (keep existing approved/writing/published, replace only recommended)
+  const savedRecs = await saveRecommendations(userId, newRecs);
+
+  return NextResponse.json({
+    success: true,
+    summary: parsed.summary,
+    recommendations: savedRecs,
+  });
 }
 
 // ─── Generation ──────────────────────────────────────────────────────────────
