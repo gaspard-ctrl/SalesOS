@@ -3,22 +3,35 @@ import type { Config } from "@netlify/functions";
 const CHUNK_SIZE = 20;
 
 async function hubspotDealIds(): Promise<string[]> {
-  const res = await fetch("https://api.hubapi.com/crm/v3/objects/deals/search", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.HUBSPOT_ACCESS_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      limit: 200,
-      properties: ["dealname", "hs_is_closed"],
-      filterGroups: [{ filters: [{ propertyName: "hs_is_closed", operator: "EQ", value: "false" }] }],
-      sorts: [{ propertyName: "amount", direction: "DESCENDING" }],
-    }),
-  });
-  if (!res.ok) throw new Error(`HubSpot ${res.status}: ${await res.text().catch(() => "")}`);
-  const data = (await res.json()) as { results?: { id: string }[] };
-  return (data.results ?? []).map((d) => d.id);
+  const ids: string[] = [];
+  let after: string | undefined = undefined;
+
+  while (true) {
+    const res = await fetch("https://api.hubapi.com/crm/v3/objects/deals/search", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.HUBSPOT_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        limit: 200,
+        after,
+        properties: ["dealname", "hs_is_closed"],
+        filterGroups: [{ filters: [{ propertyName: "hs_is_closed", operator: "EQ", value: "false" }] }],
+        sorts: [{ propertyName: "amount", direction: "DESCENDING" }],
+      }),
+    });
+    if (!res.ok) throw new Error(`HubSpot ${res.status}: ${await res.text().catch(() => "")}`);
+    const data = (await res.json()) as {
+      results?: { id: string }[];
+      paging?: { next?: { after: string } };
+    };
+    for (const d of data.results ?? []) ids.push(d.id);
+    after = data.paging?.next?.after;
+    if (!after) break;
+  }
+
+  return ids;
 }
 
 export default async () => {
