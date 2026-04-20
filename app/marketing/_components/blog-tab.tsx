@@ -42,8 +42,19 @@ interface FullArticle {
   categoryIds: number[];
 }
 
+interface ArticleStats {
+  sessions: number;
+  pageViews: number;
+  avgDuration: number;
+  bounceRate: number;
+  users: number;
+  engagementRate: number;
+}
+
 interface SingleArticleResponse {
   article: FullArticle;
+  stats: ArticleStats | null;
+  statsError: string | null;
 }
 
 export default function BlogTab() {
@@ -116,6 +127,48 @@ export default function BlogTab() {
             <Loader2 size={20} className="animate-spin" style={{ color: "#f01563" }} />
           </div>
         ) : (
+          <div className="space-y-4">
+            {/* Stats cards (30 days) */}
+            {singleData?.stats && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#888" }}>Article stats — last 30 days</h4>
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: "#f0fdf4", color: "#16a34a" }}>Live — GA4</span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  {[
+                    { label: "SESSIONS", value: singleData.stats.sessions.toLocaleString() },
+                    { label: "PAGE VIEWS", value: singleData.stats.pageViews.toLocaleString() },
+                    { label: "USERS", value: singleData.stats.users.toLocaleString() },
+                    { label: "AVG DURATION", value: `${Math.floor(singleData.stats.avgDuration / 60)}m ${String(singleData.stats.avgDuration % 60).padStart(2, "0")}s` },
+                    { label: "BOUNCE RATE", value: `${singleData.stats.bounceRate}%` },
+                    { label: "ENGAGEMENT", value: `${singleData.stats.engagementRate}%` },
+                  ].map((s) => (
+                    <div key={s.label} className="rounded-xl" style={{ background: "#fff", border: "1px solid #eeeeee", padding: "12px 16px" }}>
+                      <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: "#999" }}>{s.label}</p>
+                      <p className="text-lg font-bold mt-0.5" style={{ color: "#111" }}>{s.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {singleData?.statsError && (
+              <div className="rounded-xl flex items-start gap-3" style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: "12px 16px" }}>
+                <span className="text-xs shrink-0 mt-0.5">⚠</span>
+                <div>
+                  <p className="text-xs font-medium" style={{ color: "#dc2626" }}>GA4 stats unavailable</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: "#888" }}>{singleData.statsError}</p>
+                </div>
+              </div>
+            )}
+
+            {!singleData?.stats && !singleData?.statsError && (
+              <div className="rounded-xl text-xs text-center" style={{ background: "#fafafa", border: "1px solid #eeeeee", padding: "12px" }}>
+                <span style={{ color: "#888" }}>No traffic data for this article in the last 30 days</span>
+              </div>
+            )}
+
           <div className="rounded-xl" style={{ background: "#fff", border: "1px solid #eeeeee", padding: "32px 40px" }}>
             {/* Article meta */}
             <div className="flex items-center gap-2 mb-4 text-xs" style={{ color: "#888" }}>
@@ -149,6 +202,7 @@ export default function BlogTab() {
                 No content available for this article.
               </div>
             )}
+          </div>
           </div>
         )}
 

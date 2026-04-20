@@ -71,7 +71,8 @@ export interface BlogArticle {
 export interface ContentAnalysis {
   topPerformers: { title: string; sessions: number; trend: number }[];
   risingTrends: { keyword: string; growth: number }[];
-  contentGaps: { topic: string; competitorsCovering: string[] }[];
+  contentGaps: { topic: string; rationale: string }[];
+  summary: string;
 }
 
 export interface ArticleRecommendation {

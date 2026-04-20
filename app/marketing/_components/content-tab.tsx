@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Sparkles, TrendingUp, AlertCircle, Search, Check, Upload, Link2 } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { Sparkles, TrendingUp, AlertCircle, Search, Check, Upload, Link2, Loader2 } from "lucide-react";
 import { useMarketingContent } from "@/lib/hooks/use-marketing";
-import type { ArticleRecommendation, ArticleDraft } from "@/lib/marketing-types";
+import type { ArticleRecommendation, ArticleDraft, ContentAnalysis } from "@/lib/marketing-types";
 
 const PRIORITY_STYLES = {
   high: { bg: "#fee2e2", color: "#dc2626" },
@@ -14,18 +14,51 @@ const PRIORITY_STYLES = {
 const DIFFICULTY_LABELS = { easy: "Easy", medium: "Medium", hard: "Hard" };
 
 export default function ContentTab() {
-  const { analysis, recommendations, drafts, isLoading, reload } = useMarketingContent();
+  const { analysis: initialAnalysis, recommendations: initialRecs, drafts: initialDrafts, isLoading } = useMarketingContent();
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [analyzed, setAnalyzed] = useState(false);
+  const [analysis, setAnalysis] = useState<ContentAnalysis | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [localRecs, setLocalRecs] = useState<ArticleRecommendation[]>([]);
   const [generatedDrafts, setGeneratedDrafts] = useState<Map<string, ArticleDraft>>(new Map());
+  const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
+  const [generateErrors, setGenerateErrors] = useState<Map<string, string>>(new Map());
   const [previewLang, setPreviewLang] = useState<"fr" | "en">("fr");
   const [publishedIds, setPublishedIds] = useState<Set<string>>(new Set());
 
-  const handleAnalyze = useCallback(() => {
-    setAnalyzed(true);
-    setLocalRecs(recommendations.map((r) => ({ ...r })));
-  }, [recommendations]);
+  // Load persisted analysis/recommendations on mount
+  useEffect(() => {
+    if (initialAnalysis && !analysis) setAnalysis(initialAnalysis);
+    if (initialRecs.length > 0 && localRecs.length === 0) setLocalRecs(initialRecs);
+    if (initialDrafts.length > 0) {
+      const m = new Map<string, ArticleDraft>();
+      for (const d of initialDrafts) m.set(d.recommendationId, d);
+      setGeneratedDrafts((prev) => prev.size === 0 ? m : prev);
+    }
+  }, [initialAnalysis, initialRecs, initialDrafts, analysis, localRecs.length]);
+
+  const handleAnalyze = useCallback(async () => {
+    setAnalyzing(true);
+    setAnalyzeError(null);
+    try {
+      const res = await fetch("/api/marketing/content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "analyze" }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setAnalyzeError(data.error);
+      } else {
+        setAnalysis(data.analysis);
+        if (data.recommendations) setLocalRecs(data.recommendations);
+      }
+    } catch (e) {
+      setAnalyzeError(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setAnalyzing(false);
+    }
+  }, []);
 
   const handleApprove = useCallback((id: string) => {
     setLocalRecs((prev) => prev.map((r) => r.id === id ? { ...r, status: "approved" as const } : r));
@@ -46,15 +79,27 @@ export default function ContentTab() {
   }, []);
 
   const handleGenerate = useCallback(async (id: string) => {
+    setGeneratingIds((prev) => new Set(prev).add(id));
+    setGenerateErrors((prev) => { const m = new Map(prev); m.delete(id); return m; });
     setLocalRecs((prev) => prev.map((r) => r.id === id ? { ...r, status: "writing" as const } : r));
-    const res = await fetch("/api/marketing/content", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "generate", recommendationId: id }),
-    });
-    const data = await res.json();
-    if (data.draft) {
-      setGeneratedDrafts((prev) => new Map(prev).set(id, data.draft));
+    try {
+      const res = await fetch("/api/marketing/content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "generate", recommendationId: id }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setGenerateErrors((prev) => new Map(prev).set(id, data.error));
+        setLocalRecs((prev) => prev.map((r) => r.id === id ? { ...r, status: "approved" as const } : r));
+      } else if (data.draft) {
+        setGeneratedDrafts((prev) => new Map(prev).set(id, data.draft));
+      }
+    } catch (e) {
+      setGenerateErrors((prev) => new Map(prev).set(id, e instanceof Error ? e.message : "Network error"));
+      setLocalRecs((prev) => prev.map((r) => r.id === id ? { ...r, status: "approved" as const } : r));
+    } finally {
+      setGeneratingIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
     }
   }, []);
 
@@ -112,51 +157,81 @@ export default function ContentTab() {
       </div>
 
       {/* Step 1 — Analyze */}
-      {step === 1 && !analyzed && (
+      {step === 1 && !analysis && (
         <div className="flex flex-col items-center justify-center py-16">
           <button
             onClick={handleAnalyze}
-            className="flex items-center gap-2 text-lg font-semibold rounded-xl px-8 py-4 transition-all hover:opacity-90 hover:scale-[1.02]"
-            style={{ background: "#f01563", color: "#fff" }}
+            disabled={analyzing}
+            className="flex items-center gap-2 text-lg font-semibold rounded-xl px-8 py-4 transition-all disabled:opacity-70"
+            style={{ background: "#f01563", color: "#fff", cursor: analyzing ? "wait" : "pointer" }}
           >
-            <Sparkles size={20} />
-            Run Analysis
+            {analyzing ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20} />}
+            {analyzing ? "Analyzing... (30–60s)" : "Run Analysis"}
           </button>
           <p className="text-sm mt-3 max-w-md text-center" style={{ color: "#888" }}>
-            Claude analyzes traffic, SEO and trends to identify the best content opportunities
+            {analyzing
+              ? "Fetching data from Google Analytics, Search Console, and WordPress, then asking Claude for insights."
+              : "Claude analyzes real traffic (GA4), search queries (Search Console), and existing articles (WordPress) to identify the best content opportunities."}
           </p>
+          {analyzeError && (
+            <div className="rounded-xl mt-6 max-w-xl" style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: "12px 16px" }}>
+              <p className="text-sm font-medium" style={{ color: "#dc2626" }}>Analysis failed</p>
+              <p className="text-xs mt-1" style={{ color: "#888" }}>{analyzeError}</p>
+            </div>
+          )}
         </div>
       )}
 
-      {step === 1 && analyzed && analysis && (
+      {step === 1 && analysis && (
         <div className="space-y-4">
+          {/* Summary banner */}
+          {analysis.summary && (
+            <div className="rounded-xl flex items-start gap-3" style={{ background: "#f0f7ff", border: "1px solid #bfdbfe", padding: "14px 18px" }}>
+              <Sparkles size={16} className="shrink-0 mt-0.5" style={{ color: "#3b82f6" }} />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "#3b82f6" }}>Claude's take</p>
+                <p className="text-sm" style={{ color: "#1e3a8a", lineHeight: 1.6 }}>{analysis.summary}</p>
+              </div>
+            </div>
+          )}
+
           <div className="rounded-xl" style={{ background: "#fff", border: "1px solid #eeeeee", padding: "24px" }}>
-            <h3 className="font-semibold mb-4" style={{ color: "#111" }}>Blog Analysis</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold" style={{ color: "#111" }}>Blog Analysis</h3>
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: "#f0fdf4", color: "#16a34a" }}>Live — Claude + GA4 + Search Console + WordPress</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Top performers */}
               <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#888" }}>Top performers this week</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#888" }}>Top performers (30d)</h4>
                 <div className="space-y-2">
-                  {analysis.topPerformers.map((p) => (
-                    <div key={p.title} className="flex items-center gap-2 text-sm">
-                      <span className="flex-1 truncate" style={{ color: "#111" }}>{p.title.slice(0, 40)}...</span>
-                      <span className="font-mono text-xs shrink-0" style={{ color: "#555" }}>{p.sessions}</span>
-                      <span className="flex items-center gap-0.5 text-xs shrink-0" style={{ color: "#16a34a" }}>
-                        <TrendingUp size={12} />+{p.trend}%
-                      </span>
+                  {analysis.topPerformers.map((p, i) => (
+                    <div key={`${p.title}-${i}`} className="text-sm">
+                      <p className="font-medium leading-tight" style={{ color: "#111", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.title}</p>
+                      <div className="flex items-center gap-2 mt-1 text-xs" style={{ color: "#888" }}>
+                        <span className="font-mono">{p.sessions.toLocaleString()} sessions</span>
+                        {p.trend !== 0 && (
+                          <span className="flex items-center gap-0.5" style={{ color: p.trend > 0 ? "#16a34a" : "#dc2626" }}>
+                            <TrendingUp size={10} />
+                            {p.trend > 0 ? "+" : ""}{p.trend}%
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
               {/* Rising trends */}
               <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#888" }}>Rising trends</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#888" }}>Rising keyword trends</h4>
                 <div className="space-y-2">
-                  {analysis.risingTrends.map((t) => (
-                    <div key={t.keyword} className="flex items-center gap-2 text-sm">
-                      <TrendingUp size={14} style={{ color: "#16a34a" }} />
-                      <span style={{ color: "#111" }}>{t.keyword}</span>
-                      <span className="ml-auto text-xs font-medium" style={{ color: "#16a34a" }}>+{t.growth}%</span>
+                  {analysis.risingTrends.map((t, i) => (
+                    <div key={`${t.keyword}-${i}`} className="flex items-center gap-2 text-sm">
+                      <TrendingUp size={14} className="shrink-0" style={{ color: "#16a34a" }} />
+                      <span className="flex-1" style={{ color: "#111" }}>{t.keyword}</span>
+                      {t.growth > 0 && (
+                        <span className="ml-auto text-xs font-medium shrink-0" style={{ color: "#16a34a" }}>+{t.growth}%</span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -164,14 +239,14 @@ export default function ContentTab() {
               {/* Content gaps */}
               <div>
                 <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#888" }}>Content gaps</h4>
-                <div className="space-y-2">
-                  {analysis.contentGaps.map((g) => (
-                    <div key={g.topic} className="text-sm">
+                <div className="space-y-3">
+                  {analysis.contentGaps.map((g, i) => (
+                    <div key={`${g.topic}-${i}`} className="text-sm">
                       <div className="flex items-start gap-2">
                         <AlertCircle size={14} className="shrink-0 mt-0.5" style={{ color: "#d97706" }} />
                         <div>
-                          <p style={{ color: "#111" }}>{g.topic}</p>
-                          <p className="text-xs mt-0.5" style={{ color: "#aaa" }}>Covered by: {g.competitorsCovering.join(", ")}</p>
+                          <p className="font-medium" style={{ color: "#111" }}>{g.topic}</p>
+                          <p className="text-xs mt-1 leading-relaxed" style={{ color: "#888" }}>{g.rationale}</p>
                         </div>
                       </div>
                     </div>
@@ -180,13 +255,22 @@ export default function ContentTab() {
               </div>
             </div>
           </div>
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5"
+              style={{ border: "1px solid #ddd", color: "#888", background: "#fff" }}
+            >
+              {analyzing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              Re-analyze
+            </button>
             <button
               onClick={() => setStep(2)}
               className="text-sm font-medium rounded-lg px-5 py-2"
               style={{ background: "#f01563", color: "#fff" }}
             >
-              Next: Recommendations
+              Next: Recommendations →
             </button>
           </div>
         </div>
@@ -281,9 +365,11 @@ export default function ContentTab() {
           {localRecs
             .filter((r) => r.status === "approved" || r.status === "writing" || r.status === "published")
             .map((rec) => {
-              const draft = generatedDrafts.get(rec.id) || drafts.find((d) => d.recommendationId === rec.id);
+              const draft = generatedDrafts.get(rec.id);
               const isPublished = publishedIds.has(rec.id);
-              const hasDraft = !!draft && (rec.status === "writing" || rec.status === "published" || generatedDrafts.has(rec.id));
+              const isGenerating = generatingIds.has(rec.id);
+              const generateError = generateErrors.get(rec.id);
+              const hasDraft = !!draft;
 
               return (
                 <div key={rec.id} className="rounded-xl" style={{ background: "#fff", border: "1px solid #eeeeee", padding: "24px" }}>
@@ -292,14 +378,22 @@ export default function ContentTab() {
                     {!hasDraft && (
                       <button
                         onClick={() => handleGenerate(rec.id)}
-                        className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2"
-                        style={{ background: "#f01563", color: "#fff" }}
+                        disabled={isGenerating}
+                        className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 disabled:opacity-70"
+                        style={{ background: "#f01563", color: "#fff", cursor: isGenerating ? "wait" : "pointer" }}
                       >
-                        <Sparkles size={14} />
-                        Write Article
+                        {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                        {isGenerating ? "Writing... (60–90s)" : "Write Article"}
                       </button>
                     )}
                   </div>
+
+                  {generateError && (
+                    <div className="rounded-lg mb-4" style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: "10px 14px" }}>
+                      <p className="text-xs font-medium" style={{ color: "#dc2626" }}>Generation failed</p>
+                      <p className="text-[10px] mt-0.5" style={{ color: "#888" }}>{generateError}</p>
+                    </div>
+                  )}
 
                   {hasDraft && draft && (
                     <div>

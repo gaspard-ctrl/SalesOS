@@ -272,3 +272,60 @@ export async function fetchTopPages(
     pageViews: Math.round(parseFloat(row.metricValues[1].value) || 0),
   }));
 }
+
+/**
+ * Fetch detailed stats for a single article page path.
+ */
+export interface ArticleStats {
+  sessions: number;
+  pageViews: number;
+  avgDuration: number; // seconds
+  bounceRate: number; // percentage
+  users: number;
+  engagementRate: number; // percentage
+}
+
+export async function fetchArticleStats(
+  userId: string,
+  pagePath: string,
+  periodDays = 30,
+): Promise<ArticleStats | null> {
+  const accessToken = await getGmailAccessToken(userId);
+
+  const body = {
+    dateRanges: [{ startDate: daysAgo(periodDays), endDate: todayStr() }],
+    dimensions: [{ name: "pagePath" }],
+    metrics: [
+      { name: "sessions" },
+      { name: "screenPageViews" },
+      { name: "averageSessionDuration" },
+      { name: "bounceRate" },
+      { name: "totalUsers" },
+      { name: "engagementRate" },
+    ],
+    dimensionFilter: {
+      filter: {
+        fieldName: "pagePath",
+        stringFilter: { matchType: "EXACT", value: pagePath },
+      },
+    },
+    limit: 1,
+  };
+
+  const data = await runReport(accessToken, body) as {
+    rows?: { dimensionValues: { value: string }[]; metricValues: { value: string }[] }[];
+  };
+
+  const row = (data.rows || [])[0];
+  if (!row) return null;
+
+  const v = row.metricValues.map((m) => parseFloat(m.value) || 0);
+  return {
+    sessions: Math.round(v[0]),
+    pageViews: Math.round(v[1]),
+    avgDuration: Math.round(v[2]),
+    bounceRate: Math.round(v[3] * 1000) / 10,
+    users: Math.round(v[4]),
+    engagementRate: Math.round(v[5] * 1000) / 10,
+  };
+}

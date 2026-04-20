@@ -9,7 +9,6 @@ import type {
   ContentAnalysis,
   ArticleRecommendation,
   ArticleDraft,
-  DynamicCompetitorBenchmark,
 } from "@/lib/marketing-types";
 
 const SWR_OPTS = { revalidateOnFocus: false, dedupingInterval: 30_000 } as const;
@@ -120,26 +119,3 @@ export function useMarketingContent() {
   };
 }
 
-// ─── Recommendations ─────────────────────────────────────────────────────────
-
-export type { DynamicCompetitorBenchmark };
-
-interface RecommendationsResponse {
-  competitors: DynamicCompetitorBenchmark[];
-  competitorNames: string[];
-  error?: string;
-}
-
-export function useMarketingRecommendations() {
-  const { data, error, isLoading } = useSWR<RecommendationsResponse>(
-    `/api/marketing/recommendations`,
-    SWR_OPTS,
-  );
-  return {
-    competitors: data?.competitors ?? [],
-    competitorNames: data?.competitorNames ?? [],
-    recoError: data?.error ?? null,
-    isLoading,
-    error: error ? "Loading error" : "",
-  };
-}

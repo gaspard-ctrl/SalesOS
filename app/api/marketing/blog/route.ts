@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { fetchArticleById } from "@/lib/wordpress";
+import { fetchArticleStats } from "@/lib/google-analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -70,12 +71,26 @@ export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  // Single article fetch with full content
+  // Single article fetch with full content + GA4 stats
   const articleId = req.nextUrl.searchParams.get("id");
   if (articleId) {
     const article = await fetchArticleById(parseInt(articleId, 10));
     if (!article) return NextResponse.json({ error: "Article not found" }, { status: 404 });
-    return NextResponse.json({ article });
+
+    // Try to fetch stats — non-blocking if GA4 fails
+    let stats = null;
+    let statsError: string | null = null;
+    if (process.env.GA4_PROPERTY_ID) {
+      try {
+        // Article path is typically /blog/{slug}/
+        const pagePath = `/blog/${article.slug}/`;
+        stats = await fetchArticleStats(user.id, pagePath, 30);
+      } catch (e) {
+        statsError = e instanceof Error ? e.message : String(e);
+      }
+    }
+
+    return NextResponse.json({ article, stats, statsError });
   }
 
   // List articles (no full content for performance)
