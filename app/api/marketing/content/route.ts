@@ -9,12 +9,16 @@ import { fetchAllArticles } from "@/lib/wordpress";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-// In-memory state for the content factory pipeline
 interface Analysis {
-  topPerformers: { title: string; sessions: number; trend: number }[];
-  risingTrends: { keyword: string; growth: number }[];
-  contentGaps: { topic: string; rationale: string }[];
+  topPerformers: { title: string; sessions: number; path: string }[];
+  risingTrends: { keyword: string; impressions: number; clicks: number; ctr: number; position: number }[];
+  contentGaps: { topic: string; rationale: string; targetKeyword: string }[];
   summary: string;
+  dataSources: {
+    ga4: { ok: boolean; error?: string; pagesCount: number };
+    searchConsole: { ok: boolean; error?: string; keywordsCount: number };
+    wordpress: { ok: boolean; error?: string; articlesCount: number };
+  };
 }
 
 interface Recommendation {
@@ -112,7 +116,7 @@ export async function POST(req: NextRequest) {
 async function runAnalysis(userId: string) {
   // Gather data in parallel
   const [topPagesResult, keywordsResult, articlesResult] = await Promise.allSettled([
-    fetchTopPages(userId, 30, 15),
+    fetchTopPages(userId, 30, 10),
     fetchKeywords(userId, 28, true),
     fetchAllArticles(100),
   ]);
@@ -121,58 +125,96 @@ async function runAnalysis(userId: string) {
   const keywords = keywordsResult.status === "fulfilled" ? keywordsResult.value : [];
   const articles = articlesResult.status === "fulfilled" ? articlesResult.value : [];
 
-  // Also get KPIs for trend (current 30d vs previous)
-  let trendSummary = "";
-  try {
-    const kpis = await fetchKPIs(userId, 30);
-    const sessionsChange = kpis.previous.sessions === 0 ? 0 : ((kpis.current.sessions - kpis.previous.sessions) / kpis.previous.sessions) * 100;
-    trendSummary = `Sessions: ${kpis.current.sessions} (${sessionsChange > 0 ? "+" : ""}${sessionsChange.toFixed(1)}% vs previous 30d)`;
-  } catch {
-    trendSummary = "Sessions trend unavailable";
-  }
+  const ga4Error = topPagesResult.status === "rejected"
+    ? (topPagesResult.reason?.message || String(topPagesResult.reason))
+    : undefined;
+  const scError = keywordsResult.status === "rejected"
+    ? (keywordsResult.reason?.message || String(keywordsResult.reason))
+    : undefined;
+  const wpError = articlesResult.status === "rejected"
+    ? (articlesResult.reason?.message || String(articlesResult.reason))
+    : undefined;
 
-  // Check if we have enough data
-  if (topPages.length === 0 && keywords.length === 0 && articles.length === 0) {
+  // Need at least WordPress + one of GA4 or Search Console
+  if (articles.length === 0) {
     return NextResponse.json({
-      error: "No data available. Connect Google Analytics, Search Console, and WordPress first.",
+      error: "Cannot analyze: WordPress articles unavailable. " + (wpError || ""),
+    }, { status: 400 });
+  }
+  if (topPages.length === 0 && keywords.length === 0) {
+    return NextResponse.json({
+      error: "Cannot analyze: both GA4 and Search Console are unavailable. " + [ga4Error, scError].filter(Boolean).join(" | "),
     }, { status: 400 });
   }
 
-  // Build prompt for Claude
-  const topPagesText = topPages.slice(0, 10).map((p) => `- ${p.title} (${p.sessions} sessions, ${p.pageViews} views) — ${p.path}`).join("\n") || "No GA4 data available";
-  const topKeywordsText = keywords.slice(0, 20).map((k) => `- "${k.keyword}" — ${k.impressions} impressions, ${k.clicks} clicks, ${k.ctr}% CTR, position ${k.position}`).join("\n") || "No Search Console data available";
-  const articlesText = articles.slice(0, 40).map((a) => `- ${a.title}`).join("\n") || "No articles found";
+  // ── 1. TOP PERFORMERS: directly from GA4, no Claude hallucination ──────────
+  const topPerformers = topPages.slice(0, 5).map((p) => ({
+    title: p.title || p.path,
+    sessions: p.sessions,
+    path: p.path,
+  }));
 
-  const prompt = `You are a senior content strategist for Coachello, a B2B leadership coaching platform that combines human coaches + AI.
+  // ── 2. RISING TRENDS: real Search Console keywords sorted by opportunity ───
+  // "Rising trend" = high impressions but not yet in top positions (still growing)
+  // We pick keywords with >100 impressions and position 4-20 (opportunity zone)
+  const risingTrends = keywords
+    .filter((k) => k.impressions >= 50 && k.position >= 4 && k.position <= 20)
+    .sort((a, b) => b.impressions - a.impressions)
+    .slice(0, 5)
+    .map((k) => ({
+      keyword: k.keyword,
+      impressions: k.impressions,
+      clicks: k.clicks,
+      ctr: k.ctr,
+      position: k.position,
+    }));
 
-Analyze the following real data from the Coachello blog and identify actionable insights.
+  // ── 3. CONTENT GAPS: Claude analyzes based on real data ────────────────────
+  // Build a rich prompt with real numbers and real article titles
+  const topPerformersText = topPerformers.length > 0
+    ? topPerformers.map((p) => `- "${p.title}" — ${p.sessions} sessions`).join("\n")
+    : "GA4 data unavailable";
 
-## Current performance (last 30 days)
-${trendSummary}
+  const topKeywordsText = keywords.length > 0
+    ? keywords.slice(0, 30).map((k) => `- "${k.keyword}" — ${k.impressions} impressions, ${k.clicks} clicks, CTR ${k.ctr}%, position ${k.position}`).join("\n")
+    : "Search Console data unavailable";
 
-## Top performing blog pages (GA4)
-${topPagesText}
+  const articlesText = articles.slice(0, 50).map((a) => `- ${a.title}`).join("\n");
 
-## Top search queries bringing traffic (Google Search Console, last 28 days)
+  const prompt = `You are a senior content strategist for Coachello, a B2B leadership coaching platform (human coaches + AI).
+
+I have REAL data. Do NOT invent numbers or facts. Only analyze what is given.
+
+## All published blog articles (${articles.length} articles)
+${articlesText}
+
+## Top search queries sending traffic (Google Search Console, last 28 days)
 ${topKeywordsText}
 
-## All published blog articles
-${articlesText}
+## Top performing pages (GA4, last 30 days)
+${topPerformersText}
 
 ---
 
-Your task: analyze this data and return a structured JSON with:
-1. **topPerformers** (3 items): the articles with the best traffic right now. For each: title, sessions, and an estimated trend % (you can set to 0 if unknown).
-2. **risingTrends** (3 items): keyword queries that show opportunity — either high impressions but low CTR, or ranking well but underutilized. Each has a "keyword" and a growth indicator (positive %).
-3. **contentGaps** (3 items): topics or angles missing from Coachello's blog based on the keyword queries vs published articles. Each has a "topic" (specific article idea) and a "rationale" (why it matters, based on the data).
-4. **summary**: 2-3 sentences summarizing the biggest opportunity right now.
+Task: identify 3 content gaps — article ideas Coachello should write but hasn't.
 
-Return ONLY valid JSON, no markdown, no commentary:
+Criteria:
+- Based on the search queries people use vs what Coachello has published
+- Each gap must be a SPECIFIC article title, not a generic topic
+- Justify each with data from the lists above (cite the exact numbers, e.g. "keyword X has Y impressions")
+- Pick a target keyword from the Search Console list for each gap
+- Also write a 2-3 sentence summary of the single biggest opportunity
+
+Return ONLY valid JSON:
 {
-  "topPerformers": [{"title": "...", "sessions": 0, "trend": 0}],
-  "risingTrends": [{"keyword": "...", "growth": 0}],
-  "contentGaps": [{"topic": "...", "rationale": "..."}],
-  "summary": "..."
+  "contentGaps": [
+    {
+      "topic": "specific article title",
+      "rationale": "data-backed justification citing real numbers from the lists above",
+      "targetKeyword": "exact keyword from the Search Console list"
+    }
+  ],
+  "summary": "2-3 sentences"
 }`;
 
   const client = new Anthropic();
@@ -188,20 +230,39 @@ Return ONLY valid JSON, no markdown, no commentary:
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error("Claude returned invalid JSON");
 
-  const parsed = JSON.parse(jsonMatch[0]) as Analysis;
-  analysisResult = parsed;
+  const parsed = JSON.parse(jsonMatch[0]) as { contentGaps: Analysis["contentGaps"]; summary: string };
 
-  // Also auto-generate recommendations based on the analysis
-  recommendations = parsed.contentGaps.map((gap, i) => ({
-    id: `rec-${Date.now()}-${i}`,
-    topic: gap.topic,
-    targetKeyword: parsed.risingTrends[i]?.keyword || gap.topic.toLowerCase().slice(0, 40),
-    justification: gap.rationale,
-    estimatedTraffic: Math.round(500 + Math.random() * 1500),
-    difficulty: (["easy", "medium", "hard"] as const)[i % 3],
-    priority: i === 0 ? "high" : i === 1 ? "medium" : "low",
-    status: "recommended",
-  }));
+  analysisResult = {
+    topPerformers,
+    risingTrends,
+    contentGaps: parsed.contentGaps,
+    summary: parsed.summary,
+    dataSources: {
+      ga4: { ok: topPages.length > 0, error: ga4Error, pagesCount: topPages.length },
+      searchConsole: { ok: keywords.length > 0, error: scError, keywordsCount: keywords.length },
+      wordpress: { ok: articles.length > 0, error: wpError, articlesCount: articles.length },
+    },
+  };
+
+  // Build recommendations from content gaps
+  recommendations = parsed.contentGaps.map((gap, i) => {
+    // Find matching keyword for traffic estimate
+    const matchedKw = keywords.find((k) => k.keyword === gap.targetKeyword);
+    const estimatedTraffic = matchedKw
+      ? Math.round(matchedKw.impressions * 0.05) // assume 5% of impressions converting to clicks if we rank well
+      : 0;
+
+    return {
+      id: `rec-${Date.now()}-${i}`,
+      topic: gap.topic,
+      targetKeyword: gap.targetKeyword,
+      justification: gap.rationale,
+      estimatedTraffic,
+      difficulty: (["easy", "medium", "hard"] as const)[i % 3],
+      priority: i === 0 ? "high" : i === 1 ? "medium" : "low",
+      status: "recommended",
+    };
+  });
 
   return NextResponse.json({
     analysis: analysisResult,
@@ -217,18 +278,15 @@ async function runGeneration(userId: string, recommendationId: string) {
 
   rec.status = "writing";
 
-  // Fetch top 5 articles to use as style reference
   const articles = await fetchAllArticles(5);
   if (articles.length === 0) {
     return NextResponse.json({ error: "No WordPress articles available as style reference" }, { status: 400 });
   }
 
-  // Build style reference from top articles
   const styleReference = articles.slice(0, 3).map((a) => {
     return `--- Article: ${a.title} ---\n${a.contentText.slice(0, 2000)}`;
   }).join("\n\n");
 
-  // Build available articles for internal linking
   const availableForLinking = articles.map((a) => `- "${a.title}" → ${a.link}`).join("\n");
 
   const prompt = `You are Coachello's senior content writer. Write a NEW blog article in two languages (French + English).
@@ -239,7 +297,7 @@ ${rec.topic}
 ## Target keyword
 ${rec.targetKeyword}
 
-## Data-driven justification
+## Data-driven justification (why this article matters)
 ${rec.justification}
 
 ## Style reference — match this tone, structure, and voice
@@ -251,16 +309,14 @@ ${availableForLinking}
 ---
 
 Instructions:
-- Write the complete article in both French and English (NOT translations, each language adapted to its audience)
-- Use the same tone, structure, headings style (H2, H3), bullet lists, and CTA patterns as the style reference
+- Write the complete article in both French and English (NOT translations, each language adapted)
+- Match the tone, structure, headings (H2, H3), bullet lists, and CTA patterns of the style reference
 - Natural length: 800-1500 words
-- Include internal links from the available list — natural placement, 2-4 per language version
+- Include 2-4 internal links per language from the available list (natural placement)
 - Add a CTA section near the end ("Book a demo with Coachello" pattern)
-- Do NOT use mock data or generic statistics — if you cite numbers, make them believable for the coaching industry (ICF, PwC, Gartner are fine sources)
+- Only cite credible industry sources (ICF, PwC, Gartner, HBR, McKinsey) if needed
 
-Also propose WordPress metadata for each language (category, 3-5 tags, 150-char excerpt, URL slug).
-
-Return ONLY valid JSON, no markdown:
+Return ONLY valid JSON:
 {
   "content": {
     "fr": "<h2>...</h2><p>...</p>...",

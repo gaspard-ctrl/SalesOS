@@ -69,10 +69,15 @@ export interface BlogArticle {
 
 // Content Factory
 export interface ContentAnalysis {
-  topPerformers: { title: string; sessions: number; trend: number }[];
-  risingTrends: { keyword: string; growth: number }[];
-  contentGaps: { topic: string; rationale: string }[];
+  topPerformers: { title: string; sessions: number; path: string }[];
+  risingTrends: { keyword: string; impressions: number; clicks: number; ctr: number; position: number }[];
+  contentGaps: { topic: string; rationale: string; targetKeyword: string }[];
   summary: string;
+  dataSources?: {
+    ga4: { ok: boolean; error?: string; pagesCount: number };
+    searchConsole: { ok: boolean; error?: string; keywordsCount: number };
+    wordpress: { ok: boolean; error?: string; articlesCount: number };
+  };
 }
 
 export interface ArticleRecommendation {
