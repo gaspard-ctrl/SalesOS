@@ -31,6 +31,13 @@ const tools = [
     domain: "admin-coachello.netlify.app",
     icon: "🛡️",
   },
+  {
+    name: "Ticket Mafia",
+    description: "Plateforme Ticket Mafia",
+    url: "https://ticketmafia.netlify.app/",
+    domain: "ticketmafia.netlify.app",
+    icon: "🎟️",
+  },
 ];
 
 export default function PokedexPage() {
