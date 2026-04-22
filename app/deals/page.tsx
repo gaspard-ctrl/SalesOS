@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, memo } from "react";
+import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { useUserMe } from "@/lib/hooks/use-user-me";
 import { useDeals } from "@/lib/hooks/use-deals";
 import { X, ChevronRight, Mail, Zap, AlertCircle, CheckCircle, TrendingUp, Search, RefreshCw, Linkedin, Copy, Check, Send } from "lucide-react";
 import { scoreBadge, reliabilityLabel, reliabilityColor, healthIndicator, type DealScore } from "@/lib/deal-scoring";
 import { AskClaudeButton, AskClaudePanel } from "@/components/ask-claude";
+import { DealFiltersBar, applyDealFilters, DEFAULT_DEAL_FILTERS, type DealFilters } from "./_components/deal-filters";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,7 @@ interface Deal {
   dealstage: string;
   amount: string;
   closedate: string;
+  createdate: string;
   probability: string;
   ownerId: string;
   ownerName: string;
@@ -1197,11 +1199,11 @@ export default function DealsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [scoring, setScoring] = useState(false);
   const [scoreResult, setScoreResult] = useState<{ scored: number; total: number } | null>(null);
-  const [ownerFilter, setOwnerFilter] = useState<"mine" | "all">("mine");
+  const [filters, setFilters] = useState<DealFilters>(DEFAULT_DEAL_FILTERS);
 
-  // SWR-cached data fetching
+  // SWR-cached data fetching — ownerMode drives the server-side owner filter
   const [appliedQuery, setAppliedQuery] = useState("");
-  const { stages, deals, pipelineTotal, weightedTotal, myOwnerId, isLoading: loading, error, reload } = useDeals(appliedQuery, ownerFilter);
+  const { stages, deals, myOwnerId, owners, isLoading: loading, error, reload } = useDeals(appliedQuery, filters.ownerMode);
 
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [details, setDetails] = useState<DealDetails | null>(null);
@@ -1247,14 +1249,35 @@ export default function DealsPage() {
     }
   }, []);
 
-  // Filter deals
-  const filteredDeals = deals.filter((d) => {
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      if (!d.dealname.toLowerCase().includes(q)) return false;
-    }
-    return true;
-  });
+  // Filter deals — search + advanced filters
+  const filteredDeals = useMemo(() => {
+    const bySearch = searchQuery
+      ? deals.filter((d) => d.dealname.toLowerCase().includes(searchQuery.toLowerCase()))
+      : deals;
+    return applyDealFilters(bySearch, filters);
+  }, [deals, searchQuery, filters]);
+
+  // Stages whose label contains "nurture" (excluded from top-right metrics)
+  const nurtureStageIds = useMemo(
+    () => new Set(stages.filter((s) => s.label.toLowerCase().includes("nurture")).map((s) => s.id)),
+    [stages]
+  );
+
+  // Metrics exclude "To nurture" deals
+  const metricsDeals = useMemo(
+    () => filteredDeals.filter((d) => !nurtureStageIds.has(d.dealstage)),
+    [filteredDeals, nurtureStageIds]
+  );
+
+  const pipelineTotal = useMemo(
+    () => metricsDeals.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0),
+    [metricsDeals]
+  );
+  // Forecast pondéré = sum(amount × score/100) sur les deals scorés
+  const weightedTotal = useMemo(
+    () => metricsDeals.reduce((s, d) => s + (parseFloat(d.amount) || 0) * ((d.score?.total ?? 0) / 100), 0),
+    [metricsDeals]
+  );
 
   // Group by stage
   const dealsByStage = stages.reduce<Record<string, Deal[]>>((acc, s) => {
@@ -1274,7 +1297,7 @@ export default function DealsPage() {
         background: "white", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
       }}>
         {/* Search */}
-        <div style={{ position: "relative", flex: "1 1 200px", maxWidth: 280 }}>
+        <div style={{ position: "relative", flex: "0 0 220px" }}>
           <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }} />
           <input
             value={searchQuery}
@@ -1288,23 +1311,8 @@ export default function DealsPage() {
           />
         </div>
 
-        {/* Owner filter */}
-        <div style={{ display: "flex", borderRadius: 8, border: "1px solid #e5e7eb", overflow: "hidden" }}>
-          {(["mine", "all"] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => { setOwnerFilter(v); }}
-              style={{
-                padding: "6px 12px", fontSize: 12, fontWeight: 500, border: "none",
-                background: ownerFilter === v ? "#111827" : "white",
-                color: ownerFilter === v ? "white" : "#6b7280",
-                cursor: "pointer",
-              }}
-            >
-              {v === "mine" ? "Mes deals" : "Tous"}
-            </button>
-          ))}
-        </div>
+        {/* Filters */}
+        <DealFiltersBar filters={filters} onChange={setFilters} owners={owners} />
 
         {/* Refresh */}
         <button
@@ -1350,11 +1358,11 @@ export default function DealsPage() {
           <span>
             Pipeline: <strong style={{ color: "#111827" }}>{(pipelineTotal / 1000).toFixed(0)}k€</strong>
           </span>
-          <span>
+          <span title="Forecast pondéré = somme(montant × score/100)">
             Pondéré: <strong style={{ color: "#111827" }}>{(weightedTotal / 1000).toFixed(0)}k€</strong>
           </span>
           <span>
-            <strong style={{ color: "#111827" }}>{filteredDeals.length}</strong> deals
+            <strong style={{ color: "#111827" }}>{metricsDeals.length}</strong> deals
           </span>
         </div>
       </div>

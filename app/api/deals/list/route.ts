@@ -22,7 +22,7 @@ async function hubspot(path: string, method = "GET", body?: unknown) {
 }
 
 const DEAL_PROPS = [
-  "dealname", "dealstage", "amount", "closedate", "pipeline",
+  "dealname", "dealstage", "amount", "closedate", "createdate", "pipeline",
   "hubspot_owner_id", "hs_lastmodifieddate", "notes_last_contacted",
   "hs_deal_stage_probability", "num_associated_contacts",
   "deal_type", "description",
@@ -105,6 +105,7 @@ export async function GET(req: NextRequest) {
         dealstage: p.dealstage ?? "",
         amount: p.amount ?? "",
         closedate: p.closedate ?? "",
+        createdate: p.createdate ?? "",
         probability: p.hs_deal_stage_probability ?? "",
         ownerId: p.hubspot_owner_id ?? "",
         ownerName: ownerMap[p.hubspot_owner_id ?? ""] ?? "",
@@ -150,7 +151,13 @@ export async function GET(req: NextRequest) {
       return sum + (parseFloat(d.amount) || 0) * (prob / 100);
     }, 0);
 
-    return NextResponse.json({ stages, deals, pipelineTotal, weightedTotal, myOwnerId });
+    // Owners that appear in the current result set — used for multi-select filter
+    const ownerIdsInDeals = Array.from(new Set(deals.map((d: { ownerId: string }) => d.ownerId).filter(Boolean) as string[]));
+    const owners = ownerIdsInDeals
+      .map((id) => ({ id, name: ownerMap[id] || "—" }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return NextResponse.json({ stages, deals, pipelineTotal, weightedTotal, myOwnerId, owners });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur HubSpot" }, { status: 500 });
   }

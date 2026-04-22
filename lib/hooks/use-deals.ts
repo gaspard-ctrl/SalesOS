@@ -7,6 +7,7 @@ interface Deal {
   dealstage: string;
   amount: string;
   closedate: string;
+  createdate: string;
   probability: string;
   ownerId: string;
   ownerName: string;
@@ -28,12 +29,18 @@ interface Stage {
   probability: number | null;
 }
 
+interface Owner {
+  id: string;
+  name: string;
+}
+
 interface DealsResponse {
   stages: Stage[];
   deals: Deal[];
   pipelineTotal: number;
   weightedTotal: number;
   myOwnerId: string | null;
+  owners: Owner[];
 }
 
 export function useDeals(searchQuery: string, ownerFilter: "mine" | "all") {
@@ -53,6 +60,7 @@ export function useDeals(searchQuery: string, ownerFilter: "mine" | "all") {
     pipelineTotal: data?.pipelineTotal ?? 0,
     weightedTotal: data?.weightedTotal ?? 0,
     myOwnerId: data?.myOwnerId ?? null,
+    owners: data?.owners ?? [] as Owner[],
     isLoading,
     error: error ? (error instanceof Error ? error.message : "Erreur de chargement") : "",
     reload: () => mutate(),

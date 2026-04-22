@@ -194,7 +194,7 @@ export async function POST(req: NextRequest) {
     const DEAL_PROPS = [
       "dealname", "dealstage", "amount", "closedate",
       "hubspot_owner_id", "hs_lastmodifieddate", "notes_last_contacted",
-      "hs_deal_stage_probability", "deal_type", "description",
+      "deal_type", "description",
     ];
 
     const [dealData, contactAssoc, engagementAssoc] = await Promise.allSettled([
@@ -362,7 +362,7 @@ export async function POST(req: NextRequest) {
 
     const contextBlock = [
       `Deal : ${p.dealname ?? "?"} | Stage : ${p.dealstage ?? "?"} | Montant : ${p.amount ? `${parseFloat(p.amount).toLocaleString("fr-FR")}€` : "?"}`,
-      `Clôture : ${p.closedate ? new Date(p.closedate).toLocaleDateString("fr-FR") : "?"} | Probabilité : ${p.hs_deal_stage_probability ?? "?"}%`,
+      `Clôture : ${p.closedate ? new Date(p.closedate).toLocaleDateString("fr-FR") : "?"}`,
       p.description ? `Description : ${p.description}` : null,
       contactLines ? `Contacts : ${contactLines}` : "Contacts : aucun",
       `\n${scoreContext}`,
@@ -373,11 +373,12 @@ export async function POST(req: NextRequest) {
     const client = new Anthropic({ timeout: 90_000 });
     const message = await client.messages.create({
       model: analyzeModel,
-      max_tokens: 2500,
+      max_tokens: 4000,
       system: `Tu es un expert en vente B2B pour Coachello (coaching professionnel).
 Analyse ce deal commercial en profondeur à partir de TOUTES les données disponibles (score IA, échanges HubSpot, conversations Slack internes, contacts, contexte).
 Sois hyper précis et factuel — base chaque analyse sur des éléments concrets tirés des échanges.
 Les messages Slack sont des conversations internes de l'équipe Coachello — ils contiennent souvent des insights précieux sur l'avancement du deal, les blocages, et le contexte commercial.
+Ne mentionne jamais la probabilité HubSpot du stage — c'est une valeur automatique non pertinente. Raisonne uniquement sur la dynamique réelle (échanges, signaux, engagement).
 Utilise l'outil deal_analysis pour retourner ton analyse.`,
       messages: [{ role: "user", content: contextBlock }],
       tools: [analyzeTool],
