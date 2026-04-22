@@ -4,16 +4,21 @@
 export interface MarketingKPI {
   sessions: number;
   sessionsWoW: number;
-  uniqueVisitors: number;
-  uniqueVisitorsWoW: number;
+  activeUsers: number;
+  activeUsersWoW: number;
+  newUsers: number;
+  newUsersWoW: number;
   pageViews: number;
   pageViewsWoW: number;
-  bounceRate: number;
-  bounceRateWoW: number;
+  engagedSessions: number;
+  engagedSessionsWoW: number;
   avgDuration: number;
   avgDurationWoW: number;
-  ctaConversions: number;
-  ctaConversionsWoW: number;
+  keyEvents: number;
+  keyEventsWoW: number;
+  incomingLeads: number;
+  incomingLeadsWoW: number;
+  incomingLeadsChannelMissing?: boolean;
 }
 
 export interface TrafficDataPoint {
@@ -28,6 +33,8 @@ export interface TrafficSource {
   sessions: number;
   percentage: number;
   color: string;
+  /** Sub-source breakdown (e.g. for Referral: "linkedin.com / referral: 42"). */
+  details?: { label: string; sessions: number }[];
 }
 
 export interface GA4TopArticle {
@@ -35,6 +42,52 @@ export interface GA4TopArticle {
   title: string;
   sessions: number;
   pageViews: number;
+}
+
+export interface DeviceBreakdown {
+  device: string;
+  sessions: number;
+  activeUsers: number;
+  engagementRate: number;
+  avgDuration: number;
+  percentage: number;
+}
+
+export interface CountryBreakdown {
+  country: string;
+  sessions: number;
+  activeUsers: number;
+  percentage: number;
+}
+
+export interface LeadsTimelinePoint {
+  date: string;   // YYYY-MM-DD (Europe/Paris)
+  count: number;
+}
+
+export interface ImpressionsTimelinePoint {
+  date: string;   // YYYY-MM-DD
+  impressions: number;
+  clicks: number;
+}
+
+export interface ArticleTimelinePoint {
+  date: string;   // YYYY-MM-DD
+  id: number;
+  title: string;
+  link: string;
+  slug: string;
+}
+
+export type MarketingEventType = "salon" | "linkedin_pro" | "linkedin_perso" | "nurturing_campaign";
+
+export interface MarketingEvent {
+  id: string;
+  event_date: string;   // YYYY-MM-DD
+  event_type: MarketingEventType;
+  label: string;
+  created_by: string;
+  created_at: string;
 }
 
 // SEO
@@ -51,6 +104,26 @@ export interface Keyword {
 export interface CannibalizationAlert {
   keyword: string;
   articles: { page: string; title: string; position: number; impressions: number }[];
+}
+
+// Trends: gain/loss of clicks per page between two consecutive periods
+export interface PageTrend {
+  page: string;
+  title: string;
+  currentClicks: number;
+  previousClicks: number;
+  deltaClicks: number;
+  currentImpressions: number;
+  previousImpressions: number;
+  deltaImpressions: number;
+  currentPosition: number;      // average position in current period
+  deltaPosition: number;        // positive = position worsened (moved down); negative = improved
+}
+
+export interface SeoTrendsResponse {
+  winners: PageTrend[];
+  losers: PageTrend[];
+  error?: string;
 }
 
 // Articles (from WordPress + GA4)
@@ -89,6 +162,16 @@ export interface ArticleRecommendation {
   difficulty: "easy" | "medium" | "hard";
   priority: "high" | "medium" | "low";
   status: "recommended" | "approved" | "writing" | "published";
+  relevanceScore?: number;
+  relevanceReason?: string;
+  relevanceCategory?: "relevant" | "partial" | "irrelevant";
+}
+
+export interface KeywordRelevance {
+  keyword: string;
+  relevanceScore: number;
+  category: "relevant" | "partial" | "irrelevant";
+  reason: string;
 }
 
 export interface InternalLink {
@@ -113,4 +196,34 @@ export interface DynamicCompetitorBenchmark {
   topic: string;
   coachello: boolean;
   competitors: Record<string, boolean>;
+}
+
+// Leads (admin tab)
+export type LeadValidationStatus = "pending" | "validated" | "rejected";
+
+export interface LeadFile {
+  id: string;
+  name: string;
+  mimetype: string;
+  url_private: string;
+  thumb_url?: string;
+}
+
+export interface Lead {
+  id: string;
+  slack_ts: string;
+  slack_permalink: string | null;
+  author_name: string | null;
+  text: string;
+  files: LeadFile[];
+  posted_at: string;
+  validation_status: LeadValidationStatus;
+  validated_by: string | null;
+  validated_at: string | null;
+}
+
+export interface LeadsCounts {
+  pending: number;
+  validated: number;
+  rejected: number;
 }

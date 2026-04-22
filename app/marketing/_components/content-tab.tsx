@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect, Component, type ReactNode } from "react";
-import { Sparkles, TrendingUp, AlertCircle, Search, Check, Download, Link2, Loader2 } from "lucide-react";
+import { useState, useCallback, useEffect, useRef, Component, type ReactNode } from "react";
+import { Sparkles, TrendingUp, AlertCircle, Search, Check, Download, Link2, Loader2, Trash2, RefreshCw, FileText, ChevronRight } from "lucide-react";
 import { useMarketingContent } from "@/lib/hooks/use-marketing";
 import type { ArticleRecommendation, ArticleDraft, ContentAnalysis } from "@/lib/marketing-types";
 
@@ -58,14 +58,21 @@ function ContentTab() {
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [generateErrors, setGenerateErrors] = useState<Map<string, string>>(new Map());
   const [previewLang, setPreviewLang] = useState<"fr" | "en">("fr");
+  const [focusedRecId, setFocusedRecId] = useState<string | null>(null);
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Load persisted analysis/recommendations on mount
   useEffect(() => {
     if (initialAnalysis && !analysis) setAnalysis(initialAnalysis);
     if (initialRecs.length > 0 && localRecs.length === 0) setLocalRecs(initialRecs);
     if (initialDrafts.length > 0) {
+      // initialDrafts is sorted DESC by created_at — first occurrence per
+      // recommendationId is the latest. Skip subsequent (older) ones so the
+      // newest draft wins instead of being overwritten.
       const m = new Map<string, ArticleDraft>();
-      for (const d of initialDrafts) m.set(d.recommendationId, d);
+      for (const d of initialDrafts) {
+        if (!m.has(d.recommendationId)) m.set(d.recommendationId, d);
+      }
       setGeneratedDrafts((prev) => prev.size === 0 ? m : prev);
     }
   }, [initialAnalysis, initialRecs, initialDrafts, analysis, localRecs.length]);
@@ -168,6 +175,42 @@ function ContentTab() {
     }
   }, []);
 
+  const handleRegenerate = useCallback(async (id: string) => {
+    setGeneratedDrafts((prev) => { const m = new Map(prev); m.delete(id); return m; });
+    await handleGenerate(id);
+  }, [handleGenerate]);
+
+  const handleOpenPrevious = useCallback((id: string) => {
+    setFocusedRecId(id);
+    setStep(3);
+  }, []);
+
+  // When step 3 mounts (or focusedRecId changes), scroll the focused card into view.
+  useEffect(() => {
+    if (step !== 3 || !focusedRecId) return;
+    const el = cardRefs.current.get(focusedRecId);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    const t = setTimeout(() => setFocusedRecId(null), 1500);
+    return () => clearTimeout(t);
+  }, [step, focusedRecId]);
+
+  const handleDelete = useCallback(async (id: string) => {
+    if (!confirm("Supprimer cet article ? Cela efface la recommandation et le draft générés.")) return;
+    setLocalRecs((prev) => prev.filter((r) => r.id !== id));
+    setGeneratedDrafts((prev) => { const m = new Map(prev); m.delete(id); return m; });
+    setGenerateErrors((prev) => { const m = new Map(prev); m.delete(id); return m; });
+    try {
+      await fetch("/api/marketing/content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", recommendationId: id }),
+      });
+    } catch {
+      // Optimistic UI already updated; on next mount the GET will reconcile.
+    }
+  }, []);
+
   const handleDownload = useCallback((draft: ArticleDraft, lang: "fr" | "en") => {
     const meta = draft.wordpressFormat[lang];
     const html = `<!DOCTYPE html>
@@ -266,6 +309,25 @@ ${draft.content[lang]}
 
       {step === 1 && analysis && (
         <div className="space-y-4">
+          {/* Top nav — same Back/Next as the bottom, for quick access without scrolling. */}
+          <div className="flex items-center justify-between gap-2">
+            <button
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5 disabled:opacity-70"
+              style={{ border: "1px solid #ddd", color: "#888", background: "#fff", cursor: analyzing ? "wait" : "pointer" }}
+            >
+              {analyzing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              {analyzing ? "Re-analyzing..." : "Re-analyze"}
+            </button>
+            <button
+              onClick={() => setStep(2)}
+              className="text-xs font-medium rounded-lg px-4 py-1.5"
+              style={{ background: "#f01563", color: "#fff" }}
+            >
+              Next: Recommendations →
+            </button>
+          </div>
           {/* Summary banner */}
           {analysis.summary && (
             <div className="rounded-xl flex items-start gap-3" style={{ background: "#f0f7ff", border: "1px solid #bfdbfe", padding: "14px 18px" }}>
@@ -382,16 +444,7 @@ ${draft.content[lang]}
               </div>
             </div>
           </div>
-          <div className="flex items-center justify-between">
-            <button
-              onClick={handleAnalyze}
-              disabled={analyzing}
-              className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5"
-              style={{ border: "1px solid #ddd", color: "#888", background: "#fff" }}
-            >
-              {analyzing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-              Re-analyze
-            </button>
+          <div className="flex items-center justify-end">
             <button
               onClick={() => setStep(2)}
               className="text-sm font-medium rounded-lg px-5 py-2"
@@ -404,8 +457,48 @@ ${draft.content[lang]}
       )}
 
       {/* Step 2 — Recommendations */}
-      {step === 2 && (
+      {step === 2 && (() => {
+        const pendingRecs = localRecs.filter((r) => r.status === "recommended");
+        const previousRecs = localRecs.filter((r) => r.status === "approved" || r.status === "writing" || r.status === "published");
+        return (
         <div className="space-y-4">
+          {/* Top nav — mirror of the bottom nav for quick access. */}
+          <StepNav step={2} setStep={setStep} approvedCount={approvedCount} compact />
+          {/* Previous articles — quick access to already-approved articles in step 3 */}
+          {previousRecs.length > 0 && (
+            <div className="rounded-xl" style={{ background: "#fff", border: "1px solid #eeeeee", padding: "14px 18px" }}>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileText size={14} style={{ color: "#16a34a" }} />
+                  <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#888" }}>
+                    Previous articles ({previousRecs.length})
+                  </p>
+                </div>
+                <button
+                  onClick={() => setStep(3)}
+                  className="flex items-center gap-1 text-xs font-medium rounded-lg px-3 py-1.5"
+                  style={{ background: "#fff", color: "#16a34a", border: "1px solid #bbf7d0" }}
+                >
+                  Open Write & Publish
+                  <ChevronRight size={12} />
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {previousRecs.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => handleOpenPrevious(r.id)}
+                    className="text-xs px-2.5 py-1 rounded-lg text-left"
+                    style={{ background: "#f9fafb", color: "#374151", border: "1px solid #e5e7eb", maxWidth: 320 }}
+                    title={r.topic}
+                  >
+                    <span className="truncate inline-block max-w-full align-bottom">{r.topic}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Theme input */}
           <div className="rounded-xl" style={{ background: "#fff", border: "1px solid #eeeeee", padding: "16px 20px" }}>
             <div className="flex items-center gap-2 mb-2">
@@ -447,8 +540,18 @@ ${draft.content[lang]}
             )}
           </div>
 
+          {pendingRecs.length === 0 ? (
+            <div className="rounded-xl text-center" style={{ background: "#fafafa", border: "1px dashed #e5e5e5", padding: "32px 20px" }}>
+              <p className="text-sm" style={{ color: "#888" }}>
+                No new recommendations.
+              </p>
+              <p className="text-xs mt-1" style={{ color: "#aaa" }}>
+                Run an analysis or propose a theme above to get fresh ideas.
+              </p>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {localRecs.map((rec) => {
+            {pendingRecs.map((rec) => {
               const pStyle = PRIORITY_STYLES[rec.priority];
               const isApproved = rec.status === "approved" || rec.status === "writing" || rec.status === "published";
               return (
@@ -473,11 +576,34 @@ ${draft.content[lang]}
                     </span>
                   )}
                   <h4 className="font-semibold text-sm mt-6 mb-2" style={{ color: "#111" }}>{rec.topic}</h4>
-                  <div className="flex items-center gap-1 mb-2">
+                  <div className="flex items-center gap-1 mb-2 flex-wrap">
                     <Search size={12} style={{ color: "#888" }} />
                     <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#f5f5f5", color: "#555" }}>{rec.targetKeyword}</span>
+                    {typeof rec.relevanceScore === "number" && (
+                      <span
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{
+                          background:
+                            rec.relevanceScore >= 70 ? "#f0fdf4" :
+                            rec.relevanceScore >= 40 ? "#fef9c3" : "#fef2f2",
+                          color:
+                            rec.relevanceScore >= 70 ? "#16a34a" :
+                            rec.relevanceScore >= 40 ? "#ca8a04" : "#dc2626",
+                        }}
+                        title={rec.relevanceReason || ""}
+                      >
+                        {rec.relevanceScore}/100{rec.relevanceCategory ? " · " + rec.relevanceCategory : ""}
+                      </span>
+                    )}
                   </div>
-                  <p className="text-xs leading-relaxed mb-3" style={{ color: "#666" }}>{rec.justification}</p>
+                  <p className="text-xs leading-relaxed mb-3" style={{ color: "#666" }}>
+                    {rec.justification}
+                    {rec.relevanceReason && (
+                      <span className="block mt-1 italic" style={{ color: "#888" }}>
+                        Business angle: {rec.relevanceReason}
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs mb-4" style={{ color: "#888" }}>
                     ~{rec.estimatedTraffic} sessions/mois · Difficulté: {DIFFICULTY_LABELS[rec.difficulty]}
                   </p>
@@ -507,6 +633,7 @@ ${draft.content[lang]}
               );
             })}
           </div>
+          )}
           <div className="flex justify-between">
             <button onClick={() => setStep(1)} className="text-sm font-medium rounded-lg px-4 py-2" style={{ color: "#888", border: "1px solid #ddd" }}>
               Back
@@ -525,11 +652,14 @@ ${draft.content[lang]}
             </button>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Step 3 — Write & Publish */}
       {step === 3 && (
         <div className="space-y-6">
+          {/* Top nav — mirror of the bottom "Back" for quick access. */}
+          <StepNav step={3} setStep={setStep} approvedCount={approvedCount} compact />
           {localRecs
             .filter((r) => r.status === "approved" || r.status === "writing" || r.status === "published")
             .map((rec) => {
@@ -538,21 +668,59 @@ ${draft.content[lang]}
               const generateError = generateErrors.get(rec.id);
               const hasDraft = !!draft;
 
+              const isFocused = focusedRecId === rec.id;
               return (
-                <div key={rec.id} className="rounded-xl" style={{ background: "#fff", border: "1px solid #eeeeee", padding: "24px" }}>
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="font-semibold" style={{ color: "#111" }}>{rec.topic}</h4>
-                    {!hasDraft && (
+                <div
+                  key={rec.id}
+                  ref={(el) => {
+                    if (el) cardRefs.current.set(rec.id, el);
+                    else cardRefs.current.delete(rec.id);
+                  }}
+                  className="rounded-xl transition-shadow"
+                  style={{
+                    background: "#fff",
+                    border: isFocused ? "2px solid #f01563" : "1px solid #eeeeee",
+                    boxShadow: isFocused ? "0 0 0 4px rgba(240,21,99,0.12)" : undefined,
+                    padding: "24px",
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-4 gap-3">
+                    <h4 className="font-semibold flex-1 min-w-0" style={{ color: "#111" }}>{rec.topic}</h4>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {hasDraft && (
+                        <button
+                          onClick={() => handleRegenerate(rec.id)}
+                          disabled={isGenerating}
+                          className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5 disabled:opacity-70"
+                          style={{ background: "#fff", color: "#555", border: "1px solid #ddd", cursor: isGenerating ? "wait" : "pointer" }}
+                          title="Regenerate this article (replaces the current draft)"
+                        >
+                          {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                          {isGenerating ? "Regenerating..." : "Regenerate"}
+                        </button>
+                      )}
+                      {!hasDraft && (
+                        <button
+                          onClick={() => handleGenerate(rec.id)}
+                          disabled={isGenerating}
+                          className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 disabled:opacity-70"
+                          style={{ background: "#f01563", color: "#fff", cursor: isGenerating ? "wait" : "pointer" }}
+                        >
+                          {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                          {isGenerating ? "Writing... (60–90s)" : "Write Article"}
+                        </button>
+                      )}
                       <button
-                        onClick={() => handleGenerate(rec.id)}
+                        onClick={() => handleDelete(rec.id)}
                         disabled={isGenerating}
-                        className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 disabled:opacity-70"
-                        style={{ background: "#f01563", color: "#fff", cursor: isGenerating ? "wait" : "pointer" }}
+                        className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5 disabled:opacity-50"
+                        style={{ background: "#fff", color: "#dc2626", border: "1px solid #fecaca", cursor: isGenerating ? "not-allowed" : "pointer" }}
+                        title="Delete this article and its draft"
                       >
-                        {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                        {isGenerating ? "Writing... (60–90s)" : "Write Article"}
+                        <Trash2 size={12} />
+                        Delete
                       </button>
-                    )}
+                    </div>
                   </div>
 
                   {generateError && (
@@ -683,6 +851,56 @@ ${draft.content[lang]}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function StepNav({
+  step, setStep, approvedCount, showBack = true, compact = false,
+}: {
+  step: 1 | 2 | 3;
+  setStep: (s: 1 | 2 | 3) => void;
+  approvedCount: number;
+  showBack?: boolean;
+  compact?: boolean;
+}) {
+  const size = compact ? { btn: "text-xs font-medium rounded-lg px-3 py-1.5", next: "text-xs font-medium rounded-lg px-4 py-1.5" } : { btn: "text-sm font-medium rounded-lg px-4 py-2", next: "text-sm font-medium rounded-lg px-5 py-2" };
+  return (
+    <div className="flex items-center justify-between gap-2">
+      {showBack && step > 1 ? (
+        <button
+          onClick={() => setStep((step - 1) as 1 | 2 | 3)}
+          className={size.btn}
+          style={{ color: "#888", border: "1px solid #ddd", background: "#fff" }}
+        >
+          ← {step === 3 ? "Recommendations" : "Analyze"}
+        </button>
+      ) : <span />}
+
+      {step === 1 && (
+        <button
+          onClick={() => setStep(2)}
+          className={size.next}
+          style={{ background: "#f01563", color: "#fff" }}
+        >
+          Next: Recommendations →
+        </button>
+      )}
+      {step === 2 && (
+        <button
+          onClick={() => setStep(3)}
+          disabled={approvedCount === 0}
+          className={`${size.next} transition-opacity`}
+          style={{
+            background: approvedCount > 0 ? "#f01563" : "#e5e5e5",
+            color: approvedCount > 0 ? "#fff" : "#aaa",
+            cursor: approvedCount > 0 ? "pointer" : "not-allowed",
+          }}
+        >
+          Next: Write ({approvedCount} topic{approvedCount > 1 ? "s" : ""}) →
+        </button>
+      )}
+      {/* Step 3: no "Next" — end of flow */}
     </div>
   );
 }

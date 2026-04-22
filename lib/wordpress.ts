@@ -65,7 +65,8 @@ export function extractArticleContent(post: WPPostRaw): { html: string; text: st
       .filter((b) => b.acf_fc_layout === "content" && b.text)
       .map((b) => b.text!)
       .join("\n\n");
-    return { html, text: stripHtml(html) };
+    if (html) return { html, text: stripHtml(html) };
+    // Builder present but no "content" blocks — fall through to content.rendered.
   }
 
   // Fallback to standard content field
@@ -115,6 +116,53 @@ export async function fetchAllArticles(limit = 100): Promise<WPArticle[]> {
   }
 
   return articles;
+}
+
+export interface ArticleTimelineEntry {
+  date: string;   // YYYY-MM-DD (publish date)
+  id: number;
+  title: string;
+  link: string;
+  slug: string;
+}
+
+/**
+ * Lightweight fetch of articles published within a date range — returns just
+ * date + title + link for each. Used by the marketing overview to place a dot
+ * on the traffic chart for every published article.
+ */
+export async function fetchArticlesTimeline(
+  startDate: string,
+  endDate: string,
+): Promise<ArticleTimelineEntry[]> {
+  const entries: ArticleTimelineEntry[] = [];
+  const perPage = 50;
+  let page = 1;
+
+  const after = `${startDate}T00:00:00`;
+  const before = `${endDate}T23:59:59`;
+
+  while (true) {
+    const url = `${WP_API}/posts?per_page=${perPage}&page=${page}&orderby=date&order=desc&after=${encodeURIComponent(after)}&before=${encodeURIComponent(before)}&_fields=id,title,date,link,slug`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!res.ok) break;
+    const posts: { id: number; title: { rendered: string }; date: string; link: string; slug: string }[] = await res.json();
+    if (posts.length === 0) break;
+    for (const p of posts) {
+      entries.push({
+        date: p.date.slice(0, 10),
+        id: p.id,
+        title: decodeEntities(p.title.rendered),
+        link: p.link,
+        slug: p.slug,
+      });
+    }
+    const totalPages = parseInt(res.headers.get("X-WP-TotalPages") || "1", 10);
+    if (page >= totalPages) break;
+    page++;
+  }
+
+  return entries;
 }
 
 /**
