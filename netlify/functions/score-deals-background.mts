@@ -81,5 +81,5 @@ export default async () => {
 };
 
 export const config: Config = {
-  schedule: "0 22 * * 0", // Dimanche 22h UTC
+  schedule: "0 22 1,15 * *", // 1er et 15 de chaque mois, 22h UTC (~toutes les 2 semaines)
 };
