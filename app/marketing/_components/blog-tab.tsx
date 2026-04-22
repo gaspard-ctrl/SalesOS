@@ -1,8 +1,13 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Search, ExternalLink, Calendar, ChevronLeft, ChevronRight, ArrowLeft, Loader2 } from "lucide-react";
+import { Search, ExternalLink, Calendar, ChevronLeft, ChevronRight, ArrowLeft, Loader2, TrendingUp, Eye } from "lucide-react";
 import useSWR from "swr";
+
+function formatNumber(n: number) {
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+  return String(n);
+}
 
 interface BlogArticle {
   id: number;
@@ -14,6 +19,8 @@ interface BlogArticle {
   image: string | null;
   categories: string[];
   categoryIds: number[];
+  sessions: number;
+  pageViews: number;
 }
 
 interface Category {
@@ -23,11 +30,13 @@ interface Category {
 }
 
 interface BlogResponse {
-  articles: BlogArticle[];
-  totalPosts: number;
-  totalPages: number;
-  currentPage: number;
-  categories: Category[];
+  articles?: BlogArticle[];
+  totalPosts?: number;
+  totalPages?: number;
+  currentPage?: number;
+  categories?: Category[];
+  error?: string;
+  detail?: string;
 }
 
 interface FullArticle {
@@ -52,9 +61,11 @@ interface ArticleStats {
 }
 
 interface SingleArticleResponse {
-  article: FullArticle;
-  stats: ArticleStats | null;
-  statsError: string | null;
+  article?: FullArticle;
+  stats?: ArticleStats | null;
+  statsError?: string | null;
+  error?: string;
+  detail?: string;
 }
 
 export default function BlogTab() {
@@ -62,9 +73,10 @@ export default function BlogTab() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [sort, setSort] = useState<"date" | "sessions" | "pageViews">("date");
   const [openArticleId, setOpenArticleId] = useState<number | null>(null);
 
-  const params = new URLSearchParams({ page: String(page), per_page: "18" });
+  const params = new URLSearchParams({ page: String(page), per_page: "18", sort });
   if (categoryFilter) params.set("category", categoryFilter);
   if (searchQuery) params.set("search", searchQuery);
 
@@ -122,9 +134,27 @@ export default function BlogTab() {
           )}
         </div>
 
-        {isLoadingArticle || !article ? (
+        {isLoadingArticle ? (
           <div className="flex items-center justify-center py-20 rounded-xl" style={{ background: "#fff", border: "1px solid #eee" }}>
             <Loader2 size={20} className="animate-spin" style={{ color: "#f01563" }} />
+          </div>
+        ) : singleData?.error ? (
+          <div className="rounded-xl" style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: "20px 24px" }}>
+            <p className="text-sm font-semibold" style={{ color: "#dc2626" }}>Impossible de charger l&apos;article</p>
+            <p className="text-xs mt-1" style={{ color: "#888" }}>
+              {singleData.error}{singleData.detail ? ` — ${singleData.detail}` : ""}
+            </p>
+            <button
+              onClick={() => setOpenArticleId(null)}
+              className="mt-3 text-xs font-medium px-3 py-1.5 rounded-lg"
+              style={{ background: "#fff", color: "#dc2626", border: "1px solid #fecaca" }}
+            >
+              ← Retour à la liste
+            </button>
+          </div>
+        ) : !article ? (
+          <div className="rounded-xl" style={{ background: "#fafafa", border: "1px solid #eee", padding: "20px 24px" }}>
+            <p className="text-sm" style={{ color: "#888" }}>Article introuvable.</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -198,8 +228,23 @@ export default function BlogTab() {
                 dangerouslySetInnerHTML={{ __html: article.contentHtml }}
               />
             ) : (
-              <div className="text-sm py-8 text-center" style={{ color: "#aaa" }}>
-                No content available for this article.
+              <div className="rounded-lg py-8 px-6 text-center" style={{ background: "#fafafa", border: "1px dashed #e5e5e5" }}>
+                <p className="text-sm font-medium" style={{ color: "#555" }}>
+                  Article vide côté WordPress
+                </p>
+                <p className="text-xs mt-1" style={{ color: "#888" }}>
+                  Ce post existe sur WP mais son champ content est vide (pas de corps d&apos;article ni de blocs ACF). Rédige le contenu sur WordPress puis recharge cette page.
+                </p>
+                <a
+                  href={article.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium mt-3 px-3 py-1.5 rounded-lg"
+                  style={{ color: "#f01563", border: "1px solid #f01563", background: "#fff" }}
+                >
+                  <ExternalLink size={12} />
+                  Ouvrir sur coachello.ai
+                </a>
               </div>
             )}
           </div>
@@ -296,6 +341,18 @@ export default function BlogTab() {
             <option key={cat.id} value={cat.id}>{cat.name} ({cat.count})</option>
           ))}
         </select>
+
+        {/* Sort */}
+        <select
+          value={sort}
+          onChange={(e) => { setSort(e.target.value as "date" | "sessions" | "pageViews"); setPage(1); }}
+          className="text-sm rounded-lg px-3 py-2 outline-none"
+          style={{ border: "1px solid #ddd", color: "#555", background: "#fff" }}
+        >
+          <option value="date">Most recent</option>
+          <option value="sessions">Top sessions</option>
+          <option value="pageViews">Top page views</option>
+        </select>
       </div>
 
       {/* Loading */}
@@ -370,10 +427,24 @@ export default function BlogTab() {
                   </p>
                 )}
 
-                {/* Date */}
-                <div className="flex items-center gap-1.5 text-[10px]" style={{ color: "#bbb" }}>
-                  <Calendar size={10} />
-                  {new Date(article.date).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
+                {/* Date + perf */}
+                <div className="flex items-center justify-between gap-2 text-[10px]" style={{ color: "#bbb" }}>
+                  <div className="flex items-center gap-1.5">
+                    <Calendar size={10} />
+                    {new Date(article.date).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}
+                  </div>
+                  {(article.sessions > 0 || article.pageViews > 0) && (
+                    <div className="flex items-center gap-2 font-medium" style={{ color: "#888" }}>
+                      <span className="flex items-center gap-1" title="Sessions (30d)">
+                        <TrendingUp size={10} />
+                        {formatNumber(article.sessions)}
+                      </span>
+                      <span className="flex items-center gap-1" title="Page views (30d)">
+                        <Eye size={10} />
+                        {formatNumber(article.pageViews)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -381,8 +452,19 @@ export default function BlogTab() {
         </div>
       )}
 
+      {/* API error (surfaces 500/502 responses instead of showing silent empty state) */}
+      {!isLoading && data?.error && (
+        <div className="rounded-xl flex items-start gap-3" style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: "14px 18px" }}>
+          <span className="text-sm shrink-0 mt-0.5">⚠</span>
+          <div>
+            <p className="text-sm font-medium" style={{ color: "#dc2626" }}>Erreur de chargement</p>
+            <p className="text-xs mt-1" style={{ color: "#888" }}>{data.error}{data.detail ? ` — ${data.detail}` : ""}</p>
+          </div>
+        </div>
+      )}
+
       {/* Empty state */}
-      {!isLoading && articles.length === 0 && (
+      {!isLoading && !data?.error && articles.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 rounded-xl" style={{ background: "#fff", border: "1px solid #eee" }}>
           <p className="text-sm font-medium" style={{ color: "#555" }}>No articles found</p>
           <p className="text-xs mt-1" style={{ color: "#aaa" }}>

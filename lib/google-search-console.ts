@@ -1,5 +1,5 @@
 import { getGmailAccessToken } from "./gmail";
-import type { Keyword, CannibalizationAlert } from "./marketing-types";
+import type { Keyword, CannibalizationAlert, PageTrend } from "./marketing-types";
 
 const SEARCH_CONSOLE_API = "https://www.googleapis.com/webmasters/v3";
 const SEARCH_CONSOLE_SITE = process.env.SEARCH_CONSOLE_SITE_URL;
@@ -74,7 +74,7 @@ export async function fetchKeywords(
     startDate: daysAgoISO(days),
     endDate: daysAgoISO(1), // Search Console data has 1-2 day lag
     dimensions: ["query", "page"],
-    rowLimit: 500,
+    rowLimit: 2000,
     dataState: "all",
   };
 
@@ -109,6 +109,152 @@ export async function fetchKeywords(
       position: Math.round(row.position * 10) / 10,
     };
   });
+}
+
+/** Either a number of days back from yesterday, or an explicit date range. */
+export type SCPeriod = number | { startDate: string; endDate: string };
+
+function resolveSCRange(p: SCPeriod): { startDate: string; endDate: string } {
+  if (typeof p === "number") {
+    return { startDate: daysAgoISO(p), endDate: daysAgoISO(1) };
+  }
+  return p;
+}
+
+export interface ImpressionsTimelinePoint {
+  date: string;        // YYYY-MM-DD
+  impressions: number;
+  clicks: number;
+}
+
+/**
+ * Fetch daily impressions + clicks over a period from Search Console.
+ * Used by the marketing overview bar chart (yearly view).
+ */
+export async function fetchImpressionsTimeline(
+  userId: string,
+  period: SCPeriod,
+  blogOnly = false,
+): Promise<ImpressionsTimelinePoint[]> {
+  const accessToken = await getGmailAccessToken(userId);
+  const range = resolveSCRange(period);
+
+  const body: Record<string, unknown> = {
+    startDate: range.startDate,
+    endDate: range.endDate,
+    dimensions: ["date"],
+    rowLimit: 10000,
+    dataState: "all",
+  };
+  if (blogOnly) {
+    body.dimensionFilterGroups = [{
+      filters: [{ dimension: "page", operator: "contains", expression: "/blog/" }],
+    }];
+  }
+
+  const rows = await querySearchAnalytics(accessToken, body);
+  return rows
+    .map((r) => ({
+      date: r.keys[0],
+      impressions: r.impressions,
+      clicks: r.clicks,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Fetch per-page clicks & impressions for two consecutive windows and compute
+ * winners (pages that gained the most clicks) and losers (pages that lost the
+ * most clicks). Useful for spotting articles that are decaying or taking off.
+ */
+export async function fetchPageTrends(
+  userId: string,
+  days = 28,
+  blogOnly = true,
+  topN = 10,
+): Promise<{ winners: PageTrend[]; losers: PageTrend[] }> {
+  const accessToken = await getGmailAccessToken(userId);
+
+  // Current window: [days..1] days ago. Previous: [2*days..days+1] days ago.
+  const currentBody = buildPageQueryBody(days, 1, blogOnly);
+  const previousBody = buildPageQueryBody(days * 2, days + 1, blogOnly);
+
+  const [currentRows, previousRows] = await Promise.all([
+    querySearchAnalytics(accessToken, currentBody),
+    querySearchAnalytics(accessToken, previousBody),
+  ]);
+
+  const prevByPage = new Map<string, SearchAnalyticsRow>();
+  for (const row of previousRows) {
+    const page = row.keys[0];
+    if (page) prevByPage.set(page, row);
+  }
+
+  const trends: PageTrend[] = [];
+  const seen = new Set<string>();
+
+  for (const row of currentRows) {
+    const page = row.keys[0];
+    if (!page) continue;
+    seen.add(page);
+    const prev = prevByPage.get(page);
+    trends.push(buildTrend(page, row, prev));
+  }
+
+  // Pages that had traffic in previous window but NOT current → big losers
+  for (const [page, prev] of prevByPage) {
+    if (seen.has(page)) continue;
+    trends.push(buildTrend(page, undefined, prev));
+  }
+
+  const byDelta = [...trends].sort((a, b) => b.deltaClicks - a.deltaClicks);
+  return {
+    winners: byDelta.filter((t) => t.deltaClicks > 0).slice(0, topN),
+    losers: [...byDelta].reverse().filter((t) => t.deltaClicks < 0).slice(0, topN),
+  };
+}
+
+function buildPageQueryBody(startDaysAgo: number, endDaysAgo: number, blogOnly: boolean): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    startDate: daysAgoISO(startDaysAgo),
+    endDate: daysAgoISO(endDaysAgo),
+    dimensions: ["page"],
+    rowLimit: 500,
+    dataState: "all",
+  };
+  if (blogOnly) {
+    body.dimensionFilterGroups = [{
+      filters: [{
+        dimension: "page",
+        operator: "contains",
+        expression: "/blog/",
+      }],
+    }];
+  }
+  return body;
+}
+
+function buildTrend(page: string, current: SearchAnalyticsRow | undefined, previous: SearchAnalyticsRow | undefined): PageTrend {
+  const cur = current ?? { keys: [page], clicks: 0, impressions: 0, ctr: 0, position: 0 };
+  const prev = previous ?? { keys: [page], clicks: 0, impressions: 0, ctr: 0, position: 0 };
+  const slug = page.replace(/.*\/blog\//, "").replace(/\/$/, "");
+  const title = slug
+    ? slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).slice(0, 80)
+    : page;
+  return {
+    page,
+    title,
+    currentClicks: cur.clicks,
+    previousClicks: prev.clicks,
+    deltaClicks: cur.clicks - prev.clicks,
+    currentImpressions: cur.impressions,
+    previousImpressions: prev.impressions,
+    deltaImpressions: cur.impressions - prev.impressions,
+    currentPosition: cur.position ? Math.round(cur.position * 10) / 10 : 0,
+    deltaPosition: prev.position && cur.position
+      ? Math.round((cur.position - prev.position) * 10) / 10
+      : 0,
+  };
 }
 
 /**

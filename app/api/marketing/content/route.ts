@@ -6,6 +6,35 @@ import { db } from "@/lib/db";
 import { fetchTopPages } from "@/lib/google-analytics";
 import { fetchKeywords } from "@/lib/google-search-console";
 import { fetchAllArticles } from "@/lib/wordpress";
+import { classifyKeywords } from "@/lib/keyword-relevance";
+import { BUSINESS_CONTEXT_PROMPT_BLOCK } from "@/lib/business-context";
+import type { Keyword, KeywordRelevance } from "@/lib/marketing-types";
+
+const ANALYSIS_MODEL = "claude-haiku-4-5-20251001";
+
+/**
+ * GSC returns rows keyed by (query, page), so the same keyword can appear on
+ * multiple pages. Collapse to one row per keyword: sum impressions/clicks,
+ * recompute CTR, keep the best (lowest) position.
+ */
+function dedupeKeywords(keywords: Keyword[]): Keyword[] {
+  const byKeyword = new Map<string, Keyword>();
+  for (const k of keywords) {
+    const key = k.keyword.trim().toLowerCase();
+    const existing = byKeyword.get(key);
+    if (!existing) {
+      byKeyword.set(key, { ...k });
+      continue;
+    }
+    existing.impressions += k.impressions;
+    existing.clicks += k.clicks;
+    existing.position = Math.min(existing.position, k.position);
+    existing.ctr = existing.impressions > 0
+      ? Math.round((existing.clicks / existing.impressions) * 1000) / 10
+      : 0;
+  }
+  return Array.from(byKeyword.values());
+}
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -31,6 +60,9 @@ interface Recommendation {
   difficulty: "easy" | "medium" | "hard";
   priority: "high" | "medium" | "low";
   status: "recommended" | "approved" | "writing" | "published";
+  relevanceScore?: number;
+  relevanceReason?: string;
+  relevanceCategory?: "relevant" | "partial" | "irrelevant";
 }
 
 interface InternalLink {
@@ -76,16 +108,15 @@ interface DbRec {
   difficulty: string | null;
   priority: string | null;
   status: string;
+  relevance_score: number | null;
+  relevance_reason: string | null;
 }
 
-async function loadRecommendations(userId: string): Promise<Recommendation[]> {
-  const { data } = await db
-    .from("marketing_content_recommendations")
-    .select("id, topic, target_keyword, justification, estimated_traffic, difficulty, priority, status")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true });
+const REC_SELECT =
+  "id, topic, target_keyword, justification, estimated_traffic, difficulty, priority, status, relevance_score, relevance_reason";
 
-  return ((data as DbRec[] | null) ?? []).map((r) => ({
+function mapDbRec(r: DbRec): Recommendation {
+  return {
     id: r.id,
     topic: r.topic,
     targetKeyword: r.target_keyword,
@@ -94,7 +125,19 @@ async function loadRecommendations(userId: string): Promise<Recommendation[]> {
     difficulty: (r.difficulty as Recommendation["difficulty"]) ?? "medium",
     priority: (r.priority as Recommendation["priority"]) ?? "medium",
     status: (r.status as Recommendation["status"]) ?? "recommended",
-  }));
+    relevanceScore: r.relevance_score ?? undefined,
+    relevanceReason: r.relevance_reason ?? undefined,
+  };
+}
+
+async function loadRecommendations(userId: string): Promise<Recommendation[]> {
+  const { data } = await db
+    .from("marketing_content_recommendations")
+    .select(REC_SELECT)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+
+  return ((data as DbRec[] | null) ?? []).map(mapDbRec);
 }
 
 async function saveRecommendations(userId: string, recs: Recommendation[]): Promise<Recommendation[]> {
@@ -116,23 +159,16 @@ async function saveRecommendations(userId: string, recs: Recommendation[]): Prom
     difficulty: r.difficulty,
     priority: r.priority,
     status: r.status,
+    relevance_score: r.relevanceScore ?? null,
+    relevance_reason: r.relevanceReason ?? null,
   }));
 
   const { data } = await db
     .from("marketing_content_recommendations")
     .insert(rows)
-    .select("id, topic, target_keyword, justification, estimated_traffic, difficulty, priority, status");
+    .select(REC_SELECT);
 
-  return ((data as DbRec[] | null) ?? []).map((r) => ({
-    id: r.id,
-    topic: r.topic,
-    targetKeyword: r.target_keyword,
-    justification: r.justification ?? "",
-    estimatedTraffic: r.estimated_traffic ?? 0,
-    difficulty: (r.difficulty as Recommendation["difficulty"]) ?? "medium",
-    priority: (r.priority as Recommendation["priority"]) ?? "medium",
-    status: (r.status as Recommendation["status"]) ?? "recommended",
-  }));
+  return ((data as DbRec[] | null) ?? []).map(mapDbRec);
 }
 
 async function updateRecStatus(userId: string, recId: string, status: Recommendation["status"]): Promise<void> {
@@ -151,25 +187,23 @@ async function deleteRec(userId: string, recId: string): Promise<void> {
     .eq("user_id", userId);
 }
 
+async function deleteDraftsForRec(userId: string, recId: string): Promise<void> {
+  await db
+    .from("marketing_content_drafts")
+    .delete()
+    .eq("user_id", userId)
+    .eq("recommendation_id", recId);
+}
+
 async function getRec(userId: string, recId: string): Promise<Recommendation | null> {
   const { data } = await db
     .from("marketing_content_recommendations")
-    .select("id, topic, target_keyword, justification, estimated_traffic, difficulty, priority, status")
+    .select(REC_SELECT)
     .eq("id", recId)
     .eq("user_id", userId)
     .maybeSingle();
   if (!data) return null;
-  const r = data as DbRec;
-  return {
-    id: r.id,
-    topic: r.topic,
-    targetKeyword: r.target_keyword,
-    justification: r.justification ?? "",
-    estimatedTraffic: r.estimated_traffic ?? 0,
-    difficulty: (r.difficulty as Recommendation["difficulty"]) ?? "medium",
-    priority: (r.priority as Recommendation["priority"]) ?? "medium",
-    status: (r.status as Recommendation["status"]) ?? "recommended",
-  };
+  return mapDbRec(data as DbRec);
 }
 
 interface DbDraft {
@@ -264,6 +298,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, recommendations: recs });
   }
 
+  if (action === "delete" && recommendationId) {
+    await deleteDraftsForRec(user.id, recommendationId);
+    await deleteRec(user.id, recommendationId);
+    const [recs, drafts] = await Promise.all([
+      loadRecommendations(user.id),
+      loadDrafts(user.id),
+    ]);
+    return NextResponse.json({ success: true, recommendations: recs, drafts });
+  }
+
   if (action === "generate" && recommendationId) {
     try {
       return await runGeneration(user.id, recommendationId);
@@ -288,11 +332,12 @@ async function runAnalysis(userId: string) {
   const [topPagesResult, keywordsResult, articlesResult] = await Promise.allSettled([
     fetchTopPages(userId, 30, 10),
     fetchKeywords(userId, 28, true),
-    fetchAllArticles(100),
+    fetchAllArticles(5000),
   ]);
 
   const topPages = topPagesResult.status === "fulfilled" ? topPagesResult.value : [];
-  const keywords = keywordsResult.status === "fulfilled" ? keywordsResult.value : [];
+  const rawKeywords = keywordsResult.status === "fulfilled" ? keywordsResult.value : [];
+  const keywords = dedupeKeywords(rawKeywords);
   const articles = articlesResult.status === "fulfilled" ? articlesResult.value : [];
 
   const ga4Error = topPagesResult.status === "rejected"
@@ -324,10 +369,24 @@ async function runAnalysis(userId: string) {
     path: p.path,
   }));
 
-  // ── 2. RISING TRENDS: real Search Console keywords sorted by opportunity ───
-  // "Rising trend" = high impressions but not yet in top positions (still growing)
-  // We pick keywords with >100 impressions and position 4-20 (opportunity zone)
-  const risingTrends = keywords
+  // ── Classify keywords by business relevance (cache-backed) ─────────────────
+  // Only classify the top-impressions slice — classifying all 500 GSC rows would
+  // exceed the 120s route timeout on first run. 150 is enough: we only surface
+  // the top ~30 eligible downstream.
+  const CLASSIFY_TOP_N = 150;
+  const keywordsToClassify = [...keywords]
+    .sort((a, b) => b.impressions - a.impressions)
+    .slice(0, CLASSIFY_TOP_N);
+  const relevanceMap = keywordsToClassify.length > 0
+    ? await classifyKeywords(userId, keywordsToClassify)
+    : new Map<string, KeywordRelevance>();
+  const relOf = (kw: string) => relevanceMap.get(kw.trim().toLowerCase());
+  const isEligible = (rel: KeywordRelevance | undefined) =>
+    !!rel && rel.category !== "irrelevant" && rel.relevanceScore >= 35;
+  const eligibleKeywords = keywordsToClassify.filter((k) => isEligible(relOf(k.keyword)));
+
+  // ── 2. RISING TRENDS: only from business-relevant keywords ─────────────────
+  const risingTrends = eligibleKeywords
     .filter((k) => k.impressions >= 50 && k.position >= 4 && k.position <= 20)
     .sort((a, b) => b.impressions - a.impressions)
     .slice(0, 5)
@@ -339,73 +398,130 @@ async function runAnalysis(userId: string) {
       position: k.position,
     }));
 
-  // ── 3. CONTENT GAPS: Claude analyzes based on real data ────────────────────
-  // Build a rich prompt with real numbers and real article titles
+  // ── 3. CONTENT GAPS: Claude proposes ideas — can pick from GSC or propose new angles ─
   const topPerformersText = topPerformers.length > 0
     ? topPerformers.map((p) => `- "${p.title}" — ${p.sessions} sessions`).join("\n")
-    : "GA4 data unavailable";
+    : "(none)";
 
-  const topKeywordsText = keywords.length > 0
-    ? keywords.slice(0, 30).map((k) => `- "${k.keyword}" — ${k.impressions} impressions, ${k.clicks} clicks, CTR ${k.ctr}%, position ${k.position}`).join("\n")
-    : "Search Console data unavailable";
+  const topEligibleForPrompt = eligibleKeywords
+    .sort((a, b) => b.impressions - a.impressions)
+    .slice(0, 20);
 
-  const articlesText = articles.slice(0, 50).map((a) => `- ${a.title}`).join("\n");
+  const gscKeywordsText = topEligibleForPrompt.length > 0
+    ? topEligibleForPrompt.map((k) => {
+        const rel = relOf(k.keyword)!;
+        return `- "${k.keyword}" — ${k.impressions} imp., pos ${k.position}, CTR ${k.ctr}% · relevance ${rel.relevanceScore}/100`;
+      }).join("\n")
+    : "(no relevant keywords in Search Console)";
 
-  const prompt = `You are a senior content strategist for Coachello, a B2B leadership coaching platform (human coaches + AI).
+  const articlesText = articles.slice(0, 40).map((a) => `- ${a.title}`).join("\n");
 
-I have REAL data. Do NOT invent numbers or facts. Only analyze what is given.
+  const analysisTool: Anthropic.Tool = {
+    name: "propose_content_gaps",
+    description: "Propose 3 article ideas Coachello should write next, with data-driven rationale",
+    input_schema: {
+      type: "object",
+      properties: {
+        summary: {
+          type: "string",
+          description: "2-3 sentences on the biggest content opportunity this cycle",
+        },
+        contentGaps: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              topic: {
+                type: "string",
+                description: "Specific article title — distinctive angle, not a banal listicle",
+              },
+              targetKeyword: {
+                type: "string",
+                description: "Target keyword. Can be from the Search Console list OR a new keyword you think Coachello should target.",
+              },
+              source: {
+                type: "string",
+                enum: ["search_console", "organic_insight"],
+                description: "search_console = keyword from GSC list; organic_insight = your proposal based on business context + article patterns",
+              },
+              rationale: {
+                type: "string",
+                description: "Why this article — cite GSC numbers when from search_console; for organic_insight, explain the gap and why it extends a winning pattern",
+              },
+              relevanceReason: {
+                type: "string",
+                description: "One line on why this moves an HR/L&D buyer toward Coachello",
+              },
+            },
+            required: ["topic", "targetKeyword", "source", "rationale", "relevanceReason"],
+          },
+        },
+      },
+      required: ["summary", "contentGaps"],
+    },
+  };
 
-## All published blog articles (${articles.length} articles)
-${articlesText}
+  const prompt = `You are Coachello's senior content strategist. Propose the 3 best next articles.
 
-## Top search queries sending traffic (Google Search Console, last 28 days)
-${topKeywordsText}
+${BUSINESS_CONTEXT_PROMPT_BLOCK}
 
-## Top performing pages (GA4, last 30 days)
+## What already works for us (GA4 top pages, 30d)
 ${topPerformersText}
 
----
+## Already published (avoid duplicating these)
+${articlesText}
 
-Task: identify 3 content gaps — article ideas Coachello should write but hasn't.
+## Relevant Search Console keywords (pre-filtered by business relevance)
+${gscKeywordsText}
 
-Criteria:
-- Based on the search queries people use vs what Coachello has published
-- Each gap must be a SPECIFIC article title, not a generic topic
-- Justify each with data from the lists above (cite the exact numbers, e.g. "keyword X has Y impressions")
-- Pick a target keyword from the Search Console list for each gap
-- Also write a 2-3 sentence summary of the single biggest opportunity
+## Your job
+Propose 3 article ideas. At least 1 MUST be an organic_insight (your own keyword proposal, NOT from the GSC list). The others can be from GSC or organic.
 
-Return ONLY valid JSON:
-{
-  "contentGaps": [
-    {
-      "topic": "specific article title",
-      "rationale": "data-backed justification citing real numbers from the lists above",
-      "targetKeyword": "exact keyword from the Search Console list"
-    }
-  ],
-  "summary": "2-3 sentences"
-}`;
+Rules:
+- Build on what already works — pick angles that extend a top-performing pattern, not random new bets
+- No banal listicles, no generic "what is X" definitions, no "top 10 tips" filler
+- Each article must have a distinctive angle that positions Coachello as the expert HR/L&D buyers should hire
+- For search_console picks: cite the impressions/position numbers
+- For organic_insight picks: name a keyword an HR buyer would actually type, and explain why it's a gap (high buyer intent + no existing Coachello article)
+- Avoid duplicating already-published articles
+
+Call \`propose_content_gaps\`.`;
 
   const client = new Anthropic();
   const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
+    model: ANALYSIS_MODEL,
     max_tokens: 2000,
+    tools: [analysisTool],
+    tool_choice: { type: "tool", name: "propose_content_gaps" },
     messages: [{ role: "user", content: prompt }],
   });
 
-  logUsage(userId, "claude-sonnet-4-6", message.usage.input_tokens, message.usage.output_tokens, "marketing_content_analyze");
+  logUsage(userId, ANALYSIS_MODEL, message.usage.input_tokens, message.usage.output_tokens, "marketing_content_analyze");
 
-  const raw = message.content[0].type === "text" ? message.content[0].text : "";
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("Claude returned invalid JSON");
+  const toolUse = message.content.find((c) => c.type === "tool_use");
+  if (!toolUse || toolUse.type !== "tool_use") {
+    throw new Error(`propose_content_gaps: no tool_use block. stop_reason=${message.stop_reason}`);
+  }
 
-  const parsed = JSON.parse(jsonMatch[0]) as { contentGaps: Analysis["contentGaps"]; summary: string };
+  const parsed = toolUse.input as {
+    summary: string;
+    contentGaps: Array<{
+      topic: string;
+      targetKeyword: string;
+      source: "search_console" | "organic_insight";
+      rationale: string;
+      relevanceReason: string;
+    }>;
+  };
 
   const analysis: Analysis = {
     topPerformers,
     risingTrends,
-    contentGaps: parsed.contentGaps,
+    contentGaps: parsed.contentGaps.map((g) => ({
+      topic: g.topic,
+      rationale: g.rationale,
+      targetKeyword: g.targetKeyword,
+    })),
     summary: parsed.summary,
     dataSources: {
       ga4: { ok: topPages.length > 0, error: ga4Error, pagesCount: topPages.length },
@@ -414,15 +530,16 @@ Return ONLY valid JSON:
     },
   };
 
-  // Persist analysis
   await saveAnalysis(userId, analysis);
 
-  // Build recommendations from content gaps
+  // Build recommendations from content gaps, enriched with relevance metadata
   const newRecs: Recommendation[] = parsed.contentGaps.map((gap, i) => {
-    const matchedKw = keywords.find((k) => k.keyword === gap.targetKeyword);
+    const kwLower = gap.targetKeyword.trim().toLowerCase();
+    const matchedKw = keywords.find((k) => k.keyword.toLowerCase() === kwLower);
+    const rel = relOf(gap.targetKeyword);
     const estimatedTraffic = matchedKw ? Math.round(matchedKw.impressions * 0.05) : 0;
     return {
-      id: "", // will be assigned by DB
+      id: "",
       topic: gap.topic,
       targetKeyword: gap.targetKeyword,
       justification: gap.rationale,
@@ -430,6 +547,9 @@ Return ONLY valid JSON:
       difficulty: (["easy", "medium", "hard"] as const)[i % 3],
       priority: i === 0 ? "high" : i === 1 ? "medium" : "low",
       status: "recommended",
+      relevanceScore: rel?.relevanceScore,
+      relevanceReason: gap.relevanceReason || rel?.reason,
+      relevanceCategory: rel?.category,
     };
   });
 
@@ -444,20 +564,39 @@ async function runThemeSuggestion(userId: string, theme: string) {
   // Fetch the same real data context as runAnalysis
   const [keywordsResult, articlesResult] = await Promise.allSettled([
     fetchKeywords(userId, 28, true),
-    fetchAllArticles(100),
+    fetchAllArticles(5000),
   ]);
 
-  const keywords = keywordsResult.status === "fulfilled" ? keywordsResult.value : [];
+  const rawThemeKeywords = keywordsResult.status === "fulfilled" ? keywordsResult.value : [];
+  const keywords = dedupeKeywords(rawThemeKeywords);
   const articles = articlesResult.status === "fulfilled" ? articlesResult.value : [];
 
   if (articles.length === 0) {
     return NextResponse.json({ error: "Cannot suggest: WordPress articles unavailable." }, { status: 400 });
   }
 
+  // Classify + filter keywords by business relevance (top slice only to stay under route timeout)
+  const CLASSIFY_TOP_N = 150;
+  const keywordsToClassify = [...keywords]
+    .sort((a, b) => b.impressions - a.impressions)
+    .slice(0, CLASSIFY_TOP_N);
+  const relevanceMap = keywordsToClassify.length > 0
+    ? await classifyKeywords(userId, keywordsToClassify)
+    : new Map<string, KeywordRelevance>();
+  const relOf = (kw: string) => relevanceMap.get(kw.trim().toLowerCase());
+  const isEligible = (rel: KeywordRelevance | undefined) =>
+    !!rel && rel.category !== "irrelevant" && rel.relevanceScore >= 35;
+  const eligibleKeywords = keywordsToClassify
+    .filter((k) => isEligible(relOf(k.keyword)))
+    .sort((a, b) => b.impressions - a.impressions);
+
   const articlesText = articles.slice(0, 60).map((a) => `- ${a.title}`).join("\n");
-  const keywordsText = keywords.length > 0
-    ? keywords.slice(0, 50).map((k) => `- "${k.keyword}" — ${k.impressions} imp., ${k.clicks} clicks, CTR ${k.ctr}%, pos. ${k.position}`).join("\n")
-    : "Search Console data unavailable — suggest based on topic relevance and existing article gaps.";
+  const keywordsText = eligibleKeywords.length > 0
+    ? eligibleKeywords.slice(0, 50).map((k) => {
+        const rel = relOf(k.keyword)!;
+        return `- "${k.keyword}" — ${k.impressions} imp., ${k.clicks} clicks, CTR ${k.ctr}%, pos. ${k.position} · relevance ${rel.relevanceScore}/100 (${rel.category}): ${rel.reason}`;
+      }).join("\n")
+    : "No business-relevant Search Console keywords after filtering — suggest based on topic relevance and existing article gaps.";
 
   const themeTool: Anthropic.Tool = {
     name: "suggest_articles_on_theme",
@@ -472,12 +611,14 @@ async function runThemeSuggestion(userId: string, theme: string) {
             type: "object",
             properties: {
               topic: { type: "string", description: "Specific article title, not a generic topic" },
-              targetKeyword: { type: "string", description: "Target keyword — prefer one from the Search Console list if relevant, otherwise a natural keyword for the theme" },
+              targetKeyword: { type: "string", description: "Target keyword — prefer one from the filtered Search Console list if relevant, otherwise a natural keyword for the theme" },
               rationale: { type: "string", description: "Data-backed justification citing real numbers when available, or explaining how it fills a content gap" },
               difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
               priority: { type: "string", enum: ["high", "medium", "low"] },
+              relevanceScore: { type: "integer", description: "0-100 business relevance for Coachello's ICP. Reuse the provided score if the keyword is from the filtered list." },
+              relevanceReason: { type: "string", description: "One line explaining the business angle for Coachello's ICP" },
             },
-            required: ["topic", "targetKeyword", "rationale", "difficulty", "priority"],
+            required: ["topic", "targetKeyword", "rationale", "difficulty", "priority", "relevanceScore", "relevanceReason"],
           },
         },
       },
@@ -487,38 +628,42 @@ async function runThemeSuggestion(userId: string, theme: string) {
 
   const prompt = `You are a senior content strategist for Coachello (B2B leadership coaching platform, human coaches + AI).
 
+${BUSINESS_CONTEXT_PROMPT_BLOCK}
+
 The user wants article recommendations around this theme: "${theme}"
 
 Generate 3-5 specific article ideas that:
 1. Fit the user's theme closely — do not stray into unrelated topics
 2. Complement what Coachello has already published (avoid duplicates)
-3. Leverage real search demand when possible (use keywords from the Search Console list)
+3. Leverage real search demand when possible (use keywords from the filtered list)
 4. Are specific article TITLES, not vague topics
+5. Align with Coachello's B2B leadership-coaching ICP — reject any angle that targets consumer / wellness / job-seeker audiences
 
 ## All published Coachello articles (${articles.length} total — avoid duplicating these)
 ${articlesText}
 
-## Top Search Console keywords (real impressions/clicks/position data)
+## Business-relevant Search Console keywords (pre-filtered)
 ${keywordsText}
 
 ## Rules
 - Do NOT invent metrics. If citing a number, cite from the keywords list above.
 - Each recommendation needs a data-backed rationale (keyword impressions, content gap vs existing articles, etc.)
-- Target keyword should come from the Search Console list when there's a relevant match
+- Target keyword should come from the filtered Search Console list when there's a relevant match
+- Provide a relevanceScore (0-100) and one-line relevanceReason per recommendation
 - Write in English, for a B2B HR/L&D audience
 
 Call the \`suggest_articles_on_theme\` tool with your output.`;
 
   const client = new Anthropic();
   const message = await client.messages.create({
-    model: "claude-sonnet-4-6",
+    model: ANALYSIS_MODEL,
     max_tokens: 3000,
     tools: [themeTool],
     tool_choice: { type: "tool", name: "suggest_articles_on_theme" },
     messages: [{ role: "user", content: prompt }],
   });
 
-  logUsage(userId, "claude-sonnet-4-6", message.usage.input_tokens, message.usage.output_tokens, "marketing_content_theme");
+  logUsage(userId, ANALYSIS_MODEL, message.usage.input_tokens, message.usage.output_tokens, "marketing_content_theme");
 
   const toolUse = message.content.find((c) => c.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") {
@@ -527,15 +672,24 @@ Call the \`suggest_articles_on_theme\` tool with your output.`;
 
   const parsed = toolUse.input as {
     summary: string;
-    recommendations: { topic: string; targetKeyword: string; rationale: string; difficulty: string; priority: string }[];
+    recommendations: {
+      topic: string;
+      targetKeyword: string;
+      rationale: string;
+      difficulty: string;
+      priority: string;
+      relevanceScore: number;
+      relevanceReason: string;
+    }[];
   };
 
   // Build new recommendations and persist them (appending to existing, not replacing approved ones)
   const newRecs: Recommendation[] = parsed.recommendations.map((r) => {
     const matchedKw = keywords.find((k) => k.keyword.toLowerCase() === r.targetKeyword.toLowerCase());
+    const rel = relOf(r.targetKeyword);
     const estimatedTraffic = matchedKw ? Math.round(matchedKw.impressions * 0.05) : 0;
     return {
-      id: "", // assigned by DB
+      id: "",
       topic: r.topic,
       targetKeyword: r.targetKeyword,
       justification: r.rationale,
@@ -543,6 +697,9 @@ Call the \`suggest_articles_on_theme\` tool with your output.`;
       difficulty: (r.difficulty as Recommendation["difficulty"]) || "medium",
       priority: (r.priority as Recommendation["priority"]) || "medium",
       status: "recommended",
+      relevanceScore: rel?.relevanceScore ?? r.relevanceScore,
+      relevanceReason: r.relevanceReason || rel?.reason,
+      relevanceCategory: rel?.category,
     };
   });
 
@@ -616,7 +773,7 @@ async function runGeneration(userId: string, recommendationId: string) {
   await updateRecStatus(userId, rec.id, "writing");
 
   // ── Fetch all articles (we'll pick the top performers) ─────────────────────
-  const allArticles = await fetchAllArticles(100);
+  const allArticles = await fetchAllArticles(5000);
   if (allArticles.length === 0) {
     return NextResponse.json({ error: "No WordPress articles available as style reference" }, { status: 400 });
   }
@@ -741,16 +898,16 @@ ${ga4Available
 
 ${styleReferenceText}
 
-## Structural baseline (average of the top articles — your article should match these numbers within ±15%)
-- Target word count: ~${avgStructure.wordCount} words
+## Structural baseline (match the top articles' rhythm, but respect the HARD word/link constraints below)
+- Target word count: **between 1500 and 2000 words** (HARD constraint — do not go under 1500 or over 2000)
 - H2 sections: ~${avgStructure.h2Count}
 - H3 subsections: ~${avgStructure.h3Count}
 - Paragraphs: ~${avgStructure.paragraphCount}
 - Bullet lists: ~${avgStructure.bulletLists}
 - Tables: ~${avgStructure.tables}
-- Internal links: ~${avgStructure.internalLinks}
+- Internal links: **between 6 and 8** (HARD constraint — do not go under 6 or over 8)
 
-## All Coachello articles — pick 3-5 for internal links
+## All Coachello articles — pick 6-8 for internal links
 ${availableForLinking}
 
 ---
@@ -760,9 +917,10 @@ STRICT RULES:
 2. Match the tone, voice, and opening style of the top references.
 3. Use ONLY real numbers. If you cite a statistic, source it from ICF, PwC/ICF study, Gartner, McKinsey, HBR, BCG, or Deloitte — never invent %. If you don't have a verifiable number, use a qualitative statement.
 4. Never mention "one in X companies", fake ROI figures, or fabricated study names.
-5. Include 3-5 internal links picked from the "All Coachello articles" list above.
-6. End with a CTA section pointing to Coachello.
-7. Output valid HTML only (use <h2>, <h3>, <p>, <ul><li>, <table>, <strong>, <a href="...">), no <html>/<body> wrappers.
+5. **Word count MUST be between 1500 and 2000 words.** Count carefully. This overrides any reference-article length signal.
+6. **Include between 6 and 8 internal links** picked from the "All Coachello articles" list above. Distribute them naturally across the article — do not cluster them.
+7. End with a CTA section pointing to Coachello.
+8. Output valid HTML only (use <h2>, <h3>, <p>, <ul><li>, <table>, <strong>, <a href="...">), no <html>/<body> wrappers.
 `;
 
   // ── Tool schema for writing a single language ──────────────────────────────
@@ -862,6 +1020,8 @@ Call the \`write_article_language\` tool with your complete output.`;
     internalLinks: { fr: frResult.internalLinks || [], en: enResult.internalLinks || [] },
   };
 
+  // Wipe any previous drafts for this rec so regenerations don't pile up in DB
+  await deleteDraftsForRec(userId, rec.id);
   await saveDraft(userId, rec, draft);
 
   const recs = await loadRecommendations(userId);
