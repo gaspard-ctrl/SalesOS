@@ -39,7 +39,7 @@ const DIMENSION_NAMES = {
   ai_coaching:    ["Authority", "Budget", "Timeline", "Business Urgency", "Engagement & Momentum", "Strategic AI Fit", "Compétition"],
 };
 
-export async function scoreOneDeal(dealId: string, userId: string | null, claudeModel = DEFAULT_SCORE_MODEL): Promise<DealScore & { reasoning: string; next_action: string; qualification: Record<string, string | null> }> {
+export async function scoreOneDeal(dealId: string, userId: string | null, claudeModel = DEFAULT_SCORE_MODEL, enableCache = false): Promise<DealScore & { reasoning: string; next_action: string; qualification: Record<string, string | null> }> {
   const DEAL_PROPS = [
     "dealname", "dealstage", "amount", "closedate", "description",
     "hs_deal_stage_probability", "deal_type", "notes_last_contacted", "hs_lastmodifieddate",
@@ -178,8 +178,47 @@ Tu reçois deux sources d'information :
 
 RÈGLE FONDAMENTALE : croise TOUJOURS les deux sources.
 - Champ CRM rempli → utilise-le comme base, mais VÉRIFIE dans les conversations. Si les conversations contredisent le champ, c'est la réalité des conversations qui prime. Signale l'incohérence dans le reasoning.
-- Champ CRM vide → déduis depuis les conversations uniquement.
-- Si AUCUNE information (champ vide + pas de conversation pertinente) → score 0 sur cette dimension. Ne donne JAMAIS un score par défaut ou "au milieu" par manque d'info.
+- Champ CRM vide → déduis depuis les conversations ET tous les autres champs disponibles (voir EXPLORATION EXHAUSTIVE).
+- Si AUCUNE information (aucun signal direct ni indirect après exploration exhaustive) → score 0. Ne donne JAMAIS un score par défaut ou "au milieu" par manque d'info.
+
+=== EXPLORATION EXHAUSTIVE DES CHAMPS ===
+
+Avant de donner 0 sur une dimension, tu DOIS avoir cherché dans TOUS les champs fournis :
+- Champs CRM dédiés (authority_status, budget_status, decision_timeline, business_need_level, strategic_fit)
+- dealname (peut contenir des indices : "RFP X", "Renouvellement Y", "POC Z")
+- dealstage (agreement/contract/closedwon = preuve de progression avancée)
+- description du deal
+- montant (amount), date de clôture (closedate), âge du deal
+- Titres de meetings (hs_meeting_title), bodies des meetings et des calls
+- Titres de calls (hs_call_title), dispositions, outcomes
+- hs_body_preview des engagements
+- Contacts associés : noms, jobtitles (indice direct d'authority : DRH, C-level, Manager, …)
+- notes_last_contacted
+
+Exemples de déductions indirectes obligatoires :
+- Jobtitle "Chief People Officer" parmi les contacts → authority ≥ 14 même sans champ CRM
+- Montant renseigné à 50 000€ + closedate dans 45 jours → budget ≥ 6 et timeline ≥ 7
+- Dealstage "agreement" ou "contract sent" → tout le monde a validé en amont (voir STAGES AVANCÉS)
+- Meeting intitulé "Présentation offre commerciale" → engagement activité confirmée
+- Description mentionne "transformation managériale" → strategic_fit ≥ 4
+
+Tu ne peux donner 0 sur une dimension QUE si, après avoir balayé tous ces champs, aucun signal direct ou indirect n'existe. Mentionne alors dans reasoning.weaknesses : "Aucun signal X (tous champs explorés)."
+
+=== STAGES AVANCÉS (agreement / contract / negotiation / closedwon) ===
+
+Quand le dealstage indique un stage très avancé (contient "agreement", "contract", "negotiation", "decision maker", "closedwon", ou équivalent), la progression elle-même est la preuve rétrospective que les étapes amont ont été validées. Applique ces planchers :
+
+- authority ≥ 15 : un contrat/agreement avance = un décisionnaire est identifié et engagé
+- budget ≥ 12 : un contrat avance = un budget a été dégagé ou est en cours de validation finale
+- timeline ≥ 8 : contrat en cours = calendrier aligné
+- business_need ≥ 13 : on ne lance pas un contrat sans besoin validé
+- strategic_fit ≥ 3 sauf mismatch évident avec l'offre Coachello
+- competition ≥ 6 : si on en est à l'agreement, on est en position forte
+- engagement reste fonction de l'activité récente (pas de plancher)
+
+Signale dans reasoning.strengths : "Stage avancé (<nom stage>) — qualification rétrospective."
+
+Cas closedlost : score normalement mais ajoute la raison probable de la perte dans reasoning.weaknesses si identifiable.
 
 === CRITÈRES DE SCORING ===
 
@@ -216,6 +255,25 @@ RÈGLE FONDAMENTALE : croise TOUJOURS les deux sources.
 - 0 pts : aucun besoin identifié ou pas assez d'info pour juger
 IMPORTANT : Un prospect qui dit "on veut du coaching" sans expliquer POURQUOI = 4 max. Pour aller au-dessus de 9, il faut un impact business articulé.
 
+=== SIGNAUX RFP / APPEL D'OFFRES ===
+
+Un RFP officiel (cahier des charges formel, grille d'évaluation, deadline fournisseur) est un ACCÉLÉRATEUR, pas seulement un signal de concurrence.
+
+Détecte ces étapes dans les échanges (emails, meetings, notes) et additionne dans engagement :
+- Dossier RFP reçu / cahier des charges en main           → +3 engagement
+- Réponse RFP soumise / proposition envoyée               → +5 engagement
+- Shortlist / finaliste / retenu pour oral                → +7 engagement
+- Oral / soutenance / présentation finale planifiée       → +8 engagement
+Ces bonus restent plafonnés à ${maxes.engagement} (ne double pas avec les meetings déjà comptés dans les signaux classiques).
+
+RÈGLE RFP → BUSINESS_NEED (OBLIGATOIRE) :
+Si un RFP officiel est détecté, business_need ≥ 12/${maxes.business_need}. Un RFP prouve qu'il existe un besoin validé, budgété et porté en interne. Ne descends sous 12 que si le RFP est explicitement qualifié d'"exploratoire" ou de "benchmark".
+
+RÈGLE RFP → COMPETITION (nuance) :
+RFP multi-fournisseurs = competition basse (3 par défaut). MAIS si shortlist/finaliste atteint, remonte competition à 6/${maxes.competition} minimum — on est en position forte.
+
+Pour chaque étape RFP bonifiée, cite une phrase courte (≤ 15 mots) de l'échange concerné dans reasoning.strengths. Sans citation concrète, pas de bonus.
+
 5. ${names[4]} (0 à ${maxes.engagement} pts) — SCORING TRÈS DUR
 Évalue la dynamique RÉELLE du deal à partir de signaux cumulés. Un seul email récent ne vaut PAS 25.
 Additionne les signaux suivants :
@@ -225,8 +283,14 @@ Additionne les signaux suivants :
 - Bilatéral (au moins 1 réponse/email entrant ou meeting initié par le prospect dans les 30j = +4, sinon 0)
 - Multi-threading (2+ contacts/interlocuteurs impliqués = +4, 1 seul = 0)
 - Stagnation (deal créé depuis > 60 jours ET aucun changement de stage récent = −5)
-Le max théorique est 20-22 sur ${maxes.engagement}. Avoir ${maxes.engagement} = deal exceptionnellement actif et engagé bilatéralement.
-IMPORTANT : un seul email envoyé sans réponse la semaine dernière = ~5 pts max. Sois TRÈS strict.
+- Réceptivité du prospect (analyse du ton dans les emails/meetings entrants) :
+  - Ton enthousiaste ("super", "hâte de", "parfait", "exactement ce qu'il nous faut") = +2
+  - Prospect répond en < 24h sur 2+ échanges récents = +2
+  - Prospect propose lui-même la prochaine étape / relance sans sollicitation = +3
+  - Prospect mentionne impliquer des parties prenantes internes ("j'en parle à mon boss") = +2
+  - Ton froid / monosyllabique / silence > 7j répété malgré relances = −3
+Le max théorique est 20-22 sur ${maxes.engagement}. Avoir ${maxes.engagement} = deal exceptionnellement actif et engagé bilatéralement (signaux classiques + RFP + réceptivité cumulés mais plafonnés).
+IMPORTANT : un seul email envoyé sans réponse la semaine dernière = ~5 pts max. Sois TRÈS strict sur les deals early-stage. Pour les deals avancés (RFP, agreement), les bonus momentum et réceptivité peuvent monter l'engagement vers le plafond.
 
 6. ${names[5]} (0 à ${maxes.strategic_fit} pts)
 Évalue l'adéquation avec l'offre Coachello (coaching professionnel/managérial).
@@ -243,9 +307,24 @@ IMPORTANT : un seul email envoyé sans réponse la semaine dernière = ~5 pts ma
 - 0 pts : concurrent(s) identifié(s) et en compétition directe (nommé dans les échanges ou shortlist)
 Indices de compétition : mentions de "benchmark", "autres prestataires", "comparaison", noms de concurrents (BetterUp, CoachHub, Ezra, MentorCity, etc.), RFP envoyé à plusieurs, demande de "références" comparatives.
 
+=== DICTIONNAIRE FR — MOTS-CLÉS À DÉTECTER PAR DIMENSION ===
+
+AUTHORITY : COMEX, CODIR, C-level, CEO, CHRO, CPO, DG, DRH, VP People, Head of People/L&D/Talent, Directeur Learning/Formation, HRBP, Chief People Officer. Un de ces titres parmi les contacts → authority ≥ 14 même sans autre signal.
+
+BUDGET : "enveloppe", "pré-budgété", "arbitrage DAF", "PO émis", "bon de commande", "ligne budgétaire L&D", "forfait N coachings", "tarif par session". Montant ≥ 20k€ explicite = budget ≥ 10.
+
+TIMELINE : "Q1-Q4 2026", "T1/T2", "rentrée", "budget 2026", "clôture d'exercice", "deadline", "kick-off", "go-live". Date précise + proche (< 90j) = timeline ≥ 7.
+
+BUSINESS NEED — pain points coaching : turnover cadres, désengagement, managers promus sans formation, transformation culturelle, post-M&A, nouveau DG/DRH, restructuration, ENPS en baisse, succession planning, pivot stratégique. ≥ 1 pain point articulé → business_need ≥ 9.
+
+STRATEGIC FIT : "développement du leadership", "coaching dirigeants/managers", "parcours managérial", "onboarding dirigeants", "executive coaching", "coaching d'équipe", "codev", "feedback 360". Un de ces termes → strategic_fit ≥ 4.
+
+COMPETITION : BetterUp, CoachHub, Ezra, MentorCity, MoovOne, Simundia, Bloom at Work, Nayan, Wemanity, 15Five, Lattice, Leapsome. Mention explicite = competition 0-3.
+
 === INSTRUCTIONS ===
-- Sois STRICT et EXIGEANT. Un score élevé doit être justifié par des éléments CONCRETS dans les conversations ou les champs CRM.
-- Si une dimension manque totalement d'informations (pas de champ CRM, pas de conversation), donne 0 — pas un score "par défaut".
+- Sois exigeant sur les deals early-stage (discovery, qualification) : une dimension sans aucun signal même indirect = 0.
+- Pour les deals avancés (stage agreement/contract/negotiation/closedwon, RFP soumis, shortlist, closing), les signaux de momentum et d'aboutissement COMPENSENT l'absence de data dure. Un deal qui progresse concrètement mérite son score même si les champs CRM dédiés ne sont pas remplis.
+- AVANT de donner 0 sur une dimension, tu DOIS avoir balayé tous les champs (voir EXPLORATION EXHAUSTIVE). 0 = absence totale de signal direct ET indirect, pas "champ CRM vide".
 - Si un champ CRM contredit les conversations, mentionne-le dans crm_alert.
 - REASONING : chaque point doit faire 5-8 mots MAX. Pas d'explication, pas de détail. Concentre-toi sur la DYNAMIQUE du deal (momentum, engagement, progression), PAS sur la qualification (budget, authority, etc. sont déjà dans les scores et la qualification). Max 3 strengths, 3 weaknesses.
 - Réponds UNIQUEMENT en JSON valide :
@@ -279,7 +358,9 @@ Indices de compétition : mentions de "benchmark", "autres prestataires", "compa
   const message = await client.messages.create({
     model: claudeModel,
     max_tokens: 1500,
-    system: systemPrompt,
+    system: enableCache
+      ? [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }]
+      : systemPrompt,
     messages: [{ role: "user", content: context }],
   });
 

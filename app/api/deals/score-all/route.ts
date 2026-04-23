@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       const batch = toScore.slice(i, i + BATCH_SIZE);
       const results = await Promise.allSettled(
         batch.map(async (dealId) => {
-          const result = await scoreOneDeal(dealId, userId);
+          const result = await scoreOneDeal(dealId, userId, undefined, true);
           await db.from("deal_scores").upsert({
             deal_id: dealId,
             score: { total: result.total, components: result.components, reliability: result.reliability },
