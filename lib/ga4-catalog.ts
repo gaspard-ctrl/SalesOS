@@ -205,37 +205,32 @@ export interface Preset {
 
 export const GA4_PRESETS: Preset[] = [
   {
-    id: "current-kpis",
-    label: "KPIs actuels (overview)",
-    description: "Les 6 métriques affichées aujourd'hui sur l'overview, 30 derniers jours.",
+    id: "dashboard-mirror",
+    label: "Dashboard mirror (fetchKPIs exact)",
+    description: "Réplique EXACTE de ce que /api/marketing/overview envoie (current + previous, mêmes 7 metrics, mêmes dateRanges). Pour réconcilier les chiffres du dashboard avec GA4.",
     body: {
-      dateRanges: [{ startDate: "30daysAgo", endDate: "today" }],
-      metrics: [
-        { name: "sessions" },
-        { name: "totalUsers" },
-        { name: "screenPageViews" },
-        { name: "bounceRate" },
-        { name: "averageSessionDuration" },
-        { name: "eventCount" },
+      dateRanges: [
+        { startDate: "30daysAgo", endDate: "yesterday", name: "current" },
+        { startDate: "60daysAgo", endDate: "31daysAgo", name: "previous" },
       ],
-    },
-  },
-  {
-    id: "fixed-kpis",
-    label: "KPIs corrigés (proposition)",
-    description: "Même période mais endDate=yesterday, activeUsers au lieu de totalUsers, keyEvents au lieu d'eventCount.",
-    body: {
-      dateRanges: [{ startDate: "30daysAgo", endDate: "yesterday" }],
       metrics: [
         { name: "sessions" },
         { name: "activeUsers" },
         { name: "newUsers" },
         { name: "screenPageViews" },
-        { name: "engagementRate" },
         { name: "engagedSessions" },
         { name: "averageSessionDuration" },
         { name: "keyEvents" },
       ],
+    },
+  },
+  {
+    id: "active-users-vs-ga4-ui",
+    label: "Active users — comparaison GA4 UI",
+    description: "Une seule métrique, une seule période, aucune dimension : le chiffre exact qui doit matcher la vue d'ensemble GA4. Si écart, c'est du thresholding / sampling côté GA4.",
+    body: {
+      dateRanges: [{ startDate: "30daysAgo", endDate: "yesterday" }],
+      metrics: [{ name: "activeUsers" }],
     },
   },
   {
