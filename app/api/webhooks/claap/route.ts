@@ -81,9 +81,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Only skip when truly unanalysable. A missing deal is OK — analysis still
+    // produces value via the 6 coaching axes + MEDDIC, and the deal can be
+    // attached later from the UI.
     const shouldSkip =
       meetingType !== "external" ||
-      !dealId ||
       !recorderEmail ||
       !transcriptUrl;
 
@@ -104,13 +106,11 @@ export async function POST(req: NextRequest) {
     };
 
     if (shouldSkip) {
-      const reason = !dealId
-        ? "no_deal"
-        : meetingType !== "external"
-          ? `meeting_type_${meetingType}`
-          : !recorderEmail
-            ? "no_recorder_email"
-            : "no_transcript";
+      const reason = meetingType !== "external"
+        ? `meeting_type_${meetingType}`
+        : !recorderEmail
+          ? "no_recorder_email"
+          : "no_transcript";
       await db.from("sales_coach_analyses").upsert(
         { ...baseRow, status: "skipped", error_message: reason },
         { onConflict: "claap_recording_id" },
