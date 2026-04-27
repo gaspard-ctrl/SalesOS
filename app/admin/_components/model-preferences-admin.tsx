@@ -18,6 +18,7 @@ const FEATURES = [
   { key: "deals_email",    label: "Email de suivi deal",                defaultModel: "claude-haiku-4-5-20251001" },
   { key: "competitive",    label: "Analyse concurrentielle",            defaultModel: "claude-haiku-4-5-20251001" },
   { key: "market",         label: "Scan & signaux marché",              defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "sales_coach",    label: "Sales Coach (debrief meetings)",     defaultModel: "claude-haiku-4-5-20251001" },
 ];
 
 export function ModelPreferencesAdmin({ initialPreferences }: { initialPreferences: Record<string, string> }) {

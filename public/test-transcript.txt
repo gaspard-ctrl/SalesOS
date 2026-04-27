@@ -1,0 +1,45 @@
+[00:00:05] Commercial : Bonjour Jean, merci de prendre le temps aujourd'hui. Comment ça va ?
+
+[00:00:10] Jean : Très bien merci, ravi de vous parler.
+
+[00:00:15] Commercial : Alors, on a 30 minutes devant nous. L'objectif côté moi c'est de mieux comprendre vos enjeux managériaux chez Acme, voir si Coachello peut vous apporter de la valeur, et on verra ensuite si ça fait sens de continuer. Ça vous va ?
+
+[00:00:30] Jean : Oui parfait.
+
+[00:00:35] Commercial : Super. Première question : quel est votre principal enjeu business cette année qui dépend directement des managers ou des talents ?
+
+[00:00:50] Jean : Alors on a lancé un gros programme de transformation digitale il y a 8 mois. On a formé tous nos middle managers à la méthodologie agile, mais concrètement sur le terrain on ne voit pas de vrai changement. Les équipes continuent à travailler comme avant.
+
+[00:01:15] Commercial : OK, donc la formation a été faite mais l'adoption ne suit pas. Qu'est-ce que ça coûte concrètement aujourd'hui, cette situation ?
+
+[00:01:25] Jean : Franchement c'est compliqué. On a investi 300k€ dans le programme, et le board commence à poser des questions. Et côté équipes, on sent une fatigue, les gens disent "encore une initiative qui ne sert à rien".
+
+[00:01:45] Commercial : Donc fatigue du changement et remise en cause du ROI. Qui porte ce sujet dans l'organisation aujourd'hui ?
+
+[00:01:55] Jean : C'est moi principalement, en tant que CHRO. Mais j'ai besoin des directeurs d'équipe pour vraiment ancrer ça sur le terrain.
+
+[00:02:10] Commercial : Et qu'est-ce que les managers savent en théorie mais n'arrivent pas à appliquer ?
+
+[00:02:20] Jean : Ils connaissent les rituels agiles, ils savent animer un stand-up. Mais dès qu'il y a un conflit d'équipe ou une décision difficile à prendre, ils se cachent derrière le process. Ils évitent les conversations difficiles.
+
+[00:02:45] Commercial : Je comprends. Et si rien ne change dans 6 à 12 mois, qu'est-ce qui se passe ?
+
+[00:02:55] Jean : Honnêtement on va perdre des gens. On a déjà eu deux démissions clés sur des postes stratégiques. Le turnover va monter, et on va devoir recruter en externe, ce qui coûte cher.
+
+[00:03:15] Commercial : OK, donc coût de turnover, perte de talents, ROI questionné par le board. C'est clair. Idéalement, qu'est-ce qui aiderait vraiment vos managers au quotidien ?
+
+[00:03:30] Jean : Il faudrait un vrai accompagnement dans la durée, pas juste de la formation. Quelque chose qui les aide à gérer les situations concrètes au fil de l'eau.
+
+[00:03:45] Commercial : Parfait. Alors du coup, laissez-moi vous présenter rapidement Coachello. On transforme les managers en leaders performants grâce à un modèle hybride : coaching humain avec 500 coachs certifiés ICF, et coaching IA directement dans Slack ou Teams. Nos clients comme Enedis ou Qonto ont vu jusqu'à -30% sur les coûts de recrutement externe, et x3 sur la mobilité interne.
+
+[00:04:15] Jean : OK intéressant. Et comment ça se passe concrètement pour un manager ?
+
+[00:04:25] Commercial : Chaque manager a accès à un coach humain pour les sujets stratégiques, et à notre IA pour les micro-questions du quotidien, genre "comment je gère ce conflit" ou "comment je donne un feedback difficile". Le tout aligné sur vos compétences internes et vos modèles de leadership.
+
+[00:04:50] Jean : Ça ressemble à ce qu'on cherche. Quelle serait la prochaine étape ?
+
+[00:04:58] Commercial : Je vous propose une deuxième session avec votre DRH opérationnelle pour approfondir le use case et voir comment on pourrait structurer un pilote sur un groupe de 20 managers. Ça vous va si on bloque ça la semaine prochaine, mardi ou jeudi ?
+
+[00:05:20] Jean : Jeudi ça marche, on dit 14h. Je vous envoie l'invitation avec ma DRH.
+
+[00:05:30] Commercial : Parfait, merci Jean. À jeudi !
