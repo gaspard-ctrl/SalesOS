@@ -48,6 +48,111 @@ export async function getGmailAccessToken(userId: string): Promise<string> {
   return access_token;
 }
 
+type GmailHeader = { name: string; value: string };
+type GmailPart = {
+  mimeType?: string;
+  body?: { data?: string; size?: number };
+  parts?: GmailPart[];
+};
+
+function findHeader(headers: GmailHeader[], name: string): string {
+  return headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
+}
+
+function extractBody(part: GmailPart | undefined): string {
+  if (!part) return "";
+  if (part.mimeType === "text/plain" && part.body?.data) {
+    return Buffer.from(part.body.data, "base64").toString("utf-8");
+  }
+  if (part.parts) {
+    for (const p of part.parts) {
+      const t = extractBody(p);
+      if (t) return t;
+    }
+  }
+  if (part.mimeType === "text/html" && part.body?.data) {
+    return Buffer.from(part.body.data, "base64")
+      .toString("utf-8")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  return "";
+}
+
+export type GmailMessageSummary = {
+  id: string;
+  threadId: string;
+  from: string;
+  to: string;
+  subject: string;
+  date: string;
+  snippet: string;
+};
+
+export async function searchGmailMessages(
+  userId: string,
+  query: string,
+  maxResults = 10,
+): Promise<GmailMessageSummary[]> {
+  const token = await getGmailAccessToken(userId);
+  const listUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=${maxResults}`;
+  const listRes = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}` } });
+  if (!listRes.ok) throw new Error(`Gmail API ${listRes.status}`);
+  const listData = (await listRes.json()) as { messages?: { id: string; threadId: string }[] };
+  const ids = listData.messages ?? [];
+
+  const details = await Promise.all(
+    ids.map(async (m) => {
+      const metaUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`;
+      const mRes = await fetch(metaUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (!mRes.ok) return null;
+      const md = (await mRes.json()) as { snippet?: string; payload?: { headers?: GmailHeader[] } };
+      const headers = md.payload?.headers ?? [];
+      return {
+        id: m.id,
+        threadId: m.threadId,
+        from: findHeader(headers, "From"),
+        to: findHeader(headers, "To"),
+        subject: findHeader(headers, "Subject"),
+        date: findHeader(headers, "Date"),
+        snippet: md.snippet ?? "",
+      } satisfies GmailMessageSummary;
+    }),
+  );
+  return details.filter((d): d is GmailMessageSummary => d !== null);
+}
+
+export type GmailMessageFull = GmailMessageSummary & { cc: string; body: string };
+
+export async function getGmailMessage(userId: string, messageId: string): Promise<GmailMessageFull> {
+  const token = await getGmailAccessToken(userId);
+  const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Gmail API ${res.status}`);
+  const data = (await res.json()) as {
+    id: string;
+    threadId: string;
+    snippet?: string;
+    payload?: GmailPart & { headers?: GmailHeader[] };
+  };
+  const headers = data.payload?.headers ?? [];
+  return {
+    id: data.id,
+    threadId: data.threadId,
+    from: findHeader(headers, "From"),
+    to: findHeader(headers, "To"),
+    cc: findHeader(headers, "Cc"),
+    subject: findHeader(headers, "Subject"),
+    date: findHeader(headers, "Date"),
+    snippet: data.snippet ?? "",
+    body: extractBody(data.payload),
+  };
+}
+
 export function buildRawEmail({
   from,
   to,

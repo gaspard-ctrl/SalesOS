@@ -69,10 +69,13 @@ export async function GET(req: NextRequest) {
         probability: s.metadata?.probability ? parseFloat(s.metadata.probability) : null,
       }));
 
-    // Search active deals
+    // Search active deals — restricted to the default pipeline so counts match the Kanban
     const filters: { propertyName: string; operator: string; value?: string }[] = [
       { propertyName: "hs_is_closed", operator: "EQ", value: "false" },
     ];
+    if (defaultPipeline?.id) {
+      filters.push({ propertyName: "pipeline", operator: "EQ", value: defaultPipeline.id });
+    }
     if (ownerFilter) {
       filters.push({ propertyName: "hubspot_owner_id", operator: "EQ", value: ownerFilter });
     }

@@ -68,6 +68,8 @@ export default function IntelligencePage() {
     search_drive:              "Recherche dans Google Drive…",
     read_drive_file:           "Lecture du document…",
     list_drive_folder:         "Navigation dans Drive…",
+    search_gmail:              "Recherche dans tes emails…",
+    read_gmail_message:        "Lecture de l'email…",
   }), []);
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -295,7 +297,7 @@ export default function IntelligencePage() {
               Ton assistant commercial : CRM, stratégie, méthodologie, rédaction, veille.
             </p>
             <div className="flex flex-wrap gap-2 justify-center mt-2">
-              {["Quels deals sont à risque ?", "Relances en retard ?", "Rédige un cold email", "Explique la méthode MEDDIC", "Comment gérer l'objection prix ?"].map((q) => (
+              {["Quels deals sont à risque ?", "Relances en retard ?", "Retrouve le dernier mail d'Engie", "Rédige un cold email", "Explique la méthode MEDDIC"].map((q) => (
                 <button
                   key={q}
                   onClick={() => { setInput(q); }}
@@ -320,7 +322,7 @@ export default function IntelligencePage() {
               >
                 <p className="text-xs font-semibold mb-1" style={{ color: "#c2410c" }}>Advice</p>
                 <p className="text-xs leading-relaxed" style={{ color: "#78350f" }}>
-                  For best results, tell the bot where to look (HubSpot, Drive, or Slack) and be specific about what you need—stages, timelines, deals, or contacts.
+                  For best results, tell the bot where to look (HubSpot, Drive, Gmail, or Slack) and be specific about what you need—stages, timelines, deals, or contacts.
                   <br />Use the <Link href="/prompt" className="underline underline-offset-2">prompt guide</Link> to tailor it to your needs.
                 </p>
               </div>
@@ -405,7 +407,7 @@ export default function IntelligencePage() {
           </button>
         </div>
         <p className="text-center text-[10px] mt-2" style={{ color: "#ccc" }}>
-          Connecté à HubSpot · Slack · Google Drive · Web — Stratégie & méthodologie intégrées
+          Connecté à HubSpot · Slack · Google Drive · Gmail · Web — Stratégie & méthodologie intégrées
         </p>
       </div>
 
