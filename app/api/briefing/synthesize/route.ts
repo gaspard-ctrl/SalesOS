@@ -287,6 +287,10 @@ IMPORTANT — isSalesMeeting :
 - Mets isSalesMeeting=false pour les réunions internes, partenaires, coaching, support, onboarding, ou si le contexte ne montre pas de lien commercial clair.
 - Si isSalesMeeting=false, NE REMPLIS PAS dealQualification (laisse null/undefined).
 
+IMPORTANT — linkedinInsights :
+- Remplis linkedinInsights UNIQUEMENT si une section "=== PROFILS LINKEDIN ===" est présente dans le contexte ci-dessus.
+- Si cette section est absente, laisse linkedinInsights vide (tableau vide ou undefined). Ne déduis JAMAIS un profil LinkedIn depuis HubSpot, Gmail, Slack ou le web — ces sources ne sont PAS LinkedIn.
+
 Utilise l'outil generate_briefing pour retourner le briefing.`;
 
     const eventDate = eventStart ? new Date(eventStart).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "";
@@ -313,6 +317,12 @@ Génère le briefing pour cette réunion.`;
     // Tool use guarantees valid JSON — no parsing needed
     const toolBlock = message.content.find((b) => b.type === "tool_use");
     const briefing = (toolBlock && "input" in toolBlock ? toolBlock.input : { error: "no_tool_response" }) as Record<string, unknown>;
+
+    // Garde-fou : ne garder linkedinInsights que si des profils LinkedIn ont réellement été récupérés via Netrows.
+    // Sinon le LLM peut halluciner un profil "LinkedIn" à partir des données HubSpot/Gmail.
+    if (!rawData.linkedinProfiles || rawData.linkedinProfiles.length === 0) {
+      delete briefing.linkedinInsights;
+    }
 
     // ── Upsert with briefing ──────────────────────────────────────────────────
     await db.from("meeting_briefings").upsert({

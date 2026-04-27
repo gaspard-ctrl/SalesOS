@@ -102,7 +102,12 @@ export async function POST(req: NextRequest) {
     if (!forceRefresh && cached?.raw_data && cached?.briefing) {
       const age = Date.now() - new Date(cached.generated_at).getTime();
       if (age < 4 * 60 * 60 * 1000) {
-        return NextResponse.json({ ...cached.raw_data, cached: true, briefing: cached.briefing });
+        const rawData = cached.raw_data as { linkedinProfiles?: unknown[] };
+        const briefing = { ...(cached.briefing as Record<string, unknown>) };
+        if (!rawData.linkedinProfiles || rawData.linkedinProfiles.length === 0) {
+          delete briefing.linkedinInsights;
+        }
+        return NextResponse.json({ ...cached.raw_data, cached: true, briefing });
       }
     }
 

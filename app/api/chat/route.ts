@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
 import { logUsage } from "@/lib/log-usage";
 import { DEFAULT_BOT_GUIDE } from "@/lib/guides/bot";
+import { searchGmailMessages, getGmailMessage } from "@/lib/gmail";
 
 export const maxDuration = 300; // 5 minutes — required for large HubSpot fetches
 
@@ -304,6 +305,31 @@ const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: "search_gmail",
+    description:
+      "Recherche des emails dans la boîte Gmail de l'utilisateur connecté. Utilise la syntaxe Gmail (from:, to:, subject:, after:YYYY/MM/DD, before:, has:attachment, etc.). Utilise cet outil pour retrouver des échanges avec un prospect/client ou sur un sujet précis. Renvoie les métadonnées (from, subject, date, snippet) — utilise ensuite read_gmail_message pour lire le contenu complet d'un mail.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Requête Gmail (ex: 'from:contact@engie.com', 'subject:proposition after:2026/01/01', 'salomon')" },
+        limit: { type: "number", description: "Nombre max de résultats (défaut : 10)" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "read_gmail_message",
+    description:
+      "Lit le contenu complet d'un email Gmail (corps, expéditeur, destinataire, sujet). Utilise cet outil après search_gmail pour lire un email précis.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        message_id: { type: "string", description: "ID du message Gmail (retourné par search_gmail)" },
+      },
+      required: ["message_id"],
+    },
+  },
+  {
     name: "list_drive_folder",
     description:
       "Liste les fichiers d'un dossier Google Drive. Utilise cet outil pour naviguer dans l'arborescence Drive, explorer un dossier spécifique.",
@@ -348,7 +374,7 @@ async function getDriveAccessToken(): Promise<string> {
   return access_token;
 }
 
-async function executeTool(name: string, input: Record<string, unknown>, onProgress?: (msg: string) => void, userOwnerId?: string | null): Promise<string> {
+async function executeTool(name: string, input: Record<string, unknown>, onProgress?: (msg: string) => void, userOwnerId?: string | null, userId?: string): Promise<string> {
   switch (name) {
     case "search_contacts": {
       const props = getPropertyNames("contacts");
@@ -714,6 +740,50 @@ async function executeTool(name: string, input: Record<string, unknown>, onProgr
         return `Erreur lecture Drive : ${e instanceof Error ? e.message : "inconnue"}`;
       }
     }
+    case "search_gmail": {
+      if (!userId) return "Gmail non disponible : utilisateur non identifié.";
+      try {
+        const limit = (input.limit as number) ?? 10;
+        const results = await searchGmailMessages(userId, input.query as string, limit);
+        if (results.length === 0) return `Aucun email trouvé pour "${input.query}".`;
+        const compact = results.map((r) => ({
+          id: r.id,
+          from: r.from,
+          to: r.to,
+          subject: r.subject,
+          date: r.date,
+          snippet: (r.snippet || "").slice(0, 300),
+        }));
+        return JSON.stringify(compact);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "inconnue";
+        if (msg.includes("not connected") || msg.includes("token expired")) {
+          return "Gmail non connecté pour cet utilisateur. Il doit aller dans Réglages → Connecter Google.";
+        }
+        return `Erreur Gmail : ${msg}`;
+      }
+    }
+    case "read_gmail_message": {
+      if (!userId) return "Gmail non disponible : utilisateur non identifié.";
+      try {
+        const msg = await getGmailMessage(userId, input.message_id as string);
+        return JSON.stringify({
+          id: msg.id,
+          from: msg.from,
+          to: msg.to,
+          cc: msg.cc || undefined,
+          subject: msg.subject,
+          date: msg.date,
+          body: msg.body.slice(0, 8000),
+        });
+      } catch (e) {
+        const em = e instanceof Error ? e.message : "inconnue";
+        if (em.includes("not connected") || em.includes("token expired")) {
+          return "Gmail non connecté pour cet utilisateur. Il doit aller dans Réglages → Connecter Google.";
+        }
+        return `Erreur Gmail : ${em}`;
+      }
+    }
     case "list_drive_folder": {
       try {
         const token = await getDriveAccessToken();
@@ -903,6 +973,7 @@ export async function POST(req: NextRequest) {
                   tool.input as Record<string, unknown>,
                   (msg) => send({ type: "tool_progress", message: msg }),
                   userOwnerId,
+                  user.id,
                 );
                 results.push({ type: "tool_result", tool_use_id: tool.id, content: result });
               } catch (e) {

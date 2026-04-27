@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { useUserMe } from "@/lib/hooks/use-user-me";
 import { useDeals } from "@/lib/hooks/use-deals";
 import { X, ChevronRight, Mail, Zap, AlertCircle, CheckCircle, TrendingUp, Search, RefreshCw, Linkedin, Copy, Check, Send } from "lucide-react";
-import { scoreBadge, reliabilityLabel, reliabilityColor, healthIndicator, type DealScore } from "@/lib/deal-scoring";
+import { scoreBadge, reliabilityLabel, reliabilityColor, type DealScore } from "@/lib/deal-scoring";
 import { AskClaudeButton, AskClaudePanel } from "@/components/ask-claude";
 import { DealFiltersBar, applyDealFilters, DEFAULT_DEAL_FILTERS, type DealFilters } from "./_components/deal-filters";
 
@@ -111,10 +111,6 @@ const DealCard = memo(function DealCard({ deal, selected, onClick }: { deal: Dea
   const hasScore = deal.score !== null;
   const badge = hasScore ? scoreBadge(deal.score!.total) : null;
   const ref = deal.lastContacted || deal.lastModified;
-  const closeDateMs = deal.closedate ? new Date(deal.closedate).getTime() : null;
-  const lastContactMs = deal.lastContacted ? new Date(deal.lastContacted).getTime() : null;
-  const health = healthIndicator(closeDateMs, lastContactMs);
-  const healthDot = health === "green" ? "#16a34a" : health === "yellow" ? "#ca8a04" : "#dc2626";
 
   return (
     <div
@@ -128,14 +124,10 @@ const DealCard = memo(function DealCard({ deal, selected, onClick }: { deal: Dea
       }}
     >
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
-        <span style={{ fontWeight: 600, fontSize: 13, color: "#111827", flex: 1, marginRight: 6, lineHeight: 1.3 }}>
+      <div style={{ marginBottom: 4 }}>
+        <span style={{ fontWeight: 600, fontSize: 13, color: "#111827", lineHeight: 1.3 }}>
           {deal.dealname || "Sans nom"}
         </span>
-        <span style={{
-          width: 8, height: 8, borderRadius: "50%", background: healthDot,
-          flexShrink: 0, marginTop: 3,
-        }} />
       </div>
 
       <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
@@ -645,7 +637,7 @@ function DealDrawer({
                         {activeNextAction && (
                           <div style={{ padding: "8px 10px", background: "#f0fdf4", borderRadius: 6, border: "1px solid #bbf7d0", marginBottom: 10, display: "flex", gap: 7, alignItems: "flex-start" }}>
                             <span style={{ fontSize: 13, lineHeight: 1 }}>→</span>
-                            <p style={{ fontSize: 12, color: "#15803d", margin: 0, lineHeight: 1.5, fontWeight: 500 }}>{activeNextAction}</p>
+                            <p style={{ fontSize: 12, color: "#111827", margin: 0, lineHeight: 1.5, fontWeight: 500 }}>{activeNextAction}</p>
                           </div>
                         )}
 
@@ -653,8 +645,7 @@ function DealDrawer({
                         {activeScore.components.map((c) => (
                           <div key={c.name} style={{ marginBottom: 6 }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
-                              <span style={{ fontSize: 12, color: "#374151", display: "flex", alignItems: "center", gap: 4 }}>
-                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6366f1", display: "inline-block" }} />
+                              <span style={{ fontSize: 12, color: "#374151" }}>
                                 {c.name}
                               </span>
                               <span style={{ fontSize: 12, fontWeight: 600, color: "#111827" }}>{c.earned}/{c.max}</span>
