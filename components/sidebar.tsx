@@ -12,6 +12,7 @@ const nav = [
   { href: "/", label: "CoachelloGPT" },
   { href: "/briefing", label: "Briefing" },
   { href: "/deals", label: "Deals" },
+  { href: "/sales-coach", label: "Sales Coach" },
   { href: "/prospecting", label: "Prospection" },
   { href: "/mass-prospection", label: "Mass Prospection" },
   //{ href: "/signals", label: "Market Intel (coming)" },
