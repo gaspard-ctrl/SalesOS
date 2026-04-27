@@ -69,10 +69,14 @@ export default function OverviewTab() {
   const [view, setView] = useState<"line" | "bar">("line");
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
 
-  // Bar view always fetches 365 days; line view uses the selected period.
-  const dataPeriod: OverviewPeriod = view === "bar" ? { kind: "days", days: 365 } : period;
-
-  const { kpis, trafficData, trafficSources, topPages, devices, countries, leadsTimeline, impressionsTimeline, articlesTimeline, source, ga4Error, isLoading } = useMarketingOverview(dataPeriod);
+  // Two fetches:
+  // - `overview` follows the user-selected period and drives KPI cards, sources,
+  //   top pages, devices, countries, and the line chart.
+  // - `barOverview` is locked to 365 days when the bar view is active so the
+  //   12-month aggregation has enough history. In line view it falls back to
+  //   the same period as `overview` → SWR dedupes the request.
+  const { kpis, trafficData, trafficSources, topPages, devices, countries, leadsTimeline, impressionsTimeline, articlesTimeline, source, ga4Error, isLoading } = useMarketingOverview(period);
+  const barOverview = useMarketingOverview(view === "bar" ? { kind: "days", days: 365 } : period);
   const periodLen = period.kind === "days" ? period.days : Math.max(1, Math.round((new Date(period.to).getTime() - new Date(period.from).getTime()) / 86400000) + 1);
   const seoTrendsDays = periodLen <= 14 ? 14 : 28;
   const { winners, losers, seoTrendsError } = useMarketingSeoTrends(seoTrendsDays);
@@ -327,10 +331,10 @@ export default function OverviewTab() {
 
         {view === "bar" ? (
           <BarView
-            trafficData={trafficData}
-            leadsTimeline={leadsTimeline}
-            impressionsTimeline={impressionsTimeline}
-            articlesTimeline={articlesTimeline}
+            trafficData={barOverview.trafficData}
+            leadsTimeline={barOverview.leadsTimeline}
+            impressionsTimeline={barOverview.impressionsTimeline}
+            articlesTimeline={barOverview.articlesTimeline}
             marketingEvents={marketingEvents}
             filters={filters}
             onMonthClick={handleMonthClick}
@@ -1045,7 +1049,7 @@ function CountryBlock({ countries }: { countries: CountryBreakdown[] }) {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-1.5">
           <h3 className="font-semibold" style={{ color: "#111" }}>Top Countries</h3>
-          <InfoTooltip text="GA4: dimension `country` × metrics `sessions`, `activeUsers`. Top 10 par sessions. Utile pour valider le mix FR/EN/autres." />
+          <InfoTooltip text="GA4: dimension `country` × metric `activeUsers`. Top 10 par utilisateurs actifs. Utile pour valider le mix FR/EN/autres." />
         </div>
         <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: hasData ? "#f0fdf4" : "#f5f5f5", color: hasData ? "#16a34a" : "#888" }}>
           {hasData ? "Live — GA4 country" : "No data"}
@@ -1065,10 +1069,10 @@ function CountryBlock({ countries }: { countries: CountryBreakdown[] }) {
               contentStyle={{ background: "#fff", border: "1px solid #eee", borderRadius: 8, fontSize: 13 }}
               formatter={(value, _name, item) => {
                 const payload = item?.payload as CountryBreakdown | undefined;
-                return [`${value} sess · ${payload?.percentage ?? 0}%`, "Sessions"];
+                return [`${value} users · ${payload?.percentage ?? 0}%`, "Active users"];
               }}
             />
-            <Bar dataKey="sessions" fill="#f01563" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="activeUsers" fill="#f01563" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       )}
