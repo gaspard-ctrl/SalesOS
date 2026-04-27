@@ -193,8 +193,11 @@ export async function fetchKPIs(
   const accessToken = await getGmailAccessToken(userId);
 
   // WoW comparison: current window vs previous same-length window just before.
-  const current = resolveRange(period);
-  const previous = resolvePreviousRange(period);
+  // Naming the dateRanges lets us match rows by name in the response — GA4 adds
+  // an implicit `dateRange` dimension whose order can vary, so trusting the
+  // array index is fragile.
+  const current = { ...resolveRange(period), name: "current" };
+  const previous = { ...resolvePreviousRange(period), name: "previous" };
   const body = {
     dateRanges: [current, previous],
     metrics: [
@@ -209,10 +212,12 @@ export async function fetchKPIs(
   };
 
   const data = await runReport(accessToken, body) as {
-    rows?: { metricValues: { value: string }[] }[];
+    rows?: { dimensionValues?: { value: string }[]; metricValues: { value: string }[] }[];
+    dimensionHeaders?: { name: string }[];
   };
 
   const rows = data.rows || [];
+  const dateRangeIdx = (data.dimensionHeaders || []).findIndex((h) => h.name === "dateRange");
 
   function parseRow(row: { metricValues: { value: string }[] } | undefined): GA4KPIs {
     if (!row) return { sessions: 0, activeUsers: 0, newUsers: 0, pageViews: 0, engagedSessions: 0, avgDuration: 0, keyEvents: 0 };
@@ -228,9 +233,16 @@ export async function fetchKPIs(
     };
   }
 
+  // Match rows by dateRange name when the implicit dimension is present;
+  // fall back to positional matching for compatibility.
+  const findByName = (name: string) => {
+    if (dateRangeIdx < 0) return undefined;
+    return rows.find((r) => r.dimensionValues?.[dateRangeIdx]?.value === name);
+  };
+
   return {
-    current: parseRow(rows[0]),
-    previous: parseRow(rows[1]),
+    current: parseRow(findByName("current") ?? rows[0]),
+    previous: parseRow(findByName("previous") ?? rows[1]),
   };
 }
 
@@ -422,31 +434,50 @@ export async function fetchCountryBreakdown(
 ): Promise<GA4CountryBreakdown[]> {
   const accessToken = await getGmailAccessToken(userId);
 
-  const body = {
+  // GA4's native "Internal Traffic" data filter doesn't always propagate to the
+  // Data API (depends on whether it's Active vs Testing). Allow excluding the
+  // developer's country (or any other) via env: GA4_EXCLUDED_COUNTRIES="Ukraine,..."
+  const excluded = (process.env.GA4_EXCLUDED_COUNTRIES || "")
+    .split(",")
+    .map((c) => c.trim())
+    .filter(Boolean);
+
+  const body: Record<string, unknown> = {
     dateRanges: [resolveRange(period)],
     dimensions: [{ name: "country" }],
     metrics: [
       { name: "sessions" },
       { name: "activeUsers" },
     ],
-    orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+    orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
     limit,
   };
+
+  if (excluded.length > 0) {
+    body.dimensionFilter = {
+      notExpression: {
+        filter: {
+          fieldName: "country",
+          inListFilter: { values: excluded },
+        },
+      },
+    };
+  }
 
   const data = await runReport(accessToken, body) as {
     rows?: { dimensionValues: { value: string }[]; metricValues: { value: string }[] }[];
   };
 
   const rows = data.rows || [];
-  const totalSessions = rows.reduce((s, r) => s + (parseFloat(r.metricValues[0].value) || 0), 0);
+  const totalUsers = rows.reduce((s, r) => s + (parseFloat(r.metricValues[1].value) || 0), 0);
 
   return rows.map((row) => {
-    const sessions = Math.round(parseFloat(row.metricValues[0].value) || 0);
+    const activeUsers = Math.round(parseFloat(row.metricValues[1].value) || 0);
     return {
       country: row.dimensionValues[0].value || "(not set)",
-      sessions,
-      activeUsers: Math.round(parseFloat(row.metricValues[1].value) || 0),
-      percentage: totalSessions > 0 ? Math.round((sessions / totalSessions) * 1000) / 10 : 0,
+      sessions: Math.round(parseFloat(row.metricValues[0].value) || 0),
+      activeUsers,
+      percentage: totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 1000) / 10 : 0,
     };
   });
 }
