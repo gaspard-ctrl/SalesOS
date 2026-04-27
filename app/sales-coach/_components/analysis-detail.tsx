@@ -418,6 +418,21 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
     }
   }
 
+  const [forcing, setForcing] = useState(false);
+  async function forceAnalyze() {
+    setForcing(true);
+    try {
+      const res = await fetch(`/api/sales-coach/${analysisId}/reanalyze`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Erreur");
+      await reload();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setForcing(false);
+    }
+  }
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-full text-sm" style={{ color: "#888" }}>Chargement…</div>;
   }
@@ -455,15 +470,28 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
             <div className="text-xs mt-1" style={{ color: "#888" }}>Raison : {detail.error_message ?? "—"}</div>
           </>
         )}
-        <button
-          onClick={deleteAnalysis}
-          disabled={deleting}
-          className="mt-4 flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md disabled:opacity-50"
-          style={{ background: "#fff", color: "#dc2626", border: "1px solid #fecaca" }}
-        >
-          <Trash2 size={12} />
-          {deleting ? "Suppression…" : "Supprimer cette analyse"}
-        </button>
+        <div className="mt-4 flex items-center gap-2">
+          {(detail.status === "skipped" || detail.status === "error") && (
+            <button
+              onClick={forceAnalyze}
+              disabled={forcing}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md disabled:opacity-50"
+              style={{ background: "#f01563", color: "#fff" }}
+            >
+              <RefreshCw size={12} className={forcing ? "animate-spin" : ""} />
+              {forcing ? "Lancement…" : "Analyser quand même"}
+            </button>
+          )}
+          <button
+            onClick={deleteAnalysis}
+            disabled={deleting}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md disabled:opacity-50"
+            style={{ background: "#fff", color: "#dc2626", border: "1px solid #fecaca" }}
+          >
+            <Trash2 size={12} />
+            {deleting ? "Suppression…" : "Supprimer cette analyse"}
+          </button>
+        </div>
       </div>
     );
   }
