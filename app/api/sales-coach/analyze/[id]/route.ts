@@ -53,13 +53,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: row } = await db
     .from("sales_coach_analyses")
-    .select("id, status, user_id, meeting_title, meeting_started_at, hubspot_deal_id, claap_recording_id, recorder_email")
+    .select("id, status, updated_at, user_id, meeting_title, meeting_started_at, hubspot_deal_id, claap_recording_id, recorder_email")
     .eq("id", id)
     .single();
 
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (row.status === "done") return NextResponse.json({ ok: true, already: "done" });
-  if (row.status === "analyzing") return NextResponse.json({ ok: true, already: "analyzing" });
+  // If status is "analyzing" but updated_at is stale (>10 min), the previous run
+  // crashed before flipping to done/error. Allow re-analysis; otherwise refuse so
+  // we don't double-run a healthy in-flight analysis.
+  if (row.status === "analyzing") {
+    const ageMin = row.updated_at
+      ? (Date.now() - new Date(row.updated_at).getTime()) / 60_000
+      : Infinity;
+    if (ageMin < 10) return NextResponse.json({ ok: true, already: "analyzing" });
+  }
 
   await db
     .from("sales_coach_analyses")
@@ -109,7 +117,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const participantEmails = participants
             .map((p) => p.email)
             .filter((e): e is string => !!e);
-          const resolved = await resolveDealFromParticipants(participantEmails, row.recorder_email);
+          // Auto-resolve is best-effort: a HubSpot outage or rate-limit must NOT
+          // fail the whole analysis — meeting can still be analyzed without deal.
+          const resolved = await resolveDealFromParticipants(participantEmails, row.recorder_email).catch((e) => {
+            console.warn(`[sales-coach/analyze/${id}] deal auto-resolve failed:`, e instanceof Error ? e.message : e);
+            return null;
+          });
           if (resolved) {
             dealId = resolved;
             await db.from("sales_coach_analyses").update({ hubspot_deal_id: resolved }).eq("id", id);

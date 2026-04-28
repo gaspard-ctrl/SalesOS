@@ -56,9 +56,9 @@ export default function PromptPage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" style={{ background: "var(--c-bg-page)" }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "#f0f0f0" }}>
+      <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "var(--c-line)", background: "var(--c-bg-card)" }}>
         <button
           onClick={() => router.push("/")}
           className="flex items-center gap-2 text-sm transition-colors hover:text-[#111]"

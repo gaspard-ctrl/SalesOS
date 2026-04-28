@@ -2,11 +2,12 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, RefreshCw, LifeBuoy } from "lucide-react";
 import { useSalesCoachList } from "@/lib/hooks/use-sales-coach";
 import AnalysisList from "./_components/analysis-list";
 import AnalysisDetail from "./_components/analysis-detail";
 import { BackfillModal } from "./_components/backfill-modal";
+import { COLORS } from "@/lib/design/tokens";
 
 function SalesCoachInner() {
   const searchParams = useSearchParams();
@@ -22,6 +23,32 @@ function SalesCoachInner() {
   const [selectedId, setSelectedId] = useState<string | null>(initialId);
   const [searchQuery, setSearchQuery] = useState("");
   const [backfillOpen, setBackfillOpen] = useState(false);
+  const [recovering, setRecovering] = useState(false);
+  const [recoverMsg, setRecoverMsg] = useState<string | null>(null);
+
+  async function recoverStuck() {
+    setRecovering(true);
+    setRecoverMsg(null);
+    try {
+      const res = await fetch("/api/sales-coach/recover-stuck", { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as {
+        recovered?: number;
+        scanned?: number;
+        failed?: { id: string; error: string }[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Erreur");
+      const failedCount = data.failed?.length ?? 0;
+      setRecoverMsg(
+        `${data.recovered ?? 0} relancée(s)${failedCount > 0 ? ` · ${failedCount} échec(s)` : ""}`,
+      );
+      reload();
+    } catch (e) {
+      setRecoverMsg(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setRecovering(false);
+    }
+  }
 
   useEffect(() => {
     if (!selectedId && analyses.length > 0) {
@@ -30,37 +57,113 @@ function SalesCoachInner() {
   }, [analyses, selectedId]);
 
   return (
-    <div className="flex h-full" style={{ background: "#f8f8f8" }}>
+    <div className="flex h-full" style={{ background: COLORS.bgPage }}>
       {/* Left column — list */}
       <div className="w-[300px] flex-shrink-0 flex flex-col">
-        <div className="px-4 pt-4 pb-3" style={{ background: "#fff", borderBottom: "1px solid #eeeeee", borderRight: "1px solid #eeeeee" }}>
-          <div className="flex items-center justify-between">
-            <h1 className="text-lg font-bold" style={{ color: "#111" }}>Sales Coach</h1>
+        <div
+          style={{
+            padding: "16px 16px 12px",
+            background: COLORS.bgCard,
+            borderBottom: `1px solid ${COLORS.line}`,
+            borderRight: `1px solid ${COLORS.line}`,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <h1 style={{ fontSize: 16, fontWeight: 700, color: COLORS.ink0, margin: 0, letterSpacing: "-0.01em" }}>
+              Sales Coach
+            </h1>
             <button
               onClick={() => reload()}
-              className="text-xs font-medium px-2 py-1 rounded"
-              style={{ color: "#f01563" }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 11,
+                fontWeight: 500,
+                padding: "4px 8px",
+                borderRadius: 6,
+                color: COLORS.brand,
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+              }}
             >
+              <RefreshCw size={11} />
               Rafraîchir
             </button>
           </div>
-          <p className="text-xs mt-0.5" style={{ color: "#888" }}>
-            Debriefs automatiques après chaque meeting Claap lié à un deal.
+          <p style={{ fontSize: 11, color: COLORS.ink3, margin: 0, marginTop: 2 }}>
+            Debriefs automatiques après chaque meeting Claap.
           </p>
           <button
             onClick={() => setBackfillOpen(true)}
-            className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 rounded-md"
-            style={{ background: "#fef2f4", color: "#f01563", border: "1px solid #fbd5de" }}
+            style={{
+              marginTop: 10,
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              fontSize: 12,
+              fontWeight: 500,
+              padding: "7px 12px",
+              borderRadius: 8,
+              background: COLORS.brandTint,
+              color: COLORS.brand,
+              border: `1px solid ${COLORS.brandTint}`,
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = COLORS.brand;
+              e.currentTarget.style.color = "#fff";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = COLORS.brandTint;
+              e.currentTarget.style.color = COLORS.brand;
+            }}
           >
             <Plus size={12} />
             Analyser un meeting passé
           </button>
+          {isAdmin && (
+            <button
+              onClick={recoverStuck}
+              disabled={recovering}
+              title="Relance les analyses bloquées en pending (>10 min) ou analyzing (>15 min)"
+              style={{
+                marginTop: 6,
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                fontSize: 11,
+                fontWeight: 500,
+                padding: "6px 12px",
+                borderRadius: 8,
+                background: "transparent",
+                color: COLORS.ink2,
+                border: `1px solid ${COLORS.lineStrong}`,
+                cursor: recovering ? "not-allowed" : "pointer",
+                opacity: recovering ? 0.6 : 1,
+              }}
+            >
+              <LifeBuoy size={11} />
+              {recovering ? "Récupération…" : "Récupérer les analyses bloquées"}
+            </button>
+          )}
+          {recoverMsg && (
+            <div style={{ marginTop: 4, fontSize: 10, color: COLORS.ink3, textAlign: "center" }}>
+              {recoverMsg}
+            </div>
+          )}
         </div>
         <div className="flex-1 overflow-hidden">
           {isLoading ? (
-            <div className="px-4 py-8 text-center text-sm" style={{ color: "#888" }}>Chargement…</div>
+            <div style={{ padding: "32px 16px", textAlign: "center", fontSize: 13, color: COLORS.ink3 }}>Chargement…</div>
           ) : error ? (
-            <div className="px-4 py-8 text-center text-sm" style={{ color: "#dc2626" }}>{error}</div>
+            <div style={{ padding: "32px 16px", textAlign: "center", fontSize: 13, color: COLORS.err }}>{error}</div>
           ) : (
             <AnalysisList
               analyses={analyses}
@@ -92,7 +195,10 @@ function SalesCoachInner() {
             }}
           />
         ) : (
-          <div className="flex items-center justify-center h-full text-sm" style={{ color: "#888" }}>
+          <div
+            className="flex items-center justify-center h-full"
+            style={{ fontSize: 13, color: COLORS.ink3 }}
+          >
             Sélectionne un meeting pour voir le debrief.
           </div>
         )}
@@ -113,7 +219,16 @@ function SalesCoachInner() {
 
 export default function SalesCoachPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-full text-sm" style={{ color: "#888" }}>Chargement…</div>}>
+    <Suspense
+      fallback={
+        <div
+          className="flex items-center justify-center h-full"
+          style={{ fontSize: 13, color: COLORS.ink3 }}
+        >
+          Chargement…
+        </div>
+      }
+    >
       <SalesCoachInner />
     </Suspense>
   );

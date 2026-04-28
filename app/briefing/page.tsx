@@ -3,242 +3,32 @@
 import { useState } from "react";
 import { useCalendarEvents } from "@/lib/hooks/use-calendar-events";
 import { useUserMe } from "@/lib/hooks/use-user-me";
-// import Link from "next/link";
-import { RefreshCw, Calendar, Mail, Send, ExternalLink } from "lucide-react";
-import { scoreBadge } from "@/lib/deal-scoring";
+import { Calendar } from "lucide-react";
 import type { CalendarEvent } from "@/lib/google-calendar";
 import { AskClaude } from "@/components/ask-claude";
+import { COLORS } from "@/lib/design/tokens";
+import { ScrollText } from "lucide-react";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-interface GatheredData {
-  contacts: Record<string, string>[];
-  deals: { name: string; stage: string; amount: string | null; closedate: string | null; scoreTotal: number | null; scoreReliability: number | null; reasoning: string | null; nextAction: string | null; scoredAt: string | null }[];
-  engagements: { type: string; date: string; subject: string | null; body: string | null; duration: number | null }[];
-  companyHubspot: Record<string, string> | null;
-  gmailMessages: { subject: string; from: string; date: string; snippet: string }[];
-  slackMessages: { channel: string; text: string; timestamp: string }[];
-  webResults: { title: string; url: string; content: string; published_date: string | null }[];
-  companyProfileResults: { title: string; url: string; content: string; published_date: string | null }[];
-  strategicResults: { title: string; url: string; content: string; published_date: string | null }[];
-  cached?: boolean;
-  briefing?: BriefingResult;
-}
+import {
+  BriefingResult,
+  GatheredData,
+  LoadState,
+  externalAttendees,
+  companyFromEmail,
+  formatBriefingForSlack,
+} from "./_helpers";
+import { CalendarWeek } from "./_components/calendar-week";
+import { MeetingSidebar } from "./_components/meeting-sidebar";
+import { BriefingActions } from "./_components/briefing-actions";
+import { BriefingHeader } from "./_components/briefing-header";
+import { BriefingObjective } from "./_components/briefing-objective";
+import { BriefingContext } from "./_components/briefing-context";
+import { BriefingDealSummary } from "./_components/briefing-deal-summary";
+import { BriefingTakeaways } from "./_components/briefing-takeaways";
+import { BriefingCompanyProfile } from "./_components/briefing-company-profile";
+import { BriefingNews } from "./_components/briefing-news";
+import { BriefingPerson } from "./_components/briefing-person";
 
-interface DealQualification {
-  budget: string | null;
-  estimatedBudget: string | null;
-  authority: string | null;
-  need: string | null;
-  champion: string | null;
-  needDetailed: string | null;
-  timeline: string | null;
-  strategicFit: string | null;
-}
-
-interface CompanyProfile {
-  revenue: string | null;
-  headcount: string | null;
-  clients: string | null;
-  businessModel: string | null;
-  industry: string | null;
-  keyFact: string | null;
-}
-
-interface StrategicHistoryItem {
-  year: string | null;
-  type: "acquisition" | "partnership" | "merger" | "divestiture";
-  entity: string;
-  description: string;
-}
-
-interface BriefingResult {
-  identity: { name: string; role: string; company: string; hubspotStage: string; lastContact: string };
-  meetingType?: "discovery" | "follow_up";
-  isSalesMeeting?: boolean;
-  objective?: string;
-  contextSummary?: string;
-  companyProfile?: CompanyProfile;
-  companyInsights?: string; // backward compat for cached briefings
-  personInsights?: string;
-  linkedinInsights?: { name: string; currentRole: string; experience?: string; skills?: string; education?: string; keyInsight: string }[];
-  recentNews: { items: { type: string; text: string; url?: string; date: string }[] };
-  strategicHistory?: StrategicHistoryItem[];
-  growthDynamics?: { summary: string } | null;
-  meetingTakeaways?: string[];
-  questionsToAsk?: string[];
-  nextStep?: string;
-  confidence: "high" | "medium" | "low";
-  dealQualification?: DealQualification;
-}
-
-type LoadState = "idle" | "loading" | "done" | "error";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function eventDateLabel(start: string): { label: string; color: string } {
-  const d = new Date(start);
-  const now = new Date();
-  const todayStr = now.toDateString();
-  const tomorrowStr = new Date(now.getTime() + 86400000).toDateString();
-  if (d.toDateString() === todayStr) return { label: "Aujourd'hui", color: "#f01563" };
-  if (d.toDateString() === tomorrowStr) return { label: "Demain", color: "#f97316" };
-  return {
-    label: d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }),
-    color: "#888",
-  };
-}
-
-function eventTime(start: string): string {
-  if (!start.includes("T")) return "";
-  return new Date(start).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-}
-
-function isRoom(a: { email: string; displayName?: string; resource?: boolean }): boolean {
-  if (a.resource) return true;
-  if (a.email.includes("resource.calendar.google.com")) return true;
-  // Salles nommées "Nom (X pers)" ou "Nom (X personnes)"
-  if (a.displayName && /\(\d+\s*(pers|personnes?)\)/i.test(a.displayName)) return true;
-  return false;
-}
-
-function externalAttendees(event: CalendarEvent) {
-  return event.attendees.filter((a) => !a.self && !isRoom(a) && !a.email.includes("coachello"));
-}
-
-function companyFromEmail(email: string): string {
-  const domain = email.split("@")[1] ?? "";
-  const parts = domain.split(".");
-  return parts.length >= 2 ? parts[parts.length - 2] : domain;
-}
-
-function RichText({ text }: { text: string }) {
-  // Parse inline: **bold**, [TYPE — DATE] badges
-  const parts: React.ReactNode[] = [];
-  const regex = /(\*\*(.+?)\*\*)|(\[([A-Z_]+)\s*[—–-]\s*([^\]]+)\])/g;
-  let last = 0;
-  let match: RegExpExecArray | null;
-  let key = 0;
-
-  const badgeColors: Record<string, { bg: string; color: string }> = {
-    MEETING: { bg: "#f5f3ff", color: "#7c3aed" },
-    EMAIL: { bg: "#eff6ff", color: "#2563eb" },
-    CALL: { bg: "#fffbeb", color: "#d97706" },
-    NOTE: { bg: "#f3f4f6", color: "#6b7280" },
-  };
-
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > last) {
-      parts.push(<span key={key++}>{text.slice(last, match.index)}</span>);
-    }
-    if (match[1]) {
-      // **bold**
-      parts.push(<strong key={key++} style={{ color: "#111", fontWeight: 600 }}>{match[2]}</strong>);
-    } else if (match[3]) {
-      // [TYPE — DATE]
-      const type = match[4];
-      const date = match[5].trim();
-      const colors = badgeColors[type] ?? { bg: "#f3f4f6", color: "#6b7280" };
-      parts.push(
-        <span key={key++} className="inline-flex items-center gap-1.5 mr-1">
-          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md" style={{ background: colors.bg, color: colors.color }}>{type === "MEETING" ? "Réunion" : type === "EMAIL" ? "Email" : type === "CALL" ? "Appel" : type}</span>
-          <span className="text-[10px]" style={{ color: "#999" }}>{date}</span>
-        </span>
-      );
-    }
-    last = match.index + match[0].length;
-  }
-  if (last < text.length) {
-    parts.push(<span key={key++}>{text.slice(last)}</span>);
-  }
-  return <>{parts}</>;
-}
-
-function MarkdownBlock({ text }: { text: string }) {
-  const lines = text.split("\n");
-  return (
-    <div className="space-y-2">
-      {lines.map((line, i) => {
-        if (line.startsWith("## ")) {
-          return (
-            <div key={i} className="mt-4 first:mt-0 mb-1.5 pb-1.5 border-b" style={{ borderColor: "#f0f0f0" }}>
-              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#aaa" }}>{line.slice(3)}</p>
-            </div>
-          );
-        }
-        if (line.startsWith("# ")) {
-          return <p key={i} className="text-xs font-bold mt-4 first:mt-0" style={{ color: "#111" }}>{line.slice(2)}</p>;
-        }
-        if (line.startsWith("- ") || line.startsWith("• ")) {
-          const content = line.slice(2);
-          return (
-            <div key={i} className="flex items-start gap-2 pl-1">
-              <span className="mt-[7px] shrink-0 w-1 h-1 rounded-full" style={{ background: "#f01563" }} />
-              <p className="text-xs leading-relaxed" style={{ color: "#444" }}><RichText text={content} /></p>
-            </div>
-          );
-        }
-        if (line.trim() === "") return <div key={i} className="h-1.5" />;
-        return <p key={i} className="text-xs leading-relaxed" style={{ color: "#444" }}><RichText text={line} /></p>;
-      })}
-    </div>
-  );
-}
-
-function confidenceBadge(c: "high" | "medium" | "low") {
-  if (c === "high") return { bg: "#f0fdf4", color: "#166534", border: "#bbf7d0", label: "Données riches" };
-  if (c === "medium") return { bg: "#fef3c7", color: "#92400e", border: "#fde68a", label: "Données partielles" };
-  return { bg: "#f1f5f9", color: "#475569", border: "#e2e8f0", label: "Peu de données" };
-}
-
-function formatBriefingForSlack(briefing: BriefingResult, eventTitle: string): string {
-  const lines: string[] = [
-    `*Briefing — ${eventTitle}*`,
-    "",
-    `*${briefing.identity?.name}* — ${briefing.identity?.role} @ ${briefing.identity?.company}`,
-    `Statut CRM : ${briefing.identity?.hubspotStage || "—"} | Dernier contact : ${briefing.identity?.lastContact || "—"}`,
-  ];
-  if (briefing.isSalesMeeting !== false && briefing.meetingType) {
-    lines.push("", `Type : ${briefing.meetingType === "discovery" ? "Découverte" : "Point de suivi"}`);
-  }
-  if (briefing.objective) {
-    lines.push("", `*Objectif* : ${briefing.objective}`);
-  }
-  if (briefing.meetingTakeaways?.length) {
-    lines.push("", `*Points clés* :`, ...briefing.meetingTakeaways.map((t, i) => `${i + 1}. ${t}`));
-  }
-  if (briefing.companyProfile) {
-    const cp = briefing.companyProfile;
-    const profileLines = [
-      cp.revenue ? `CA : ${cp.revenue}` : null,
-      cp.headcount ? `Effectifs : ${cp.headcount}` : null,
-      cp.clients ? `Clients : ${cp.clients}` : null,
-      cp.businessModel ? `Modèle : ${cp.businessModel}` : null,
-      cp.industry ? `Secteur : ${cp.industry}` : null,
-    ].filter(Boolean);
-    if (profileLines.length > 0) {
-      lines.push("", `*Entreprise* :`, ...profileLines.map((l) => `• ${l}`));
-    }
-  } else if (briefing.companyInsights) {
-    lines.push("", `*Entreprise* : ${briefing.companyInsights}`);
-  }
-  if (briefing.contextSummary) {
-    lines.push("", `*Contexte* :`, briefing.contextSummary);
-  }
-  if (briefing.personInsights) {
-    lines.push("", `*Interlocuteur* : ${briefing.personInsights}`);
-  }
-  if (briefing.recentNews?.items?.length) {
-    lines.push("", `*Actualités* :`, ...briefing.recentNews.items.slice(0, 4).map((i) => `• [${i.type}] ${i.text}`));
-  }
-  if (briefing.questionsToAsk?.length) {
-    lines.push("", `*Questions à poser* :`, ...briefing.questionsToAsk.map((q, i) => `${i + 1}. ${q}`));
-  }
-  if (briefing.nextStep) {
-    lines.push("", `*Prochaine étape* : ${briefing.nextStep}`);
-  }
-  return lines.join("\n");
-}
-
-// ── Component ─────────────────────────────────────────────────────────────────
 export default function BriefingPage() {
   const { events, calendarConnected, isLoading: loadingEvents } = useCalendarEvents(7);
   const { slackName } = useUserMe();
@@ -250,6 +40,7 @@ export default function BriefingPage() {
   const [sendingSlack, setSendingSlack] = useState(false);
   const [slackSent, setSlackSent] = useState(false);
   const [draftSent, setDraftSent] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
 
   async function selectEvent(event: CalendarEvent, forceRefresh = false) {
     setSelectedEvent(event);
@@ -257,6 +48,7 @@ export default function BriefingPage() {
     setRawData(null);
     setSlackSent(false);
     setDraftSent(false);
+    setAskOpen(false);
 
     const ext = externalAttendees(event);
     const company = ext[0] ? companyFromEmail(ext[0].email) : "";
@@ -275,7 +67,6 @@ export default function BriefingPage() {
       setRawData(gathered);
       setGatherState("done");
 
-      // Use cached briefing only if complete and not forcing refresh
       if (gathered.cached && gathered.briefing?.identity && !forceRefresh) {
         setBriefing(gathered.briefing);
         setBriefingState("done");
@@ -323,7 +114,9 @@ export default function BriefingPage() {
 
   function createDraft() {
     if (!briefing || !selectedEvent) return;
-    const content = formatBriefingForSlack(briefing, selectedEvent.title).replace(/\*/g, "").replace(/_/g, "");
+    const content = formatBriefingForSlack(briefing, selectedEvent.title)
+      .replace(/\*/g, "")
+      .replace(/_/g, "");
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -334,268 +127,109 @@ export default function BriefingPage() {
     setDraftSent(true);
   }
 
-  // ── Render ──────────────────────────────────────────────────────────────────
-  const showCenter = !!selectedEvent;
-  const showRight = briefingState === "done" && !!briefing;
+  function backToCalendar() {
+    setSelectedEvent(null);
+    setBriefing(null);
+    setRawData(null);
+    setGatherState("idle");
+    setBriefingState("idle");
+    setAskOpen(false);
+  }
 
-  const leftWidth = showRight ? "20%" : showCenter ? "40%" : "100%";
-  const centerWidth = showRight ? "50%" : showCenter ? "60%" : "0%";
-  const rightWidth = showRight ? "30%" : "0%";
+  // ── Render: no event selected → calendar week view ──────────────────────────
+  if (!selectedEvent) {
+    return (
+      <div className="flex flex-col h-full" style={{ background: COLORS.bgPage }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "16px 24px",
+            background: COLORS.bgCard,
+            borderBottom: `1px solid ${COLORS.line}`,
+          }}
+        >
+          <div>
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: COLORS.ink0, margin: 0, letterSpacing: "-0.01em" }}>
+              Meetings à venir
+            </h1>
+            <p style={{ fontSize: 12, color: COLORS.ink3, margin: 0, marginTop: 2 }}>7 prochains jours</p>
+          </div>
+          <Calendar size={18} style={{ color: COLORS.ink3 }} />
+        </div>
+        <div className="flex-1" style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <CalendarWeek
+            events={events}
+            loading={loadingEvents}
+            calendarConnected={calendarConnected}
+            onSelectEvent={selectEvent}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render: event selected → maquette layout ────────────────────────────────
+  const showLoading = gatherState === "loading" || (gatherState === "done" && briefingState === "loading");
+  const showError = gatherState === "error";
+  const briefingReady = briefingState === "done" && briefing && briefing.identity;
+  const briefingIncomplete = briefingState === "done" && briefing && !briefing.identity;
 
   return (
     <>
-    <div className="flex h-full overflow-hidden" style={{ background: "#f8f8f8" }}>
+      <div className="flex h-full" style={{ background: COLORS.bgPage, overflow: "hidden" }}>
+        <MeetingSidebar
+          events={events}
+          selectedId={selectedEvent.id}
+          onSelect={(e) => selectEvent(e)}
+          onBackToCalendar={backToCalendar}
+        />
 
-      {/* ── LEFT: Calendar Events ───────────────────────────────────────────── */}
-      <div className="flex flex-col border-r" style={{ width: leftWidth, flexShrink: 0, background: "#fff", borderColor: "#eee", transition: "width 0.3s ease", overflow: "hidden" }}>
-        <div className="px-4 py-4 border-b" style={{ borderColor: "#eee" }}>
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-semibold" style={{ color: "#111" }}>Meetings à venir</h2>
-              <p className="text-xs mt-0.5" style={{ color: "#aaa" }}>7 prochains jours</p>
+        <div className="flex flex-col" style={{ flex: 1, minWidth: 0 }}>
+          {briefingReady && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: 12,
+                padding: "12px 24px",
+                background: COLORS.bgCard,
+                borderBottom: `1px solid ${COLORS.line}`,
+              }}
+            >
+              <BriefingActions
+                onRefresh={() => selectEvent(selectedEvent, true)}
+                onSendSlack={sendToSlack}
+                sendingSlack={sendingSlack}
+                slackSent={slackSent}
+                slackName={slackName}
+              />
             </div>
-            {selectedEvent && (
-              <button
-                onClick={() => { setSelectedEvent(null); setBriefing(null); setRawData(null); setGatherState("idle"); setBriefingState("idle"); }}
-                className="text-xs px-2.5 py-1 rounded-lg border"
-                style={{ color: "#888", borderColor: "#e5e5e5" }}
-              >
-                ← Calendrier
-              </button>
-            )}
-          </div>
-        </div>
+          )}
 
-        {/* ── Vue calendrier semaine (plein écran) ── */}
-        {!showCenter && (
-          <div className="flex-1 overflow-hidden flex flex-col">
-            {!loadingEvents && calendarConnected === false && (
-              <div className="m-4 rounded-xl p-4 text-center" style={{ background: "#fde8ef", border: "1px solid #f9b4cb" }}>
-                <Calendar size={20} style={{ color: "#f01563", margin: "0 auto 8px" }} />
-                <p className="text-xs font-semibold mb-1" style={{ color: "#c01252" }}>Calendar non connecté</p>
-                <p className="text-xs mb-3" style={{ color: "#c01252" }}>Reconnecte Google pour activer l&apos;accès Calendar.</p>
-                <a href="/api/gmail/connect" className="inline-block text-xs px-3 py-1.5 rounded-lg font-medium" style={{ background: "#f01563", color: "#fff" }}>
-                  Reconnecter Google →
-                </a>
-              </div>
-            )}
-
-            {loadingEvents && calendarConnected !== false && (
-              <div className="flex-1 grid grid-cols-7 gap-px p-4" style={{ background: "#f0f0f0" }}>
-                {Array.from({ length: 7 }).map((_, i) => (
-                  <div key={i} className="flex flex-col gap-2 p-2" style={{ background: "#fff" }}>
-                    <div className="h-6 rounded animate-pulse" style={{ background: "#f5f5f5" }} />
-                    <div className="h-16 rounded animate-pulse" style={{ background: "#f5f5f5" }} />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {!loadingEvents && calendarConnected !== false && (() => {
-              // Build 7 days starting today
-              const days = Array.from({ length: 7 }, (_, i) => {
-                const d = new Date();
-                d.setDate(d.getDate() + i);
-                d.setHours(0, 0, 0, 0);
-                return d;
-              });
-
-              const eventsByDay = days.map((day) =>
-                events.filter((e) => {
-                  const ed = new Date(e.start);
-                  return ed.toDateString() === day.toDateString();
-                })
-              );
-
-              const DAY_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
-              const MONTH_SHORT = ["jan", "fév", "mar", "avr", "mai", "jun", "jul", "aoû", "sep", "oct", "nov", "déc"];
-              const todayStr = new Date().toDateString();
-
-              return (
-                <div className="flex flex-1 overflow-hidden">
-                  {days.map((day, di) => {
-                    const isToday = day.toDateString() === todayStr;
-                    const dayEvents = eventsByDay[di];
-
-                    return (
-                      <div
-                        key={di}
-                        className="flex flex-col flex-1 border-r overflow-hidden"
-                        style={{ borderColor: "#f0f0f0", background: isToday ? "#fffbfc" : "#fff" }}
-                      >
-                        {/* Day header */}
-                        <div
-                          className="px-2 py-2 border-b text-center shrink-0"
-                          style={{ borderColor: "#f0f0f0", background: isToday ? "#fde8ef" : "#fafafa" }}
-                        >
-                          <p className="text-[10px] font-medium" style={{ color: isToday ? "#f01563" : "#888" }}>
-                            {DAY_LABELS[day.getDay()]}
-                          </p>
-                          <p className="text-sm font-bold" style={{ color: isToday ? "#f01563" : "#111" }}>
-                            {day.getDate()}
-                          </p>
-                          <p className="text-[9px]" style={{ color: "#bbb" }}>
-                            {MONTH_SHORT[day.getMonth()]}
-                          </p>
-                        </div>
-
-                        {/* Events */}
-                        <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5">
-                          {dayEvents.length === 0 && (
-                            <div className="h-full flex items-start justify-center pt-4">
-                              <span className="text-[10px]" style={{ color: "#e5e5e5" }}>—</span>
-                            </div>
-                          )}
-                          {dayEvents.map((event) => {
-                            const ext = externalAttendees(event);
-                            const isInternal = ext.length === 0;
-                            const time = eventTime(event.start);
-
-                            return (
-                              <button
-                                key={event.id}
-                                onClick={() => !isInternal && selectEvent(event)}
-                                disabled={isInternal}
-                                className="w-full text-left p-2 rounded-lg border transition-all"
-                                style={{
-                                  borderColor: isInternal ? "#f0f0f0" : "#e5e5e5",
-                                  background: isInternal ? "#fafafa" : "#fff",
-                                  opacity: isInternal ? 0.5 : 1,
-                                  cursor: isInternal ? "default" : "pointer",
-                                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-                                }}
-                                onMouseEnter={(e) => { if (!isInternal) e.currentTarget.style.borderColor = "#f01563"; }}
-                                onMouseLeave={(e) => { if (!isInternal) e.currentTarget.style.borderColor = "#e5e5e5"; }}
-                              >
-                                {time && (
-                                  <p className="text-[9px] font-semibold mb-0.5" style={{ color: "#f01563" }}>{time}</p>
-                                )}
-                                <p className="text-[10px] font-semibold leading-tight mb-1" style={{ color: "#111" }}>
-                                  {event.title}
-                                </p>
-                                {!isInternal && (
-                                  <p className="text-[9px] truncate" style={{ color: "#aaa" }}>
-                                    {ext[0]?.displayName || ext[0]?.email}
-                                    {ext.length > 1 ? ` +${ext.length - 1}` : ""}
-                                  </p>
-                                )}
-                                <div className="flex gap-1 mt-1 flex-wrap">
-                                  {isInternal && (
-                                    <span className="text-[8px] px-1 py-0.5 rounded-full" style={{ background: "#f1f5f9", color: "#475569" }}>Interne</span>
-                                  )}
-                                  {event.meetingLink && (
-                                    <span className="text-[8px] px-1 py-0.5 rounded-full" style={{ background: "#eff6ff", color: "#1d4ed8" }}>Visio</span>
-                                  )}
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-          </div>
-        )}
-
-        {/* ── Vue liste (quand un event est sélectionné) ── */}
-        {showCenter && (
-          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
-            {events.map((event) => {
-              const ext = externalAttendees(event);
-              const { label, color } = eventDateLabel(event.start);
-              const time = eventTime(event.start);
-              const active = selectedEvent?.id === event.id;
-              const isInternal = ext.length === 0;
-
-              return (
-                <button
-                  key={event.id}
-                  onClick={() => !isInternal && selectEvent(event)}
-                  disabled={isInternal}
-                  className="w-full text-left p-3 rounded-xl border transition-colors"
-                  style={{
-                    borderColor: active ? "#f01563" : "#e5e5e5",
-                    background: active ? "#fff9fb" : "#fff",
-                    opacity: isInternal ? 0.5 : 1,
-                    cursor: isInternal ? "default" : "pointer",
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <p className="text-xs font-semibold leading-tight" style={{ color: "#111" }}>{event.title}</p>
-                    <span className="text-[10px] shrink-0 font-medium" style={{ color }}>{label}</span>
-                  </div>
-                  {time && <p className="text-[10px] mb-1" style={{ color: "#888" }}>{time}</p>}
-                  <div className="flex items-center gap-1.5">
-                    {isInternal ? (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: "#f1f5f9", color: "#475569" }}>Interne</span>
-                    ) : (
-                      <span className="text-[10px]" style={{ color: "#aaa" }}>
-                        {ext[0]?.displayName || ext[0]?.email}
-                        {ext.length > 1 ? ` +${ext.length - 1}` : ""}
-                      </span>
-                    )}
-                    {event.meetingLink && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: "#eff6ff", color: "#1d4ed8" }}>Visio</span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ── CENTER: Briefing Content ────────────────────────────────────────── */}
-      <div className="flex flex-col" style={{ width: centerWidth, flexShrink: 0, overflowX: "hidden", overflowY: showCenter ? "auto" : "hidden", transition: "width 0.3s ease" }}>
-        {!selectedEvent && (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-8">
-            <Calendar size={40} style={{ color: "#e5e5e5" }} />
-            <p className="text-sm font-medium" style={{ color: "#888" }}>Sélectionne un meeting</p>
-            <p className="text-xs" style={{ color: "#bbb" }}>Clique sur un événement pour générer le briefing</p>
-          </div>
-        )}
-
-        {selectedEvent && (
-          <div className="px-6 py-5 space-y-5">
-            {/* Header */}
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-base font-semibold" style={{ color: "#111" }}>{selectedEvent.title}</h2>
-                <p className="text-xs mt-0.5" style={{ color: "#888" }}>
-                  {selectedEvent.start
-                    ? new Date(selectedEvent.start).toLocaleDateString("fr-FR", {
-                        weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
-                      })
-                    : ""}
-                  {selectedEvent.meetingLink && (
-                    <a href={selectedEvent.meetingLink} target="_blank" rel="noopener noreferrer" className="ml-2 inline-flex items-center gap-0.5" style={{ color: "#1d4ed8" }}>
-                      Rejoindre <ExternalLink size={10} />
-                    </a>
-                  )}
-                </p>
-              </div>
-              {briefingState === "done" && (
-                <button
-                  onClick={() => selectEvent(selectedEvent, true)}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors"
-                  style={{ background: "#f5f5f5", color: "#555" }}
-                >
-                  <RefreshCw size={11} />
-                  Régénérer
-                </button>
-              )}
-            </div>
-
+          <div className="flex-1 overflow-y-auto" style={{ padding: "20px 24px" }}>
+            <div style={{ maxWidth: 1280, margin: "0 auto" }}>
             {/* Loading: gather */}
             {gatherState === "loading" && (
-              <div className="space-y-3">
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {["HubSpot CRM…", "Gmail…", "Slack…", "Web…"].map((src) => (
-                  <div key={src} className="flex items-center gap-3 p-3 rounded-xl border animate-pulse" style={{ borderColor: "#f0f0f0", background: "#fafafa" }}>
-                    <div className="w-4 h-4 rounded-full" style={{ background: "#f5f5f5" }} />
-                    <p className="text-xs" style={{ color: "#aaa" }}>Recherche dans {src}</p>
+                  <div
+                    key={src}
+                    className="animate-pulse"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: 14,
+                      borderRadius: 12,
+                      border: `1px solid ${COLORS.line}`,
+                      background: COLORS.bgSoft,
+                    }}
+                  >
+                    <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#f5f5f5" }} />
+                    <p style={{ fontSize: 12, color: COLORS.ink4, margin: 0 }}>Recherche dans {src}</p>
                   </div>
                 ))}
               </div>
@@ -603,513 +237,179 @@ export default function BriefingPage() {
 
             {/* Loading: synthesize */}
             {gatherState === "done" && briefingState === "loading" && (
-              <div className="flex items-center gap-3 p-4 rounded-xl border" style={{ borderColor: "#fde8ef", background: "#fff9fb" }}>
-                <div className="w-2 h-2 rounded-full animate-ping" style={{ background: "#f01563" }} />
-                <p className="text-xs" style={{ color: "#c01252" }}>Claude analyse les données…</p>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: 16,
+                  borderRadius: 12,
+                  border: `1px solid ${COLORS.brandTint}`,
+                  background: COLORS.brandTintSoft,
+                }}
+              >
+                <div className="animate-ping" style={{ width: 8, height: 8, borderRadius: "50%", background: COLORS.brand }} />
+                <p style={{ fontSize: 12, color: "#c01252", margin: 0 }}>Claude analyse les données…</p>
               </div>
             )}
 
             {/* Error */}
-            {gatherState === "error" && (
-              <div className="p-4 rounded-xl border text-xs" style={{ borderColor: "#fecaca", background: "#fef2f2", color: "#991b1b" }}>
+            {showError && (
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 12,
+                  border: "1px solid #fecaca",
+                  background: "#fef2f2",
+                  color: "#991b1b",
+                  fontSize: 13,
+                }}
+              >
                 Erreur lors de la récupération des données. Réessaie dans un moment.
               </div>
             )}
 
-            {/* Data sources summary */}
-            {gatherState === "done" && rawData && (
-              <div className="flex gap-2 flex-wrap">
-                {[
-                  { label: `${rawData.contacts.length} contact${rawData.contacts.length > 1 ? "s" : ""} HubSpot`, active: rawData.contacts.length > 0 },
-                  ...(briefing?.isSalesMeeting !== false ? [{ label: `${rawData.deals.length} deal${rawData.deals.length > 1 ? "s" : ""}`, active: rawData.deals.length > 0 }] : []),
-                  { label: `${rawData.gmailMessages.length} email${rawData.gmailMessages.length > 1 ? "s" : ""}`, active: rawData.gmailMessages.length > 0 },
-                  { label: `${rawData.slackMessages.length} Slack`, active: rawData.slackMessages.length > 0 },
-                  { label: `${rawData.webResults.length} web`, active: rawData.webResults.length > 0 },
-                ].map(({ label, active }) => (
-                  <span key={label} className="text-[10px] px-2 py-1 rounded-full" style={{
-                    background: active ? "#f0fdf4" : "#f5f5f5",
-                    color: active ? "#166534" : "#aaa",
-                    border: `1px solid ${active ? "#bbf7d0" : "#e5e5e5"}`,
-                  }}>
-                    {label}
-                  </span>
-                ))}
-                {rawData.cached && (
-                  <span className="text-[10px] px-2 py-1 rounded-full" style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}>
-                    Cache
-                  </span>
-                )}
+            {/* Briefing incomplete from cache */}
+            {briefingIncomplete && (
+              <div
+                style={{
+                  padding: 14,
+                  borderRadius: 12,
+                  border: "1px solid #fde68a",
+                  background: "#fffbeb",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  fontSize: 13,
+                  color: "#92400e",
+                }}
+              >
+                <ScrollText size={16} />
+                Le briefing en cache est incomplet. Clique sur <strong>Rafraîchir</strong> pour relancer l&apos;analyse.
               </div>
             )}
 
-            {/* Objective banner */}
-            {briefingState === "done" && briefing?.objective && (
-              <div className="rounded-xl px-4 py-3" style={{ background: "#fde8ef", border: "1px solid #f9b4cb" }}>
-                <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: "#c01252" }}>Objectif de la réunion</p>
-                <p className="text-xs leading-relaxed" style={{ color: "#7a0e3a" }}>{briefing.objective}</p>
-              </div>
-            )}
+            {/* Briefing ready: header + objective + 2-col body */}
+            {briefingReady && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                <BriefingHeader
+                  selectedEvent={selectedEvent}
+                  briefing={briefing!}
+                  rawData={rawData}
+                  onAskAI={() => setAskOpen((v) => !v)}
+                  onDownloadDraft={createDraft}
+                  onLinkedIn={() => {
+                    document.getElementById("briefing-person-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                />
 
-            {/* Meeting takeaways */}
-            {briefingState === "done" && briefing?.meetingTakeaways && briefing.meetingTakeaways.length > 0 && (
-              <div className="rounded-xl px-4 py-3" style={{ background: "#fef3c7", border: "1px solid #fde68a" }}>
-                <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: "#92400e" }}>Points clés pour le meeting</p>
-                <ol className="space-y-1.5">
-                  {briefing.meetingTakeaways.map((t, i) => (
-                    <li key={i} className="flex items-start gap-2 text-xs" style={{ color: "#78350f" }}>
-                      <span className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5" style={{ background: "#fde68a", color: "#92400e" }}>
-                        {i + 1}
+                {briefing!.objective && <BriefingObjective objective={briefing!.objective} />}
+
+                {briefing!.isSalesMeeting !== false && <BriefingDealSummary rawData={rawData} />}
+
+                {/* Data sources summary */}
+                {rawData && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {[
+                      { label: `${rawData.contacts.length} contact${rawData.contacts.length > 1 ? "s" : ""} HubSpot`, active: rawData.contacts.length > 0 },
+                      ...(briefing!.isSalesMeeting !== false ? [{ label: `${rawData.deals.length} deal${rawData.deals.length > 1 ? "s" : ""}`, active: rawData.deals.length > 0 }] : []),
+                      { label: `${rawData.gmailMessages.length} email${rawData.gmailMessages.length > 1 ? "s" : ""}`, active: rawData.gmailMessages.length > 0 },
+                      { label: `${rawData.slackMessages.length} Slack`, active: rawData.slackMessages.length > 0 },
+                      { label: `${rawData.webResults.length} web`, active: rawData.webResults.length > 0 },
+                    ].map(({ label, active }) => (
+                      <span
+                        key={label}
+                        style={{
+                          fontSize: 11,
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          background: active ? COLORS.okBg : COLORS.bgSoft,
+                          color: active ? COLORS.ok : COLORS.ink4,
+                          border: `1px solid ${active ? "#bbf7d0" : COLORS.line}`,
+                        }}
+                      >
+                        {label}
                       </span>
-                      {t}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
-
-            {/* Deal card (compact) — only for sales meetings */}
-            {gatherState === "done" && rawData && rawData.deals.length > 0 && briefing?.isSalesMeeting !== false && (() => {
-              const deal = rawData.deals[0];
-              const badge = deal.scoreTotal !== null ? scoreBadge(deal.scoreTotal) : null;
-              const amount = deal.amount ? `${Number(deal.amount).toLocaleString("fr-FR")} €` : null;
-              return (
-                <div className="rounded-xl border p-4" style={{ borderColor: "#e5e5e5", borderLeft: "2px solid #e5e5e5", background: "#fff" }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#aaa" }}>Deal associé</p>
-                    {badge && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold" style={{ color: badge.color }}>{deal.scoreTotal}/100</span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs font-semibold" style={{ color: "#111" }}>{deal.name}</p>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className="text-[10px]" style={{ color: "#888" }}>{deal.stage}</span>
-                    {amount && <span className="text-[10px] font-medium" style={{ color: "#555" }}>{amount}</span>}
-                    {deal.closedate && (
-                      <span className="text-[10px]" style={{ color: "#bbb" }}>
-                        Clôture {new Date(deal.closedate).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
-                      </span>
-                    )}
-                  </div>
-                  {deal.reasoning && (
-                    <p className="text-[11px] leading-relaxed mt-2" style={{ color: "#666" }}>{deal.reasoning}</p>
-                  )}
-                  {deal.nextAction && (
-                    <p className="text-[11px] mt-1" style={{ color: "#888" }}>
-                      <span style={{ color: "#aaa" }}>Prochaine action :</span> {deal.nextAction}
-                    </p>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Briefing sections */}
-            {briefingState === "done" && briefing && !briefing.identity && (
-              <div className="rounded-xl border px-4 py-3 flex items-center gap-3" style={{ borderColor: "#fde68a", background: "#fffbeb" }}>
-                <p className="text-xs" style={{ color: "#92400e" }}>
-                  Le briefing en cache est incomplet. Clique sur <strong>Régénérer</strong> pour relancer l'analyse.
-                </p>
-              </div>
-            )}
-
-            {briefingState === "done" && briefing && briefing.identity && (
-              <div className="space-y-4">
-
-                {/* Context summary */}
-                {briefing.contextSummary && (
-                  <div className="p-3.5 rounded-xl border" style={{ borderColor: "#e5e5e5", background: "#fafafa" }}>
-                    <MarkdownBlock text={briefing.contextSummary} />
-                  </div>
-                )}
-
-                {/* Next step */}
-                {briefing.nextStep && (
-                  <div className="p-3.5 rounded-xl border" style={{ borderColor: "#bbf7d0", background: "#f0fdf4" }}>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: "#166534" }}>Prochaine étape</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#15803d" }}>{briefing.nextStep}</p>
-                  </div>
-                )}
-
-                {/* Deal qualification checklist — only for sales meetings */}
-                {briefing.isSalesMeeting !== false && briefing.dealQualification && (() => {
-                  const fields: { key: keyof DealQualification; label: string }[] = [
-                    { key: "budget",          label: "Budget" },
-                    { key: "estimatedBudget", label: "Budget estimé" },
-                    { key: "authority",       label: "Autorité (décisionnaire)" },
-                    { key: "need",            label: "Besoin" },
-                    { key: "champion",        label: "Champion interne" },
-                    { key: "needDetailed",    label: "Besoin détaillé" },
-                    { key: "timeline",        label: "Timeline" },
-                    { key: "strategicFit",    label: "Fit stratégique" },
-                  ];
-                  const known = fields.filter((f) => !!briefing.dealQualification![f.key]);
-                  const missing = fields.filter((f) => !briefing.dealQualification![f.key]);
-                  return (
-                    <div className="rounded-xl border overflow-hidden" style={{ borderColor: "#e5e5e5" }}>
-                      <div className="px-3.5 py-2.5 border-b" style={{ borderColor: "#f0f0f0", background: "#fafafa" }}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#aaa" }}>
-                            Qualification deal
-                          </p>
-                          <p className="text-[10px] font-medium" style={{ color: "#888" }}>
-                            {known.length}/{fields.length}
-                          </p>
-                        </div>
-                        <div className="w-full h-1 rounded-full" style={{ background: "#e5e5e5" }}>
-                          <div className="h-1 rounded-full transition-all" style={{ width: `${(known.length / fields.length) * 100}%`, background: known.length === fields.length ? "#22c55e" : "#f01563" }} />
-                        </div>
-                      </div>
-                      <div className="divide-y" style={{ borderColor: "#f5f5f5" }}>
-                        {known.map((f) => (
-                          <div key={f.key} className="flex items-start gap-2.5 px-3.5 py-2.5">
-                            <span className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ background: "#22c55e" }} />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[10px] font-semibold" style={{ color: "#555" }}>{f.label}</p>
-                              <p className="text-[11px] leading-relaxed" style={{ color: "#111" }}>{briefing.dealQualification![f.key]}</p>
-                            </div>
-                          </div>
-                        ))}
-                        {missing.length > 0 && (
-                          <div className="px-3.5 py-2.5" style={{ background: "#fffbfb" }}>
-                            <p className="text-[10px] font-semibold mb-1.5" style={{ color: "#aaa" }}>À collecter</p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {missing.map((f) => (
-                                <span key={f.key} className="text-[10px] px-2 py-0.5 rounded-full border" style={{ background: "#fff", borderColor: "#fecaca", color: "#dc2626" }}>
-                                  {f.label}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── RIGHT: Context + Actions ─────────────────────────────────────── */}
-      <div className="flex flex-col border-l" style={{ width: rightWidth, flexShrink: 0, background: "#fff", borderColor: "#eee", transition: "width 0.3s ease", overflow: "hidden" }}>
-        <div className="px-4 py-4 border-b" style={{ borderColor: "#eee" }}>
-          <h2 className="text-sm font-semibold" style={{ color: "#111" }}>Fiche contact</h2>
-          <p className="text-xs mt-0.5" style={{ color: "#aaa" }}>Profil, entreprise &amp; insights</p>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          {!selectedEvent && (
-            <p className="text-xs text-center mt-12" style={{ color: "#bbb" }}>Sélectionne un meeting pour voir la fiche</p>
-          )}
-
-          {(briefingState === "loading" || gatherState === "loading") && selectedEvent && (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-24 rounded-xl animate-pulse" style={{ background: "#f5f5f5" }} />
-              ))}
-            </div>
-          )}
-
-          {briefingState === "done" && briefing && briefing.identity && (
-            <div className="space-y-3">
-
-              {/* Identity */}
-              <div className="rounded-xl border p-4" style={{ borderColor: "#e5e5e5", borderLeft: "2px solid #e5e5e5", background: "#fff" }}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#aaa" }}>Qui tu rencontres</p>
-                    {briefing.isSalesMeeting !== false && briefing.meetingType && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: briefing.meetingType === "discovery" ? "#eff6ff" : "#fef3c7", color: briefing.meetingType === "discovery" ? "#1e40af" : "#92400e" }}>
-                        {briefing.meetingType === "discovery" ? "Découverte" : "Suivi"}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {briefing.identity?.hubspotStage && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{ background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0" }}>
-                        {briefing.identity?.hubspotStage}
-                      </span>
-                    )}
-                    {briefing.confidence && (() => {
-                      const badge = confidenceBadge(briefing.confidence);
-                      return (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>
-                          {badge.label}
-                        </span>
-                      );
-                    })()}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold uppercase shrink-0" style={{ background: "#fde8ef", color: "#f01563" }}>
-                    {briefing.identity?.name?.split(" ").map((n: string) => n[0]).slice(0, 2).join("") ?? "?"}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold truncate" style={{ color: "#111" }}>{briefing.identity?.name}</p>
-                    <p className="text-[11px] truncate" style={{ color: "#888" }}>
-                      {briefing.identity?.role}{briefing.identity?.company ? ` · ${briefing.identity?.company}` : ""}
-                    </p>
-                    {briefing.identity?.lastContact && (
-                      <p className="text-[10px] mt-0.5" style={{ color: "#bbb" }}>Dernier contact : {briefing.identity?.lastContact}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Company profile (structured) */}
-              {(briefing.companyProfile || briefing.companyInsights) && (
-                <div className="rounded-xl border p-4" style={{ borderColor: "#e5e5e5", borderLeft: "2px solid #e5e5e5", background: "#fff" }}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide mb-2.5" style={{ color: "#aaa" }}>Entreprise</p>
-                  {briefing.companyProfile ? (
-                    <div className="space-y-2.5">
-                      {/* Metrics grid */}
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {[
-                          { label: "CA", value: briefing.companyProfile.revenue },
-                          { label: "Effectifs", value: briefing.companyProfile.headcount },
-                          { label: "Clients", value: briefing.companyProfile.clients },
-                        ].filter((m) => m.value).map((m) => (
-                          <div key={m.label} className="rounded-lg px-2.5 py-1.5" style={{ background: "#fdf2f8" }}>
-                            <p className="text-[9px] font-medium" style={{ color: "#aaa" }}>{m.label}</p>
-                            <p className="text-[11px] font-semibold" style={{ color: "#111" }}>{m.value}</p>
-                          </div>
-                        ))}
-                      </div>
-                      {/* Structured details */}
-                      <div className="space-y-0.5">
-                        {[
-                          { label: "Secteur", value: briefing.companyProfile.industry },
-                          { label: "Modèle", value: briefing.companyProfile.businessModel },
-                        ].filter((d) => d.value).map((d) => (
-                          <p key={d.label} className="text-[11px]">
-                            <span style={{ color: "#aaa" }}>{d.label} · </span>
-                            <span style={{ color: "#555" }}>{d.value}</span>
-                          </p>
-                        ))}
-                      </div>
-                      {/* Key fact */}
-                      {briefing.companyProfile.keyFact && (
-                        <p className="text-[11px] leading-relaxed pt-1 border-t" style={{ color: "#555", borderColor: "#f0f0f0" }}>
-                          {briefing.companyProfile.keyFact}
-                        </p>
-                      )}
-                      {/* Growth dynamics (inline - 1 phrase) */}
-                      {briefing.growthDynamics?.summary && (
-                        <p className="text-[10px] leading-relaxed pt-1 border-t" style={{ color: "#888", borderColor: "#f0f0f0" }}>
-                          {briefing.growthDynamics.summary}
-                        </p>
-                      )}
-                      {/* Strategic history (inline) */}
-                      {briefing.strategicHistory && briefing.strategicHistory.length > 0 && (
-                        <div className="pt-2 border-t space-y-1" style={{ borderColor: "#f0f0f0" }}>
-                          <p className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: "#aaa" }}>Historique stratégique</p>
-                          {briefing.strategicHistory.map((item, i) => {
-                            const typeLabels: Record<string, string> = { acquisition: "Acq.", partnership: "Part.", merger: "Fusion", divestiture: "Cession" };
-                            return (
-                              <div key={i} className="flex items-start gap-1.5 text-[10px]">
-                                <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1" style={{ background: "#f01563" }} />
-                                <span style={{ color: "#888" }}>{item.year ?? "—"}</span>
-                                <span className="font-medium" style={{ color: "#888" }}>{typeLabels[item.type] ?? item.type}</span>
-                                <span style={{ color: "#444" }}><strong style={{ color: "#111" }}>{item.entity}</strong> — {item.description}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-xs leading-relaxed" style={{ color: "#555" }}>{briefing.companyInsights}</p>
-                  )}
-                </div>
-              )}
-
-              {/* Interlocuteur (personInsights + LinkedIn) */}
-              {(briefing.personInsights || (briefing.linkedinInsights && briefing.linkedinInsights.length > 0)) && (
-                <div className="rounded-xl border p-4" style={{
-                  borderColor: "#e5e5e5",
-                  borderLeft: briefing.linkedinInsights?.length ? "2px solid #1d4ed8" : "2px solid #e5e5e5",
-                  background: "#fff",
-                }}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#aaa" }}>Interlocuteur</p>
-                    {briefing.linkedinInsights?.length && (
-                      <div className="flex items-center gap-1">
-                        <svg viewBox="0 0 24 24" width={10} height={10} fill="#1d4ed8"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                        <span className="text-[9px] font-medium" style={{ color: "#1d4ed8" }}>LinkedIn</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Person insights (HubSpot/Claude) — only if no LinkedIn data */}
-                  {briefing.personInsights && !briefing.linkedinInsights?.length && (
-                    <div className="text-xs leading-relaxed space-y-1" style={{ color: "#555" }}>
-                      {briefing.personInsights.split("\n").filter(Boolean).map((line, i) => (
-                        <p key={i}>{line}</p>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* LinkedIn insights */}
-                  {briefing.linkedinInsights?.map((li, i) => (
-                    <div key={i} className="space-y-2">
-                      <div>
-                        <p className="text-xs font-semibold" style={{ color: "#111" }}>{li.name}</p>
-                        <p className="text-[11px]" style={{ color: "#1d4ed8" }}>{li.currentRole}</p>
-                      </div>
-                      {li.keyInsight && (
-                        <p className="text-[11px] px-2.5 py-1.5 rounded-lg" style={{ background: "#eff6ff", color: "#1e40af" }}>
-                          {li.keyInsight}
-                        </p>
-                      )}
-                      {li.experience && (
-                        <div>
-                          <p className="text-[9px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: "#aaa" }}>Parcours</p>
-                          <div className="text-[11px] leading-relaxed" style={{ color: "#555" }}>
-                            {li.experience.split("\\n").map((line, j) => <p key={j}>{line}</p>)}
-                          </div>
-                        </div>
-                      )}
-                      {li.skills && (
-                        <div>
-                          <p className="text-[9px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: "#aaa" }}>Compétences</p>
-                          <p className="text-[11px]" style={{ color: "#555" }}>{li.skills}</p>
-                        </div>
-                      )}
-                      {li.education && (
-                        <div>
-                          <p className="text-[9px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: "#aaa" }}>Formation</p>
-                          <p className="text-[11px]" style={{ color: "#555" }}>{li.education}</p>
-                        </div>
-                      )}
-                      {/* personInsights as complement below LinkedIn */}
-                      {briefing.personInsights && i === (briefing.linkedinInsights?.length ?? 1) - 1 && (
-                        <div className="pt-2 border-t" style={{ borderColor: "#f0f0f0" }}>
-                          <p className="text-[9px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: "#aaa" }}>Notes CRM</p>
-                          <div className="text-[11px] leading-relaxed" style={{ color: "#888" }}>
-                            {briefing.personInsights.split("\n").filter(Boolean).map((line, j) => (
-                              <p key={j}>{line}</p>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Recent news (categorized) */}
-              {briefing.recentNews?.items?.length > 0 && (() => {
-                const categoryConfig: Record<string, { label: string; bg: string; color: string }> = {
-                  strategic: { label: "Stratégique", bg: "#f5f3ff", color: "#7c3aed" },
-                  recognition: { label: "Reconnaissance", bg: "#fef3c7", color: "#d97706" },
-                  partnership: { label: "Partenariat", bg: "#eff6ff", color: "#2563eb" },
-                  growth: { label: "Croissance", bg: "#f0fdf4", color: "#16a34a" },
-                  leadership: { label: "Leadership", bg: "#eef2ff", color: "#4f46e5" },
-                  general: { label: "Actualité", bg: "#f3f4f6", color: "#6b7280" },
-                };
-                return (
-                  <div className="rounded-xl border p-4" style={{ borderColor: "#e5e5e5", borderLeft: "2px solid #e5e5e5", background: "#fff" }}>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: "#aaa" }}>Actualités récentes</p>
-                    <div className="space-y-2">
-                      {briefing.recentNews.items.map((item, i) => {
-                        const cat = categoryConfig[item.type] ?? categoryConfig.general;
-                        return (
-                          <div key={i} className="flex items-start gap-2">
-                            <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-md shrink-0 mt-0.5" style={{ background: cat.bg, color: cat.color }}>{cat.label}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[11px]" style={{ color: "#444" }}>{item.text}</p>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                {item.url && (
-                                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-[10px] flex items-center gap-0.5" style={{ color: "#1d4ed8" }}>
-                                    Source <ExternalLink size={9} />
-                                  </a>
-                                )}
-                                {item.date && <span className="text-[10px]" style={{ color: "#bbb" }}>{item.date}</span>}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Questions to ask */}
-              {briefing.questionsToAsk && briefing.questionsToAsk.length > 0 && (
-                <div className="rounded-xl border p-4" style={{ borderColor: "#e5e5e5", borderLeft: "2px solid #e5e5e5", background: "#fff" }}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: "#aaa" }}>Questions à poser</p>
-                  <ol className="space-y-2">
-                    {briefing.questionsToAsk.map((q, i) => (
-                      <li key={i} className="flex items-start gap-2.5 text-xs" style={{ color: "#444" }}>
-                        <span className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5" style={{ background: "#f5f5f5", color: "#888" }}>
-                          {i + 1}
-                        </span>
-                        {q}
-                      </li>
                     ))}
-                  </ol>
+                    {rawData.cached && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          background: COLORS.warnBg,
+                          color: COLORS.warn,
+                          border: "1px solid #fde68a",
+                        }}
+                      >
+                        Cache
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* 2-column body */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 3fr) minmax(0, 2fr)",
+                    gap: 18,
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    <BriefingContext briefing={briefing!} />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {briefing!.meetingTakeaways && briefing!.meetingTakeaways.length > 0 && (
+                      <BriefingTakeaways takeaways={briefing!.meetingTakeaways} />
+                    )}
+                    <BriefingCompanyProfile briefing={briefing!} />
+                    <BriefingNews briefing={briefing!} />
+                    <div id="briefing-person-section">
+                      <BriefingPerson briefing={briefing!} />
+                    </div>
+                  </div>
                 </div>
-              )}
 
+                {askOpen && (
+                  <div>
+                    <AskClaude
+                      context={{
+                        meeting: selectedEvent.title,
+                        briefing,
+                        rawData: rawData
+                          ? {
+                              contacts: rawData.contacts,
+                              deals: rawData.deals,
+                              engagements: rawData.engagements,
+                              company: rawData.companyHubspot,
+                              gmailMessages: rawData.gmailMessages,
+                              slackMessages: rawData.slackMessages,
+                              webResults: rawData.webResults,
+                            }
+                          : undefined,
+                      }}
+                      placeholder="Poser une question sur ce meeting…"
+                    />
+                  </div>
+                )}
+
+                {draftSent && (
+                  <p style={{ fontSize: 11, color: COLORS.ok, textAlign: "center", margin: 0 }}>
+                    Debrief téléchargé ✓
+                  </p>
+                )}
+
+                {showLoading && !briefingReady && (
+                  <div style={{ height: 20 }} />
+                )}
+              </div>
+            )}
             </div>
-          )}
-        </div>
-
-        {/* Actions */}
-        {briefingState === "done" && briefing && selectedEvent && (
-          <div className="px-4 py-3 border-t space-y-2" style={{ borderColor: "#eee" }}>
-            <button
-              onClick={sendToSlack}
-              disabled={sendingSlack || slackSent || !slackName}
-              className="w-full flex items-center justify-center gap-1.5 text-xs py-2.5 rounded-lg transition-colors disabled:opacity-50"
-              style={{ background: slackSent ? "#f0fdf4" : "#f01563", color: slackSent ? "#166534" : "#fff" }}
-              title={!slackName ? "Configurez votre nom Slack dans Admin" : undefined}
-            >
-              <Send size={12} />
-              {slackSent ? "Envoyé en DM Slack" : sendingSlack ? "Envoi…" : !slackName ? "User Slack non défini" : "Envoyer en DM Slack"}
-            </button>
-            <button
-              onClick={createDraft}
-              className="w-full flex items-center justify-center gap-1.5 text-xs py-2 rounded-lg transition-colors"
-              style={{ background: draftSent ? "#f0fdf4" : "#fff", color: draftSent ? "#166534" : "#555", border: `1px solid ${draftSent ? "#bbf7d0" : "#e5e5e5"}` }}
-            >
-              <Mail size={12} />
-              {draftSent ? "Téléchargé" : "Télécharger le debrief (.txt)"}
-            </button>
-            <button
-              onClick={() => selectEvent(selectedEvent, true)}
-              className="w-full flex items-center justify-center gap-1.5 text-xs py-2 rounded-lg transition-colors"
-              style={{ background: "#fff", color: "#555", border: "1px solid #e5e5e5" }}
-            >
-              <RefreshCw size={11} />
-              Régénérer le briefing
-            </button>
-            <AskClaude
-              context={{
-                meeting: selectedEvent.title,
-                briefing,
-                rawData: rawData ? {
-                  contacts: rawData.contacts,
-                  deals: rawData.deals,
-                  engagements: rawData.engagements,
-                  company: rawData.companyHubspot,
-                  gmailMessages: rawData.gmailMessages,
-                  slackMessages: rawData.slackMessages,
-                  webResults: rawData.webResults,
-                } : undefined,
-              }}
-              placeholder="Poser une question sur ce meeting…"
-            />
           </div>
-        )}
+        </div>
       </div>
-
-    </div>
     </>
   );
 }

@@ -205,7 +205,7 @@ export default function SignalsPage() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full" style={{ background: "#f8f8f8" }}>
+    <div className="flex flex-col h-full" style={{ background: "var(--c-bg-page)" }}>
 
       {/* ── Header + KPIs ────────────────────────────────────────────────── */}
       <div style={{ background: "#fff", borderBottom: "1px solid #eee" }}>

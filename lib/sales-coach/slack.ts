@@ -64,8 +64,9 @@ function formatAnalysisMessage(args: {
   const date = meetingStartedAt ? new Date(meetingStartedAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "";
   const kindLabel = meetingKind ? MEETING_KIND_LABELS[meetingKind] : null;
 
+  const hasDealLabel = !!dealName && dealName !== "—";
   const lines: string[] = [
-    `:dart: *Debrief de ton meeting — ${dealName}*${dealStage ? ` · _${dealStage}_` : ""}`,
+    `:dart: *Debrief de ton meeting${hasDealLabel ? ` — ${dealName}` : ""}*${dealStage ? ` · _${dealStage}_` : ""}`,
     `${meetingTitle}${date ? ` · ${date}` : ""}${salesName ? ` · ${salesName}` : ""}${kindLabel ? ` · _${kindLabel}_` : ""}`,
     ``,
     `*Note globale :* ${scoreGlobal}/10`,

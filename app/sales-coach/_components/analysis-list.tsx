@@ -1,9 +1,12 @@
 "use client";
 
-import { Search, AlertCircle, CheckCircle2, Loader2, CircleDashed, CircleSlash, User, Building2 } from "lucide-react";
+import { Search, AlertCircle, CheckCircle2, Loader2, CircleDashed, CircleSlash } from "lucide-react";
 import type { MeetingParticipant, SalesCoachListItem, SalesCoachStatus } from "@/lib/hooks/use-sales-coach";
 import { MEETING_KIND_LABELS } from "@/lib/guides/sales-coach";
 import { companyFromEmail } from "@/lib/claap";
+import { COLORS, scoreToColor } from "@/lib/design/tokens";
+import { CompanyAvatar } from "@/components/ui/company-avatar";
+import { ListItem } from "@/components/ui/list-item";
 
 function pickPrimaryParticipant(
   participants: MeetingParticipant[] | null | undefined,
@@ -46,25 +49,18 @@ interface Props {
   onDateToChange: (v: string) => void;
 }
 
-function scoreColor(score: number | null): { bg: string; fg: string } {
-  if (score === null || score === undefined) return { bg: "#f5f5f5", fg: "#888" };
-  if (score >= 7.5) return { bg: "#ecfdf5", fg: "#059669" };
-  if (score >= 5) return { bg: "#fef3c7", fg: "#b45309" };
-  return { bg: "#fee2e2", fg: "#dc2626" };
-}
-
 function StatusIcon({ status }: { status: SalesCoachStatus }) {
   switch (status) {
     case "done":
-      return <CheckCircle2 size={14} style={{ color: "#059669" }} />;
+      return <CheckCircle2 size={12} style={{ color: COLORS.ok }} />;
     case "analyzing":
-      return <Loader2 size={14} style={{ color: "#2563eb" }} className="animate-spin" />;
+      return <Loader2 size={12} style={{ color: "#2563eb" }} className="animate-spin" />;
     case "pending":
-      return <CircleDashed size={14} style={{ color: "#888" }} />;
+      return <CircleDashed size={12} style={{ color: COLORS.ink3 }} />;
     case "error":
-      return <AlertCircle size={14} style={{ color: "#dc2626" }} />;
+      return <AlertCircle size={12} style={{ color: COLORS.err }} />;
     case "skipped":
-      return <CircleSlash size={14} style={{ color: "#888" }} />;
+      return <CircleSlash size={12} style={{ color: COLORS.ink3 }} />;
   }
 }
 
@@ -105,31 +101,60 @@ export default function AnalysisList({
     : analyses;
 
   return (
-    <div className="flex flex-col h-full" style={{ background: "#fff", borderRight: "1px solid #eeeeee" }}>
+    <div
+      className="flex flex-col h-full"
+      style={{ background: COLORS.bgCard, borderRight: `1px solid ${COLORS.line}` }}
+    >
       {/* Search + filter */}
-      <div className="px-4 py-3 border-b" style={{ borderColor: "#eeeeee" }}>
-        <div className="relative mb-2">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "#888" }} />
+      <div style={{ padding: "12px 16px", borderBottom: `1px solid ${COLORS.line}` }}>
+        <div style={{ position: "relative", marginBottom: 8 }}>
+          <Search
+            size={14}
+            style={{
+              position: "absolute",
+              left: 10,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: COLORS.ink3,
+              pointerEvents: "none",
+            }}
+          />
           <input
             type="text"
-            placeholder="Chercher un meeting, deal, email…"
+            placeholder="Chercher un meeting…"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-sm rounded-md border outline-none"
-            style={{ borderColor: "#e5e5e5", background: "#fafafa" }}
+            style={{
+              width: "100%",
+              paddingLeft: 32,
+              paddingRight: 12,
+              paddingTop: 7,
+              paddingBottom: 7,
+              fontSize: 13,
+              borderRadius: 8,
+              border: `1px solid ${COLORS.line}`,
+              background: COLORS.bgSoft,
+              outline: "none",
+              color: COLORS.ink0,
+            }}
           />
         </div>
         {isAdmin && (
-          <div className="flex gap-1 mb-2">
+          <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
             {(["mine", "all"] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => onOwnerFilterChange(v)}
-                className="text-xs px-2 py-1 rounded transition-colors"
                 style={{
-                  background: ownerFilter === v ? "#f01563" : "transparent",
-                  color: ownerFilter === v ? "#fff" : "#666",
-                  border: "1px solid " + (ownerFilter === v ? "#f01563" : "#e5e5e5"),
+                  fontSize: 11,
+                  fontWeight: 500,
+                  padding: "4px 10px",
+                  borderRadius: 6,
+                  background: ownerFilter === v ? COLORS.brand : "transparent",
+                  color: ownerFilter === v ? "#fff" : COLORS.ink2,
+                  border: `1px solid ${ownerFilter === v ? COLORS.brand : COLORS.lineStrong}`,
+                  cursor: "pointer",
+                  transition: "all 0.15s",
                 }}
               >
                 {v === "mine" ? "Mes meetings" : "Tous"}
@@ -139,29 +164,53 @@ export default function AnalysisList({
         )}
 
         {/* Date range filter */}
-        <div className="flex items-center gap-1.5">
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <input
             type="date"
             value={dateFrom}
             onChange={(e) => onDateFromChange(e.target.value)}
-            className="text-xs px-2 py-1 rounded border outline-none flex-1 min-w-0"
-            style={{ borderColor: "#e5e5e5", background: "#fafafa", color: "#333" }}
+            style={{
+              fontSize: 11,
+              padding: "5px 8px",
+              borderRadius: 6,
+              border: `1px solid ${COLORS.line}`,
+              background: COLORS.bgSoft,
+              color: COLORS.ink1,
+              outline: "none",
+              flex: 1,
+              minWidth: 0,
+            }}
             title="Date min"
           />
-          <span className="text-xs" style={{ color: "#888" }}>→</span>
+          <span style={{ fontSize: 11, color: COLORS.ink3 }}>→</span>
           <input
             type="date"
             value={dateTo}
             onChange={(e) => onDateToChange(e.target.value)}
-            className="text-xs px-2 py-1 rounded border outline-none flex-1 min-w-0"
-            style={{ borderColor: "#e5e5e5", background: "#fafafa", color: "#333" }}
+            style={{
+              fontSize: 11,
+              padding: "5px 8px",
+              borderRadius: 6,
+              border: `1px solid ${COLORS.line}`,
+              background: COLORS.bgSoft,
+              color: COLORS.ink1,
+              outline: "none",
+              flex: 1,
+              minWidth: 0,
+            }}
             title="Date max"
           />
           {hasDateFilter && (
             <button
               onClick={clearDates}
-              className="text-xs px-1.5 py-1 rounded"
-              style={{ color: "#888" }}
+              style={{
+                fontSize: 11,
+                padding: "4px 6px",
+                color: COLORS.ink3,
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+              }}
               title="Effacer les dates"
             >
               ✕
@@ -171,88 +220,120 @@ export default function AnalysisList({
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" style={{ padding: 8 }}>
         {filtered.length === 0 && (
-          <div className="px-4 py-8 text-center text-sm" style={{ color: "#888" }}>
+          <div style={{ padding: "32px 16px", textAlign: "center", fontSize: 13, color: COLORS.ink3 }}>
             Aucune analyse pour le moment. Les debriefs apparaîtront ici après chaque meeting Claap.
           </div>
         )}
         {filtered.map((a) => {
           const active = a.id === selectedId;
-          const { bg, fg } = scoreColor(a.score_global);
+          const score = typeof a.score_global === "number" ? a.score_global : null;
+          const sc = scoreToColor(score, 10);
+          const primary = pickPrimaryParticipant(a.participants, a.primary_contact);
+          const dateStr = formatDate(a.meeting_started_at ?? a.created_at);
+          const kindLabel = a.meeting_kind ? MEETING_KIND_LABELS[a.meeting_kind] : null;
+
           return (
-            <button
+            <ListItem
               key={a.id}
+              active={active}
               onClick={() => onSelect(a.id)}
-              className="w-full text-left px-4 py-3 border-b transition-colors"
-              style={{
-                background: active ? "#fef2f4" : "transparent",
-                borderColor: "#eeeeee",
-                borderLeft: active ? "3px solid #f01563" : "3px solid transparent",
-              }}
+              left={
+                primary ? (
+                  <CompanyAvatar name={primary.company || primary.name} size={32} rounded="md" />
+                ) : (
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 10,
+                      background: COLORS.bgSoft,
+                    }}
+                  />
+                )
+              }
+              right={
+                a.status === "done" && score !== null ? (
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: sc.fg,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {score.toFixed(1)}
+                  </span>
+                ) : (
+                  <StatusIcon status={a.status} />
+                )
+              }
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <StatusIcon status={a.status} />
-                    <span className="text-sm font-medium truncate" style={{ color: "#111" }}>
-                      {a.meeting_title ?? "Meeting sans titre"}
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: COLORS.ink0,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      flex: 1,
+                      minWidth: 0,
+                    }}
+                  >
+                    {primary ? primary.name : a.meeting_title ?? "Meeting sans titre"}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 11,
+                    color: COLORS.ink3,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {kindLabel && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        padding: "1px 6px",
+                        borderRadius: 999,
+                        background: COLORS.infoBg,
+                        color: COLORS.info,
+                      }}
+                    >
+                      {kindLabel}
                     </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-wrap text-xs" style={{ color: "#666" }}>
-                    {a.meeting_kind && (
-                      <span
-                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                        style={{ background: "#ede9fe", color: "#6d28d9" }}
-                      >
-                        {MEETING_KIND_LABELS[a.meeting_kind]}
-                      </span>
-                    )}
-                    <span className="truncate">
-                      {formatDate(a.meeting_started_at ?? a.created_at)}
-                    </span>
-                  </div>
-                  {(() => {
-                    const primary = pickPrimaryParticipant(a.participants, a.primary_contact);
-                    if (!primary) return null;
-                    return (
-                      <div
-                        className="flex items-center gap-1.5 text-xs mt-1 flex-wrap"
-                        style={{ color: "#333" }}
-                        title={`${primary.name}${primary.company ? ` · ${primary.company}` : ""}${primary.extra > 0 ? ` +${primary.extra}` : ""}`}
-                      >
-                        <span className="inline-flex items-center gap-1 truncate">
-                          <User size={11} className="flex-shrink-0" style={{ color: "#888" }} />
-                          <span className="truncate font-medium">{primary.name}</span>
-                          {primary.extra > 0 && (
-                            <span className="text-[10px]" style={{ color: "#888" }}>+{primary.extra}</span>
-                          )}
-                        </span>
-                        {primary.company && (
-                          <span className="inline-flex items-center gap-1 truncate" style={{ color: "#555" }}>
-                            <Building2 size={11} className="flex-shrink-0" style={{ color: "#888" }} />
-                            <span className="truncate">{primary.company}</span>
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })()}
-                  {a.status === "error" && a.error_message && (
-                    <div className="text-xs mt-1 truncate" style={{ color: "#dc2626" }}>
-                      {a.error_message}
-                    </div>
+                  )}
+                  {primary?.company && <span>{primary.company}</span>}
+                  {dateStr && (
+                    <>
+                      {primary?.company && <span>·</span>}
+                      <span>{dateStr}</span>
+                    </>
                   )}
                 </div>
-                {a.status === "done" && a.score_global !== null && (
+                {a.status === "error" && a.error_message && (
                   <div
-                    className="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded"
-                    style={{ background: bg, color: fg }}
+                    style={{
+                      fontSize: 11,
+                      color: COLORS.err,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
                   >
-                    {a.score_global.toFixed(1)}/10
+                    {a.error_message}
                   </div>
                 )}
               </div>
-            </button>
+            </ListItem>
           );
         })}
       </div>

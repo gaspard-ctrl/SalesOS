@@ -99,13 +99,13 @@ export default function Sidebar() {
       <aside
         className={`flex flex-col shrink-0 h-screen border-r bg-white
           fixed md:relative z-50 md:z-auto
-          transition-all duration-200 ease-in-out
-          w-52
+          transition-[width,transform] duration-200 ease-in-out
+          w-52 md:w-[var(--sidebar-w)]
           ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
         style={{
           borderColor: "#eeeeee",
-          width: undefined, // mobile: use Tailwind w-52
-        }}
+          ["--sidebar-w" as string]: `${desktopWidth}px`,
+        } as React.CSSProperties}
       >
         {/* Mobile uses fixed w-52; desktop overrides via inline style below */}
         <div

@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { getClaapRecording, pickTranscriptUrl, extractExternalParticipants } from "@/lib/claap";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
@@ -63,14 +63,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const siteUrl = req.nextUrl.origin;
-  void fetch(`${siteUrl}/api/sales-coach/analyze/${id}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-internal-secret": internalSecret,
-    },
-    body: JSON.stringify({ transcriptUrl }),
-  }).catch((e) => console.error("[reanalyze] trigger fetch failed:", e));
+  // Await with short timeout: analyzer flips status to "analyzing" immediately,
+  // then keeps running on its own 300s budget. Without await, serverless can
+  // kill the outbound request before it leaves.
+  try {
+    const triggerRes = await fetch(`${siteUrl}/api/sales-coach/analyze/${id}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": internalSecret,
+      },
+      body: JSON.stringify({ transcriptUrl }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!triggerRes.ok) {
+      const text = await triggerRes.text().catch(() => "");
+      console.error(`[reanalyze] trigger non-2xx (${triggerRes.status}):`, text.slice(0, 200));
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!msg.includes("aborted") && !msg.includes("timeout")) {
+      console.error("[reanalyze] trigger fetch failed:", msg);
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }
