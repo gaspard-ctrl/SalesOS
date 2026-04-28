@@ -828,6 +828,7 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
             talkRatio={detail.talk_ratio}
             onOpenEmailDraft={() => setEmailModalOpen(true)}
             onGoToAxes={() => setTab("axes")}
+            onGoToMeddic={() => setTab("meddic")}
           />
         )}
 
