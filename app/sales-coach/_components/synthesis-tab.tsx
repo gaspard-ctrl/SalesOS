@@ -68,6 +68,7 @@ interface Props {
   talkRatio: TalkRatio | null;
   onOpenEmailDraft: () => void;
   onGoToAxes: () => void;
+  onGoToMeddic: () => void;
 }
 
 function isMeddicNA(score: number, notes: string): boolean {
@@ -79,6 +80,7 @@ export function SynthesisTab({
   talkRatio,
   onOpenEmailDraft,
   onGoToAxes,
+  onGoToMeddic,
 }: Props) {
   const strengths = toStringArray(analysis.strengths);
   const weaknesses = toStringArray(analysis.weaknesses);
@@ -270,6 +272,69 @@ export function SynthesisTab({
           })}
         </div>
       </Card>
+
+      {/* Score MEDDIC compact */}
+      {analysis.meddic && (
+        <Card padding={16}>
+          <SectionHeader
+            title="Score MEDDIC"
+            right={
+              <button
+                onClick={onGoToMeddic}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 2,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: COLORS.brand,
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                Voir le détail
+                <ChevronRight size={12} />
+              </button>
+            }
+          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {MEDDIC_LABELS.map(({ key, label }) => {
+              const dim = analysis.meddic[key];
+              if (!dim) return null;
+              const score = typeof dim.score === "number" ? dim.score : 0;
+              const notes = typeof dim.notes === "string" ? dim.notes : "";
+              const na = isMeddicNA(score, notes);
+              const sc = scoreToColor(score, 10);
+              return (
+                <div key={key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 160, fontSize: 12, color: COLORS.ink1 }}>{label}</div>
+                  <div style={{ flex: 1 }}>
+                    {na ? (
+                      <div style={{ height: 6 }} />
+                    ) : (
+                      <ProgressBar value={score * 10} max={100} height={6} variant="auto" scale={100} />
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      width: 44,
+                      textAlign: "right",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: na ? COLORS.ink3 : sc.fg,
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {na ? "N/A" : score.toFixed(1)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       {/* Talk ratio */}
       {talkRatio && (
