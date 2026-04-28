@@ -3,7 +3,26 @@ import type { SalesCoachAnalysis, MeetingKind } from "@/lib/guides/sales-coach";
 import type { DealSnapshot } from "@/lib/hubspot";
 import type { TalkRatio } from "@/lib/sales-coach/talk-ratio";
 
-const SWR_OPTS = { revalidateOnFocus: false, dedupingInterval: 15_000 } as const;
+// Custom fetcher: SWR's default fetcher resolves with the JSON body even for
+// 4xx/5xx responses, which means errorRetryCount/Interval never kick in. By
+// throwing on non-OK we let SWR drive retries (notably for 404 race conditions
+// right after an analysis is freshly created).
+async function jsonFetcher<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    const err = new Error(body.error ?? `HTTP ${res.status}`) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
+  }
+  return res.json() as Promise<T>;
+}
+
+const SWR_OPTS = {
+  fetcher: jsonFetcher,
+  revalidateOnFocus: false,
+  dedupingInterval: 15_000,
+} as const;
 
 export type SalesCoachStatus = "pending" | "analyzing" | "done" | "error" | "skipped";
 
@@ -38,7 +57,6 @@ export interface SalesCoachDetail extends SalesCoachListItem {
   deal_snapshot: DealSnapshot | null;
   talk_ratio: TalkRatio | null;
   email_draft: { subject: string; body: string; generated_at: string } | null;
-  hubspot_task_ids: string[] | null;
   claap_event_id: string | null;
   updated_at: string;
 }
@@ -87,6 +105,12 @@ export function useSalesCoachDetail(id: string | null) {
     id ? `/api/sales-coach/${id}` : null,
     {
       ...SWR_OPTS,
+      // Retry on 404: a freshly backfilled or webhook-created row may not be
+      // committed yet by the time the client first fetches it. 4 retries with
+      // exponential-ish backoff covers the typical replication window.
+      shouldRetryOnError: true,
+      errorRetryCount: 4,
+      errorRetryInterval: 1500,
       refreshInterval: (latest) => {
         const s = latest?.analysis?.status;
         return s === "pending" || s === "analyzing" ? 5000 : 0;

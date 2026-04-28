@@ -20,14 +20,19 @@ import {
   ClipboardCheck,
   Trash2,
   Info,
+  ChevronDown,
 } from "lucide-react";
+import { MeddicBadge } from "@/components/ui/meddic-badge";
+import { ProgressBar } from "@/components/ui/progress-bar";
 import { useSalesCoachDetail, useSalesCoachDealHistory } from "@/lib/hooks/use-sales-coach";
 import type { SalesCoachAnalysis, AxisScore, MeddicScore } from "@/lib/guides/sales-coach";
 import { MEETING_KIND_LABELS, isDiscoveryKind } from "@/lib/guides/sales-coach";
-import { RecapTab } from "./recap-tab";
-import { TrendsTab } from "./trends-tab";
+import { SynthesisTab } from "./synthesis-tab";
 import { EmailDraftModal } from "./email-draft-modal";
 import { Sparkles } from "lucide-react";
+import { COLORS, scoreToColor } from "@/lib/design/tokens";
+import { ScoreGauge } from "@/components/ui/score-gauge";
+import { TabBar } from "@/components/ui/tab-bar";
 
 interface Props {
   analysisId: string;
@@ -35,12 +40,10 @@ interface Props {
   onDeleted?: () => void;
 }
 
-type TabId = "recap" | "axes" | "meddic" | "bosche" | "trends" | "history" | "transcript";
+type TabId = "synthese" | "axes" | "meddic" | "bosche" | "history" | "transcript";
 
 function scoreColor(score: number): string {
-  if (score >= 7.5) return "#059669";
-  if (score >= 5) return "#b45309";
-  return "#dc2626";
+  return scoreToColor(score, 10).fg;
 }
 
 function ScoreBar({ score }: { score: number }) {
@@ -86,8 +89,21 @@ const BOSCHE_LABELS: { key: keyof SalesCoachAnalysis["bosche"]; label: string; s
   { key: "human_economic", label: "Human & Economic impact", short: "H.E" },
 ];
 
-function AxisCard({ label, axis }: { label: string; axis: AxisScore | MeddicScore }) {
-  const isNA = axis.score === 0 && /n\/?a/i.test(axis.notes);
+function AxisCard({
+  label,
+  axis,
+  collapsible = false,
+}: {
+  label: string;
+  axis: AxisScore | MeddicScore;
+  collapsible?: boolean;
+}) {
+  const score = typeof axis.score === "number" ? axis.score : 0;
+  const notes = typeof axis.notes === "string" ? axis.notes : "";
+  const isNA = score === 0 && /n\/?a/i.test(notes);
+  const hasDetails = !!axis.evidence || !!axis.explanation || !!axis.recommendation;
+  const [expanded, setExpanded] = useState(!collapsible);
+
   return (
     <div className="rounded-lg p-4" style={{ background: "#fff", border: "1px solid #eeeeee" }}>
       <div className="flex items-center justify-between gap-3 mb-2">
@@ -95,12 +111,27 @@ function AxisCard({ label, axis }: { label: string; axis: AxisScore | MeddicScor
         {isNA ? (
           <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ color: "#888", background: "#f4f4f4" }}>N/A</span>
         ) : (
-          <ScoreBar score={axis.score} />
+          <ScoreBar score={score} />
         )}
       </div>
-      <p className="text-sm" style={{ color: "#333" }}>{axis.notes}</p>
+      <p className="text-sm" style={{ color: "#333" }}>{notes}</p>
 
-      {axis.evidence && (
+      {collapsible && hasDetails && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-2 inline-flex items-center gap-1 text-xs font-medium"
+          style={{ color: "#666", background: "transparent", border: "none", padding: 0, cursor: "pointer" }}
+        >
+          <ChevronDown
+            size={13}
+            style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}
+          />
+          {expanded ? "Masquer le détail" : "Voir le détail"}
+        </button>
+      )}
+
+      {expanded && axis.evidence && (
         <div className="mt-3">
           <div className="flex items-center gap-1 mb-1 text-[11px] uppercase tracking-wider font-medium" style={{ color: "#888" }}>
             <Quote size={10} />
@@ -112,7 +143,7 @@ function AxisCard({ label, axis }: { label: string; axis: AxisScore | MeddicScor
         </div>
       )}
 
-      {axis.explanation && (
+      {expanded && axis.explanation && (
         <div className="mt-3">
           <div className="flex items-center gap-1 mb-1 text-[11px] uppercase tracking-wider font-medium" style={{ color: "#888" }}>
             <Lightbulb size={10} />
@@ -122,7 +153,7 @@ function AxisCard({ label, axis }: { label: string; axis: AxisScore | MeddicScor
         </div>
       )}
 
-      {axis.recommendation && (
+      {expanded && axis.recommendation && (
         <div className="mt-3 rounded-md px-3 py-2" style={{ background: "#fef2f4", border: "1px solid #fbd5de" }}>
           <div className="flex items-center gap-1 mb-1 text-[11px] uppercase tracking-wider font-semibold" style={{ color: "#f01563" }}>
             <ClipboardCheck size={11} />
@@ -131,6 +162,78 @@ function AxisCard({ label, axis }: { label: string; axis: AxisScore | MeddicScor
           <p className="text-xs leading-relaxed" style={{ color: "#7a0e35" }}>{axis.recommendation}</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function CompactScoreCard({
+  label,
+  axis,
+  framework,
+  dimension,
+}: {
+  label: string;
+  axis: AxisScore | MeddicScore;
+  framework: "meddic" | "bosche";
+  dimension: string;
+}) {
+  const score = typeof axis.score === "number" ? axis.score : 0;
+  const notes = typeof axis.notes === "string" ? axis.notes : "";
+  const na = score === 0 && /n\/?a/i.test(notes);
+  const sc = scoreToColor(score, 10);
+  return (
+    <div
+      style={{
+        padding: 12,
+        borderRadius: 10,
+        border: `1px solid ${COLORS.line}`,
+        background: COLORS.bgCard,
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <MeddicBadge dimension={dimension} size={28} framework={framework} />
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: COLORS.ink0,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {label}
+          </span>
+        </div>
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: na ? COLORS.ink3 : sc.fg,
+            fontVariantNumeric: "tabular-nums",
+            flexShrink: 0,
+          }}
+        >
+          {na ? "N/A" : `${score.toFixed(1)}/10`}
+        </span>
+      </div>
+      {notes && !na && (
+        <p
+          style={{
+            fontSize: 12,
+            color: COLORS.ink2,
+            margin: 0,
+            lineHeight: 1.4,
+          }}
+        >
+          {notes}
+        </p>
+      )}
+      {!na && <ProgressBar value={score * 10} max={100} height={4} variant="auto" scale={100} />}
     </div>
   );
 }
@@ -385,49 +488,12 @@ function MeetingKindBadge({ kind, size = "sm" }: { kind: string | null; size?: "
 export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: Props) {
   const { detail, isLoading, error, reload } = useSalesCoachDetail(analysisId);
   const { history } = useSalesCoachDealHistory(detail?.hubspot_deal_id ?? null, analysisId);
-  const [tab, setTab] = useState<TabId>("recap");
+  const [tab, setTab] = useState<TabId>("synthese");
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const [emailModalOpen, setEmailModalOpen] = useState(false);
-  const [creatingTasks, setCreatingTasks] = useState(false);
-  const [deletingTasks, setDeletingTasks] = useState(false);
-  const [taskResult, setTaskResult] = useState<{ ok: boolean; msg: string } | null>(null);
-
-  async function createTasks() {
-    setCreatingTasks(true);
-    setTaskResult(null);
-    try {
-      const res = await fetch(`/api/sales-coach/${analysisId}/create-tasks`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Erreur");
-      const n = (data.taskIds ?? []).length;
-      setTaskResult({ ok: true, msg: `${n} tâche${n > 1 ? "s" : ""} créée${n > 1 ? "s" : ""}` });
-      await reload();
-    } catch (e) {
-      setTaskResult({ ok: false, msg: e instanceof Error ? e.message : "Erreur" });
-    } finally {
-      setCreatingTasks(false);
-    }
-  }
-
-  async function deleteTasks() {
-    if (!confirm("Archiver les tâches HubSpot créées pour cette analyse ?")) return;
-    setDeletingTasks(true);
-    setTaskResult(null);
-    try {
-      const res = await fetch(`/api/sales-coach/${analysisId}/create-tasks`, { method: "DELETE" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Erreur");
-      setTaskResult({ ok: true, msg: data.warning ? data.warning : `${data.deleted} tâche${data.deleted > 1 ? "s" : ""} archivée${data.deleted > 1 ? "s" : ""}` });
-      await reload();
-    } catch (e) {
-      setTaskResult({ ok: false, msg: e instanceof Error ? e.message : "Erreur" });
-    } finally {
-      setDeletingTasks(false);
-    }
-  }
 
   async function resendSlack() {
     setSending(true);
@@ -514,7 +580,9 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
           </>
         )}
         <div className="mt-4 flex items-center gap-2">
-          {(detail.status === "skipped" || detail.status === "error" || detail.status === "pending") && (
+          {(detail.status === "skipped" ||
+            detail.status === "error" ||
+            detail.status === "pending") && (
             <button
               onClick={forceAnalyze}
               disabled={forcing}
@@ -560,92 +628,170 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
   const coachingPriorities = toStringArray(a.coaching_priorities);
   const risks = toStringArray(a.risks);
 
-  return (
-    <div className="flex flex-col h-full" style={{ background: "#f8f8f8" }}>
-      {/* Header */}
-      <div className="px-6 pt-3 pb-3" style={{ background: "#fff", borderBottom: "1px solid #eeeeee" }}>
-        {/* Line 1: title + score (adjacent to title) · kind badge + info pushed right */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-base font-bold truncate min-w-0 max-w-full" style={{ color: "#111" }}>
-            {detail.meeting_title ?? "Meeting"}
-          </h2>
-          <div
-            className="flex-shrink-0 font-bold px-3 py-1 rounded-md leading-none"
-            style={{
-              background: "#fef2f4",
-              color: scoreColor(Number(detail.score_global ?? 0)),
-              border: "1px solid " + scoreColor(Number(detail.score_global ?? 0)),
-              fontSize: 18,
-            }}
-          >
-            {Number(detail.score_global ?? 0).toFixed(1)}
-            <span style={{ fontSize: 11, opacity: 0.7, fontWeight: 600 }}>/10</span>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <MeetingKindBadge kind={detail.meeting_kind} size="md" />
-            {a.meeting_kind_reasoning && (
-              <span title={`Classification : ${a.meeting_kind_reasoning}`} style={{ color: "#888", cursor: "help" }}>
-                <Info size={13} />
-              </span>
-            )}
-          </div>
-        </div>
+  const participantNames = (detail.participants ?? [])
+    .map((p) => p.name?.trim() || p.email.split("@")[0])
+    .filter((s): s is string => !!s);
+  const fallbackNames =
+    participantNames.length === 0
+      ? (detail.deal_snapshot?.contacts ?? [])
+          .map((c) => `${c.firstname} ${c.lastname}`.trim() || c.email)
+          .filter((s): s is string => !!s)
+      : [];
+  const names = participantNames.length > 0 ? participantNames : fallbackNames;
+  const meetingKindLabel = detail.meeting_kind ? MEETING_KIND_LABELS[detail.meeting_kind] : null;
 
-        {/* Line 2: date · recorder · avec · actions */}
-        <div className="mt-1 flex items-center gap-2 flex-wrap text-xs" style={{ color: "#888" }}>
-          <span>{meetingDate}</span>
-          {detail.recorder_email && <span>· {detail.recorder_email}</span>}
-          {(() => {
-            const participantNames = (detail.participants ?? [])
-              .map((p) => p.name?.trim() || p.email.split("@")[0])
-              .filter((s): s is string => !!s);
-            const fallbackNames = participantNames.length === 0
-              ? (detail.deal_snapshot?.contacts ?? [])
-                  .map((c) => `${c.firstname} ${c.lastname}`.trim() || c.email)
-                  .filter((s): s is string => !!s)
-              : [];
-            const names = participantNames.length > 0 ? participantNames : fallbackNames;
-            if (names.length === 0) return null;
-            return (
-              <span className="inline-flex items-center gap-1" style={{ color: "#555" }}>
-                · <Users size={11} />
-                <span>avec {names.slice(0, 3).join(", ")}{names.length > 3 ? ` +${names.length - 3}` : ""}</span>
-              </span>
-            );
-          })()}
-          <div className="ml-auto flex items-center gap-2">
+  return (
+    <div className="flex flex-col h-full" style={{ background: COLORS.bgPage }}>
+      {/* Header */}
+      <div
+        style={{
+          background: COLORS.bgCard,
+          borderBottom: `1px solid ${COLORS.line}`,
+          padding: "16px 24px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+          <ScoreGauge value={Number(detail.score_global ?? 0)} scale={10} size={72} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
+              {meetingKindLabel && (
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: "3px 10px",
+                    borderRadius: 999,
+                    background: COLORS.infoBg,
+                    color: COLORS.info,
+                  }}
+                >
+                  {meetingKindLabel}
+                </span>
+              )}
+              {a.meeting_kind_reasoning && (
+                <span title={`Classification : ${a.meeting_kind_reasoning}`} style={{ color: COLORS.ink3, cursor: "help" }}>
+                  <Info size={13} />
+                </span>
+              )}
+            </div>
+            <h2
+              style={{
+                fontSize: 20,
+                fontWeight: 700,
+                color: COLORS.ink0,
+                margin: 0,
+                letterSpacing: "-0.01em",
+                lineHeight: 1.2,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {detail.meeting_title ?? "Meeting"}
+            </h2>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginTop: 4,
+                fontSize: 12,
+                color: COLORS.ink2,
+                flexWrap: "wrap",
+              }}
+            >
+              <span>{meetingDate}</span>
+              {detail.recorder_email && (
+                <>
+                  <span>·</span>
+                  <span>{detail.recorder_email}</span>
+                </>
+              )}
+              {names.length > 0 && (
+                <>
+                  <span>·</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <Users size={11} />
+                    avec {names.slice(0, 3).join(", ")}
+                    {names.length > 3 ? ` +${names.length - 3}` : ""}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
             <button
               onClick={resendSlack}
               disabled={sending}
-              className="flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-md transition-colors disabled:opacity-50"
-              style={{ background: "#f01563", color: "#fff" }}
+              title={detail.slack_sent_at ? `Envoyé le ${new Date(detail.slack_sent_at).toLocaleDateString("fr-FR")}` : undefined}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 12,
+                fontWeight: 500,
+                padding: "7px 12px",
+                borderRadius: 10,
+                border: `1px solid ${COLORS.lineStrong}`,
+                background: COLORS.bgCard,
+                color: COLORS.ink1,
+                cursor: sending ? "not-allowed" : "pointer",
+                opacity: sending ? 0.5 : 1,
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                if (sending) return;
+                e.currentTarget.style.borderColor = COLORS.brand;
+                e.currentTarget.style.color = COLORS.brand;
+              }}
+              onMouseLeave={(e) => {
+                if (sending) return;
+                e.currentTarget.style.borderColor = COLORS.lineStrong;
+                e.currentTarget.style.color = COLORS.ink1;
+              }}
             >
-              <Send size={11} />
-              {sending ? "Envoi…" : detail.slack_sent_at ? "Renvoyer Slack" : "Slack"}
+              <Send size={13} />
+              {sending ? "Envoi…" : detail.slack_sent_at ? "Re-Slack" : "Slack"}
             </button>
-            {sendResult && (
-              <span className="flex items-center gap-1" style={{ color: sendResult.ok ? "#059669" : "#dc2626" }}>
-                {sendResult.ok ? <CheckCircle2 size={11} /> : <AlertCircle size={11} />}
-                {sendResult.msg}
-              </span>
-            )}
-            {detail.slack_sent_at && !sendResult && (
-              <span className="text-[11px]">Envoyé le {new Date(detail.slack_sent_at).toLocaleDateString("fr-FR")}</span>
-            )}
             <button
               onClick={deleteAnalysis}
               disabled={deleting}
-              className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-md disabled:opacity-50"
-              style={{ color: "#dc2626", border: "1px solid #fecaca", background: "#fff" }}
+              aria-label="Supprimer l'analyse"
               title="Supprimer l'analyse"
+              style={{
+                width: 36,
+                height: 36,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 10,
+                border: "1px solid #fecaca",
+                background: COLORS.bgCard,
+                color: COLORS.err,
+                cursor: deleting ? "not-allowed" : "pointer",
+                opacity: deleting ? 0.5 : 1,
+              }}
             >
-              <Trash2 size={11} />
-              {deleting ? "…" : "Supprimer"}
+              <Trash2 size={14} />
             </button>
           </div>
         </div>
 
-        {a.summary && <div className="mt-2 text-sm" style={{ color: "#333" }}>{a.summary}</div>}
+        {sendResult && (
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: 12,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              color: sendResult.ok ? COLORS.ok : COLORS.err,
+            }}
+          >
+            {sendResult.ok ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+            {sendResult.msg}
+          </div>
+        )}
       </div>
 
       {/* Topo deal */}
@@ -659,63 +805,36 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
       </div>
 
       {/* Tabs */}
-      <div className="px-6 mt-2" style={{ background: "#fff", borderBottom: "1px solid #eeeeee" }}>
-        <div className="flex gap-1">
-          {[
-            { id: "recap" as const, label: "Récap", icon: Sparkles },
-            { id: "axes" as const, label: "6 axes", icon: Target },
-            { id: "meddic" as const, label: "MEDDIC", icon: TrendingUp },
-            ...(isDisco ? [{ id: "bosche" as const, label: "BOSCHE", icon: TrendingUp }] : []),
-            { id: "trends" as const, label: "Tendances", icon: TrendingUp },
-            { id: "history" as const, label: `Historique${history.length > 0 ? ` (${history.length})` : ""}`, icon: History },
-            { id: "transcript" as const, label: "Transcript", icon: FileText },
-          ].map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className="flex items-center gap-1.5 text-sm px-4 py-2.5 font-medium transition-colors whitespace-nowrap"
-                style={{
-                  color: active ? "#f01563" : "#888",
-                  borderBottom: active ? "2px solid #f01563" : "2px solid transparent",
-                  marginBottom: -1,
-                }}
-              >
-                <Icon size={14} />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
+      <div style={{ background: COLORS.bgCard, padding: "0 24px" }}>
+        <TabBar
+          active={tab}
+          onChange={(k) => setTab(k as TabId)}
+          tabs={[
+            { key: "synthese", label: "Synthèse", icon: Sparkles },
+            { key: "axes", label: "6 axes", icon: Target },
+            { key: "meddic", label: "MEDDIC", icon: TrendingUp },
+            ...(isDisco ? [{ key: "bosche", label: "BOSCHE", icon: TrendingUp }] : []),
+            { key: "history", label: `Historique${history.length > 0 ? ` (${history.length})` : ""}`, icon: History },
+            { key: "transcript", label: "Transcript", icon: FileText },
+          ]}
+        />
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-8 py-6">
-        {tab === "recap" && (
-          <RecapTab
+        {tab === "synthese" && (
+          <SynthesisTab
             analysis={a}
             talkRatio={detail.talk_ratio}
-            hubspotTaskIds={detail.hubspot_task_ids}
             onOpenEmailDraft={() => setEmailModalOpen(true)}
-            onCreateTasks={createTasks}
-            onDeleteTasks={deleteTasks}
-            creatingTasks={creatingTasks}
-            deletingTasks={deletingTasks}
-            taskResult={taskResult}
             onGoToAxes={() => setTab("axes")}
           />
-        )}
-
-        {tab === "trends" && (
-          <TrendsTab analysisId={analysisId} dealId={detail.hubspot_deal_id} />
         )}
 
         {tab === "axes" && (
           <div className="space-y-3">
             {AXES_LABELS.map(({ key, label }) => (
-              <AxisCard key={key} label={label} axis={a.axes?.[key] ?? EMPTY_AXIS} />
+              <AxisCard key={key} label={label} axis={a.axes?.[key] ?? EMPTY_AXIS} collapsible />
             ))}
 
             {coachingPriorities.length > 0 && (
@@ -759,25 +878,33 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
                 Analyse MEDDIC non disponible pour ce meeting (analyse générée avant l&apos;ajout du framework, ou incomplete). Ré-analyse le meeting via &quot;Analyser un meeting passé&quot; pour obtenir les scores MEDDIC.
               </div>
             )}
-            {a.meddic && MEDDIC_LABELS.map(({ key, label, short }) => (
-              <div key={key} className="relative">
-                <div className="absolute -left-1 top-4 z-10">
-                  <span
-                    className="inline-flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-bold"
-                    style={{ background: "#ede9fe", color: "#6d28d9" }}
-                  >
-                    {short}
-                  </span>
-                </div>
-                <div className="pl-8">
-                  <AxisCard label={label} axis={a.meddic[key] ?? EMPTY_AXIS} />
-                </div>
+            {a.meddic && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gap: 10,
+                }}
+              >
+                {MEDDIC_LABELS.map(({ key, label }) => {
+                  const dim = a.meddic[key];
+                  if (!dim) return null;
+                  return (
+                    <CompactScoreCard
+                      key={key}
+                      label={label}
+                      axis={dim}
+                      framework="meddic"
+                      dimension={key as string}
+                    />
+                  );
+                })}
               </div>
-            ))}
+            )}
           </div>
         )}
 
-        {tab === "bosche" && isDisco && a.bosche && (
+        {tab === "bosche" && isDisco && a.bosche && typeof a.bosche === "object" && (
           <div className="space-y-3">
             {a.bosche.trigger_identified ? (
               <div className="rounded-lg p-4" style={{ background: "#fff", border: "1px solid #f01563" }}>
@@ -802,26 +929,26 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
               </div>
             )}
 
-            {BOSCHE_LABELS.map(({ key, label, short }) => {
-              const dim = a.bosche[key] as { score: number; notes: string };
-              return (
-                <div key={key} className="rounded-lg p-4" style={{ background: "#fff", border: "1px solid #eeeeee" }}>
-                  <div className="flex items-center justify-between gap-3 mb-2">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold"
-                        style={{ background: "#fef2f4", color: "#f01563" }}
-                      >
-                        {short}
-                      </span>
-                      <span className="text-sm font-medium" style={{ color: "#111" }}>{label}</span>
-                    </div>
-                    <ScoreBar score={dim.score} />
-                  </div>
-                  <p className="text-sm" style={{ color: "#333" }}>{dim.notes}</p>
-                </div>
-              );
-            })}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+                gap: 10,
+              }}
+            >
+              {BOSCHE_LABELS.map(({ key, label }) => {
+                const dim = (a.bosche[key] ?? EMPTY_AXIS) as AxisScore;
+                return (
+                  <CompactScoreCard
+                    key={key}
+                    label={label}
+                    axis={dim}
+                    framework="bosche"
+                    dimension={key as string}
+                  />
+                );
+              })}
+            </div>
           </div>
         )}
 

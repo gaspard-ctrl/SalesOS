@@ -1,12 +1,18 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
-import { ArrowUp, History, Plus } from "lucide-react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { History, Plus, Globe, Mail, MessageSquare, Database, FolderOpen, Check } from "lucide-react";
 import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ConversationHistoryModal, type Conversation } from "./_components/conversation-history-modal";
+import { ChatTabs, type ChatTabKey } from "./_components/chat-tabs";
+import { ChatWelcome } from "./_components/chat-welcome";
+import { ChatInputBar } from "./_components/chat-input-bar";
+import { COLORS } from "@/lib/design/tokens";
+import { Card } from "@/components/ui/card";
+import { SectionHeader } from "@/components/ui/section-header";
 
 type Message = { role: "user" | "assistant"; content: string };
 type ApiMessage = { role: "user" | "assistant"; content: unknown };
@@ -47,6 +53,19 @@ export default function IntelligencePage() {
   const [streamingText, setStreamingText] = useState("");
   const [toolSteps, setToolSteps] = useState<string[]>([]);
   const [costWarning, setCostWarning] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<ChatTabKey>("conversation");
+  const router = useRouter();
+
+  const handleTabChange = useCallback(
+    (k: ChatTabKey) => {
+      if (k === "guides") {
+        router.push("/prompt");
+        return;
+      }
+      setActiveTab(k);
+    },
+    [router]
+  );
 
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -110,6 +129,7 @@ export default function IntelligencePage() {
     setCostWarning(null);
     setConversationId(null);
     setInput("");
+    setActiveTab("conversation");
   };
 
   const loadConversation = async (id: string) => {
@@ -121,6 +141,7 @@ export default function IntelligencePage() {
       setApiHistory(history ?? []);
       setConversationId(id);
       setShowHistory(false);
+      setActiveTab("conversation");
     } catch (e) {
       console.error("Erreur chargement conversation:", e);
     }
@@ -254,162 +275,177 @@ export default function IntelligencePage() {
     }
   };
 
-  const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      send();
-    }
-  };
+  const toolbar = (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+      {messages.length > 0 && activeTab === "conversation" && (
+        <button
+          onClick={startNewConversation}
+          aria-label="Nouvelle conversation"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 12,
+            padding: "6px 12px",
+            borderRadius: 10,
+            border: `1px solid ${COLORS.lineStrong}`,
+            color: COLORS.ink2,
+            background: COLORS.bgCard,
+            cursor: "pointer",
+            transition: "all 0.15s",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = COLORS.brand;
+            e.currentTarget.style.color = COLORS.brand;
+            e.currentTarget.style.background = COLORS.brandTintSoft;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = COLORS.lineStrong;
+            e.currentTarget.style.color = COLORS.ink2;
+            e.currentTarget.style.background = COLORS.bgCard;
+          }}
+        >
+          <Plus size={13} />
+          Nouveau
+        </button>
+      )}
+      <button
+        onClick={() => setShowHistory(true)}
+        aria-label="Voir l'historique des conversations"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          fontSize: 12,
+          padding: "6px 12px",
+          borderRadius: 10,
+          border: `1px solid ${COLORS.lineStrong}`,
+          color: COLORS.ink2,
+          background: COLORS.bgCard,
+          cursor: "pointer",
+          transition: "all 0.15s",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.borderColor = COLORS.brand;
+          e.currentTarget.style.color = COLORS.brand;
+          e.currentTarget.style.background = COLORS.brandTintSoft;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.borderColor = COLORS.lineStrong;
+          e.currentTarget.style.color = COLORS.ink2;
+          e.currentTarget.style.background = COLORS.bgCard;
+        }}
+      >
+        <History size={13} />
+        Historique
+      </button>
+    </div>
+  );
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-end px-6 py-4 gap-2">
-        {messages.length > 0 && (
-          <button
-            onClick={startNewConversation}
-            aria-label="Nouvelle conversation"
-            className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl border transition-all hover:border-[#f01563] hover:text-[#f01563] hover:bg-[#fff8fa]"
-            style={{ borderColor: "#e5e5e5", color: "#666", background: "#fff" }}
-          >
-            <Plus size={14} />
-            Nouveau
-          </button>
-        )}
-        <button
-          onClick={() => setShowHistory(true)}
-          aria-label="Voir l'historique des conversations"
-          className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl transition-all hover:bg-[#333]"
-          style={{ background: "#111", color: "#fff" }}
-        >
-          <History size={14} />
-          Historique
-        </button>
+    <div className="flex flex-col h-full" style={{ background: COLORS.bgPage }}>
+      {/* Page header: tabs + toolbar */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          padding: "12px 24px",
+          borderBottom: `1px solid ${COLORS.line}`,
+          background: COLORS.bgCard,
+        }}
+      >
+        <ChatTabs active={activeTab} onChange={handleTabChange} />
+        {toolbar}
       </div>
 
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-            <Image src="/logo.png" alt="Coachello" width={56} height={56} quality={100} className="rounded-2xl" />
-            <h1 className="text-2xl font-semibold" style={{ color: "#111" }}>CoachelloGPT</h1>
-            <p className="text-sm max-w-sm" style={{ color: "#aaa" }}>
-              Ton assistant commercial : CRM, stratégie, méthodologie, rédaction, veille.
-            </p>
-            <div className="flex flex-wrap gap-2 justify-center mt-2">
-              {["Quels deals sont à risque ?", "Relances en retard ?", "Retrouve le dernier mail d'Engie", "Rédige un cold email", "Explique la méthode MEDDIC"].map((q) => (
-                <button
-                  key={q}
-                  onClick={() => { setInput(q); }}
-                  className="text-xs px-3 py-1.5 rounded-full border transition-colors hover:border-[#f01563] hover:text-[#f01563]"
-                  style={{ borderColor: "#eee", color: "#888" }}
-                >
-                  {q}
-                </button>
+      {/* Tab content */}
+      <div className="flex-1 overflow-y-auto" style={{ padding: "16px 24px" }}>
+        {activeTab === "conversation" && (
+          messages.length === 0 ? (
+            <ChatWelcome onPick={(q) => setInput(q)} />
+          ) : (
+            <div className="max-w-2xl mx-auto space-y-4" style={{ paddingTop: 8 }}>
+              {messages.map((m, i) => (
+                <MessageBubble key={i} message={m} />
               ))}
-            </div>
-            <Link
-              href="/prompt"
-              className="text-xs px-4 py-2 rounded-lg transition-opacity hover:opacity-85"
-              style={{ background: "#f01563", color: "#fff" }}
-            >
-              Guide de réponse
-            </Link>
-            <div className="w-full max-w-xl flex flex-col gap-2 mt-2">
-              <div
-                className="rounded-xl px-5 py-3 text-center"
-                style={{ background: "#fff8f0", border: "1px solid #ffe4c4" }}
-              >
-                <p className="text-xs font-semibold mb-1" style={{ color: "#c2410c" }}>Advice</p>
-                <p className="text-xs leading-relaxed" style={{ color: "#78350f" }}>
-                  For best results, tell the bot where to look (HubSpot, Drive, Gmail, or Slack) and be specific about what you need—stages, timelines, deals, or contacts.
-                  <br />Use the <Link href="/prompt" className="underline underline-offset-2">prompt guide</Link> to tailor it to your needs.
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="max-w-2xl mx-auto space-y-4">
-            {messages.map((m, i) => (
-              <MessageBubble key={i} message={m} />
-            ))}
-            {streamingText && (
-              <div className="flex justify-start">
-                <Image src="/logo.png" alt="AI" width={28} height={28} quality={80} className="rounded-lg mr-3 mt-0.5 shrink-0 self-start" />
-                <div className="max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed" style={{ background: "#f5f5f5", color: "#111", borderBottomLeftRadius: 4 }}>
-                  <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0 prose-table:text-xs">
-                    <ReactMarkdown remarkPlugins={remarkPlugins}>{streamingText}</ReactMarkdown>
+              {streamingText && (
+                <div className="flex justify-start">
+                  <Image src="/logo.png" alt="AI" width={28} height={28} quality={80} className="rounded-lg mr-3 mt-0.5 shrink-0 self-start" />
+                  <div className="max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed" style={{ background: "#f5f5f5", color: "#111", borderBottomLeftRadius: 4 }}>
+                    <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-li:my-0 prose-table:text-xs">
+                      <ReactMarkdown remarkPlugins={remarkPlugins}>{streamingText}</ReactMarkdown>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-            {loading && (
-              <div className="flex justify-start items-start gap-3">
-                <Image src="/logo.png" alt="AI" width={28} height={28} quality={100} className="rounded-lg shrink-0 mt-0.5" />
-                <div className="px-4 py-3 rounded-2xl space-y-1.5" style={{ background: "#f5f5f5" }}>
-                  {toolSteps.map((step, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <span className="text-xs" style={{ color: "#16a34a" }}>✓</span>
-                      <span className="text-xs" style={{ color: "#888" }}>{step}</span>
-                    </div>
-                  ))}
-                  {costWarning !== null && (
-                    <div className="flex items-center gap-2 mt-1 px-2 py-1 rounded-lg" style={{ background: "#fff7ed", border: "1px solid #fed7aa" }}>
-                      <span className="text-xs">⚠️</span>
-                      <span className="text-xs font-medium" style={{ color: "#c2410c" }}>
-                        Requête coûteuse : ~{(costWarning * 100).toFixed(1)}¢ jusqu'ici
-                      </span>
-                    </div>
-                  )}
-                  {!streamingText && (
-                    <div className="flex items-center gap-2">
-                      <div className="flex gap-1">
-                        {[0, 1, 2].map((i) => (
-                          <div key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: "#f01563", animationDelay: `${i * 0.15}s` }} />
-                        ))}
+              )}
+              {loading && (
+                <div className="flex justify-start items-start gap-3">
+                  <Image src="/logo.png" alt="AI" width={28} height={28} quality={100} className="rounded-lg shrink-0 mt-0.5" />
+                  <div className="px-4 py-3 rounded-2xl space-y-1.5" style={{ background: "#f5f5f5" }}>
+                    {toolSteps.map((step, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="text-xs" style={{ color: "#16a34a" }}>✓</span>
+                        <span className="text-xs" style={{ color: "#888" }}>{step}</span>
                       </div>
-                      {toolSteps.length > 0 && (
-                        <span className="text-xs" style={{ color: "#bbb" }}>en cours…</span>
-                      )}
-                    </div>
-                  )}
+                    ))}
+                    {costWarning !== null && (
+                      <div className="flex items-center gap-2 mt-1 px-2 py-1 rounded-lg" style={{ background: "#fff7ed", border: "1px solid #fed7aa" }}>
+                        <span className="text-xs">⚠️</span>
+                        <span className="text-xs font-medium" style={{ color: "#c2410c" }}>
+                          Requête coûteuse : ~{(costWarning * 100).toFixed(1)}¢ jusqu&apos;ici
+                        </span>
+                      </div>
+                    )}
+                    {!streamingText && (
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-1">
+                          {[0, 1, 2].map((i) => (
+                            <div key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: "#f01563", animationDelay: `${i * 0.15}s` }} />
+                          ))}
+                        </div>
+                        {toolSteps.length > 0 && (
+                          <span className="text-xs" style={{ color: "#bbb" }}>en cours…</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-            <div ref={bottomRef} />
-          </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
+          )
         )}
+
+        {activeTab === "connecteurs" && <ConnectorsTabPlaceholder />}
       </div>
 
-      {/* Input bar */}
-      <div className="px-6 pb-6 pt-2">
-        <div className="max-w-2xl mx-auto flex items-end gap-3 p-3 rounded-2xl border transition-all" style={{ background: "#fff", borderColor: "#e5e5e5" }}>
-          <label htmlFor="chat-input" className="sr-only">Message</label>
-          <textarea
-            id="chat-input"
+      {/* Input bar — visible only on Conversation tab */}
+      {activeTab === "conversation" && (
+        <div style={{ padding: "8px 24px 20px" }}>
+          <ChatInputBar
             ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKey}
-            placeholder="Deals, stratégie, méthodologie, rédaction d'emails..."
-            rows={1}
-            className="flex-1 resize-none text-sm outline-none bg-transparent leading-relaxed"
-            style={{ color: "#111", maxHeight: 200, overflowY: "auto" }}
+            onChange={setInput}
+            onSend={send}
+            loading={loading}
           />
-          <button
-            onClick={send}
-            disabled={!input.trim() || loading}
-            aria-label="Envoyer le message"
-            className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-opacity"
-            style={{ background: "#f01563", opacity: !input.trim() || loading ? 0.4 : 1 }}
+          <p
+            style={{
+              textAlign: "center",
+              fontSize: 10,
+              marginTop: 10,
+              color: COLORS.ink5,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              fontWeight: 600,
+            }}
           >
-            <ArrowUp size={15} style={{ color: "#fff" }} />
-          </button>
+            HubSpot · Slack · Gmail · Drive · Web — Réponses en streaming
+          </p>
         </div>
-        <p className="text-center text-[10px] mt-2" style={{ color: "#ccc" }}>
-          Connecté à HubSpot · Slack · Google Drive · Gmail · Web — Stratégie & méthodologie intégrées
-        </p>
-      </div>
+      )}
 
       {showHistory && (
         <ConversationHistoryModal
@@ -420,6 +456,62 @@ export default function IntelligencePage() {
           onClose={() => setShowHistory(false)}
         />
       )}
+    </div>
+  );
+}
+
+function ConnectorsTabPlaceholder() {
+  const items = [
+    { icon: Database, name: "HubSpot", desc: "Contacts, deals, companies, activités" },
+    { icon: Mail, name: "Gmail", desc: "Recherche et lecture d'emails" },
+    { icon: MessageSquare, name: "Slack", desc: "Recherche, lecture de canaux, envoi de message" },
+    { icon: FolderOpen, name: "Google Drive", desc: "Recherche, lecture de fichiers" },
+    { icon: Globe, name: "Web", desc: "Recherche web temps réel" },
+  ];
+  return (
+    <div style={{ maxWidth: 720, margin: "0 auto", padding: "12px 0", display: "flex", flexDirection: "column", gap: 12 }}>
+      <SectionHeader title="Connecteurs" />
+      {items.map(({ icon: Icon, name, desc }) => (
+        <Card key={name} padding={14}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                background: COLORS.bgSoft,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: COLORS.ink1,
+                flexShrink: 0,
+              }}
+            >
+              <Icon size={18} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink0 }}>{name}</div>
+              <div style={{ fontSize: 12, color: COLORS.ink2 }}>{desc}</div>
+            </div>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "2px 8px",
+                fontSize: 11,
+                fontWeight: 600,
+                borderRadius: 999,
+                background: COLORS.okBg,
+                color: COLORS.ok,
+              }}
+            >
+              <Check size={12} strokeWidth={3} />
+              Connecté
+            </span>
+          </div>
+        </Card>
+      ))}
     </div>
   );
 }

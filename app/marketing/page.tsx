@@ -8,79 +8,72 @@ import ContentTab from "./_components/content-tab";
 import BlogTab from "./_components/blog-tab";
 import LeadsTab from "./_components/leads-tab";
 import { useLeads } from "@/lib/hooks/use-marketing";
+import { COLORS } from "@/lib/design/tokens";
+import { TabBar } from "@/components/ui/tab-bar";
 
-const TABS = [
-  { id: "overview", label: "Overview", icon: BarChart3 },
-  { id: "articles", label: "Articles", icon: BookOpen },
-  { id: "seo", label: "SEO", icon: Search },
-  { id: "content", label: "Content Factory", icon: Sparkles },
-  { id: "leads", label: "Leads", icon: Inbox },
-] as const;
-
-type TabId = (typeof TABS)[number]["id"];
+type TabId = "overview" | "articles" | "seo" | "content" | "leads";
 
 export default function MarketingPage() {
   const [tab, setTab] = useState<TabId>("overview");
   const { counts } = useLeads("pending");
   const pendingCount = counts.pending;
 
+  const leadsBadge =
+    pendingCount > 0 ? (
+      <span
+        style={{
+          minWidth: 18,
+          height: 18,
+          borderRadius: 9,
+          background: COLORS.err,
+          color: "#fff",
+          fontSize: 10,
+          fontWeight: 700,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "0 5px",
+        }}
+      >
+        {pendingCount > 99 ? "99+" : pendingCount}
+      </span>
+    ) : null;
+
   return (
-    <div className="flex flex-col h-full" style={{ background: "#f8f8f8" }}>
+    <div className="flex flex-col h-full" style={{ background: COLORS.bgPage }}>
       {/* Header */}
-      <div className="px-6 pt-5 pb-3" style={{ background: "#fff", borderBottom: "1px solid #eeeeee" }}>
-        <h1 className="text-xl font-bold" style={{ color: "#111" }}>Marketing</h1>
-        <p className="text-sm mt-0.5" style={{ color: "#888" }}>Blog Coachello — Performance & Content</p>
+      <div
+        style={{
+          padding: "16px 24px 12px",
+          background: COLORS.bgCard,
+          borderBottom: `1px solid ${COLORS.line}`,
+        }}
+      >
+        <h1 style={{ fontSize: 18, fontWeight: 700, color: COLORS.ink0, margin: 0, letterSpacing: "-0.01em" }}>
+          Marketing
+        </h1>
+        <p style={{ fontSize: 12, color: COLORS.ink3, margin: 0, marginTop: 2 }}>
+          Blog Coachello — Performance &amp; Content
+        </p>
       </div>
 
       {/* Tabs */}
-      <div className="px-6" style={{ background: "#fff", borderBottom: "1px solid #eeeeee" }}>
-        <div className="flex gap-1">
-          {TABS.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
-            const showBadge = t.id === "leads" && pendingCount > 0;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className="flex items-center gap-1.5 text-sm px-4 py-2.5 font-medium transition-colors whitespace-nowrap"
-                style={{
-                  position: "relative",
-                  color: active ? "#f01563" : "#888",
-                  borderBottom: active ? "2px solid #f01563" : "2px solid transparent",
-                  marginBottom: -1,
-                }}
-              >
-                <Icon size={15} />
-                {t.label}
-                {showBadge && (
-                  <span
-                    style={{
-                      minWidth: 18,
-                      height: 18,
-                      borderRadius: 9,
-                      background: "#ef4444",
-                      color: "#fff",
-                      fontSize: 10,
-                      fontWeight: 700,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "0 5px",
-                      marginLeft: 4,
-                    }}
-                  >
-                    {pendingCount > 99 ? "99+" : pendingCount}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+      <div style={{ padding: "0 24px", background: COLORS.bgCard }}>
+        <TabBar
+          active={tab}
+          onChange={(k) => setTab(k as TabId)}
+          tabs={[
+            { key: "overview", label: "Overview", icon: BarChart3 },
+            { key: "articles", label: "Articles", icon: BookOpen },
+            { key: "seo", label: "SEO", icon: Search },
+            { key: "content", label: "Content Factory", icon: Sparkles },
+            { key: "leads", label: "Leads", icon: Inbox, badge: leadsBadge },
+          ]}
+        />
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      <div className="flex-1 overflow-y-auto" style={{ padding: "20px 24px" }}>
         {tab === "overview" && <OverviewTab />}
         {tab === "articles" && <BlogTab />}
         {tab === "seo" && <SeoTab />}

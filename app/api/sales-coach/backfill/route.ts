@@ -5,7 +5,7 @@ import { getClaapRecording, pickTranscriptUrl, extractExternalParticipants } fro
 import { resolveDealFromParticipants } from "@/lib/hubspot";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 type Body = {
   recordingId?: string;
@@ -115,14 +115,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "INTERNAL_SECRET not configured — can't trigger analyzer" }, { status: 500 });
   }
 
-  void fetch(`${siteUrl}/api/sales-coach/analyze/${inserted.id}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-internal-secret": internalSecret,
-    },
-    body: JSON.stringify({ transcriptUrl }),
-  }).catch((e) => console.error("[backfill] trigger fetch failed:", e));
+  // Await with short timeout: analyzer flips status to "analyzing" immediately,
+  // then keeps running on its own 300s budget. Without await, serverless can
+  // kill the outbound request before it leaves.
+  try {
+    const triggerRes = await fetch(`${siteUrl}/api/sales-coach/analyze/${inserted.id}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": internalSecret,
+      },
+      body: JSON.stringify({ transcriptUrl }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!triggerRes.ok) {
+      const text = await triggerRes.text().catch(() => "");
+      console.error(`[backfill] trigger non-2xx (${triggerRes.status}):`, text.slice(0, 200));
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!msg.includes("aborted") && !msg.includes("timeout")) {
+      console.error("[backfill] trigger fetch failed:", msg);
+    }
+  }
 
   return NextResponse.json({ ok: true, id: inserted.id });
 }

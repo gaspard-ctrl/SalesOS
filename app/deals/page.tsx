@@ -3,111 +3,26 @@
 import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { useUserMe } from "@/lib/hooks/use-user-me";
 import { useDeals } from "@/lib/hooks/use-deals";
-import { X, ChevronRight, Mail, Zap, AlertCircle, CheckCircle, TrendingUp, Search, RefreshCw, Linkedin, Copy, Check, Send } from "lucide-react";
-import { scoreBadge, reliabilityLabel, reliabilityColor, type DealScore } from "@/lib/deal-scoring";
-import { AskClaudeButton, AskClaudePanel } from "@/components/ask-claude";
+import { Zap, Search, RefreshCw, ArrowLeft } from "lucide-react";
+import { scoreBadge } from "@/lib/deal-scoring";
 import { DealFiltersBar, applyDealFilters, DEFAULT_DEAL_FILTERS, type DealFilters } from "./_components/deal-filters";
+import { DealListGrouped } from "./_components/deal-list-grouped";
+import { DealDetailPanel } from "./_components/deal-detail-panel";
+import { type Deal, type DealDetails, fmt, fmtDate, stageColor, timeAgo } from "./_helpers";
+import { COLORS } from "@/lib/design/tokens";
+import { StatPill } from "@/components/ui/stat-pill";
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
+// ─── Deal Card (kanban) ────────────────────────────────────────────────────────
 
-interface Deal {
-  id: string;
-  dealname: string;
-  dealstage: string;
-  amount: string;
-  closedate: string;
-  createdate: string;
-  probability: string;
-  ownerId: string;
-  ownerName: string;
-  lastContacted: string;
-  lastModified: string;
-  numContacts: number;
-  dealType: string;
-  score: DealScore | null;
-  reasoning: string | null;
-  next_action: string | null;
-  scoredAt: string | null;
-  qualification: Record<string, string | null> | null;
-}
-
-interface DealDetails extends Deal {
-  description: string;
-  contacts: { id: string; name: string; jobTitle: string; email: string; linkedinUrl: string | null }[];
-  company: { name: string; industry: string; employees: string; website: string };
-  engagements: { type: string; date: string; body: string }[];
-  reasoning: string | null;
-  next_action: string | null;
-  scoredAt: string | null;
-  qualification: Record<string, string | null> | null;
-}
-
-interface Stage {
-  id: string;
-  label: string;
-  order: number;
-  probability: number | null;
-}
-
-interface Analysis {
-  synthese: string;
-  riskLevel: "Faible" | "Moyen" | "Élevé";
-  dynamique: { momentum: string; analyse: string };
-  qualification: { budget: string; authority: string; need: string; timeline: string; fit: string };
-  signaux: { positifs: string[]; negatifs: string[] };
-  risques: { risque: string; severite: "Faible" | "Moyen" | "Élevé" }[];
-  scoreInsight: string;
-  prochaines_etapes: { action: string; priorite: "Urgent" | "Moyen" | "Faible"; impact: string }[];
-  // legacy compat
-  summary?: string;
-  positiveSignals?: string[];
-  negativeSignals?: string[];
-  nextSteps?: string[];
-  scoringInsight?: string;
-}
-
-// ─── Stage colors ──────────────────────────────────────────────────────────────
-
-const STAGE_COLORS = ["#3b82f6", "#7c3aed", "#f97316", "#f01563", "#d97706", "#16a34a", "#6b7280", "#0891b2", "#be185d"];
-
-function stageColor(index: number): string {
-  return STAGE_COLORS[index % STAGE_COLORS.length];
-}
-
-// ─── Helpers ───────────────────────────────────────────────────────────────────
-
-function fmt(amount: string): string {
-  const n = parseFloat(amount);
-  if (isNaN(n)) return "—";
-  return n >= 1000 ? `${(n / 1000).toFixed(0)}k€` : `${n.toFixed(0)}€`;
-}
-
-function fmtDate(dateStr: string): string {
-  if (!dateStr) return "";
-  return new Date(dateStr).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
-}
-
-function timeAgo(dateStr: string): string {
-  if (!dateStr) return "";
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const days = Math.floor(diff / 864e5);
-  if (days === 0) return "Aujourd'hui";
-  if (days === 1) return "Hier";
-  if (days < 7) return `Il y a ${days}j`;
-  if (days < 30) return `Il y a ${Math.floor(days / 7)}sem`;
-  return `Il y a ${Math.floor(days / 30)}mois`;
-}
-
-function engagementTypeBadge(type: string): string {
-  const map: Record<string, string> = {
-    EMAIL: "Email", CALL: "Appel", MEETING: "Réunion", NOTE: "Note", TASK: "Tâche",
-  };
-  return map[type?.toUpperCase()] ?? type;
-}
-
-// ─── Deal Card ─────────────────────────────────────────────────────────────────
-
-const DealCard = memo(function DealCard({ deal, selected, onClick }: { deal: Deal; selected: boolean; onClick: () => void }) {
+const DealCard = memo(function DealCard({
+  deal,
+  selected,
+  onClick,
+}: {
+  deal: Deal;
+  selected: boolean;
+  onClick: () => void;
+}) {
   const hasScore = deal.score !== null;
   const badge = hasScore ? scoreBadge(deal.score!.total) : null;
   const ref = deal.lastContacted || deal.lastModified;
@@ -117,41 +32,43 @@ const DealCard = memo(function DealCard({ deal, selected, onClick }: { deal: Dea
       onClick={onClick}
       className="rounded-lg border cursor-pointer transition-all"
       style={{
-        background: selected ? "#f0f4ff" : "white",
-        borderColor: selected ? "#6366f1" : "#e5e7eb",
+        background: selected ? COLORS.brandTintSoft : COLORS.bgCard,
+        borderColor: selected ? COLORS.brand : COLORS.line,
         padding: "10px 12px",
         marginBottom: 8,
       }}
     >
-      {/* Header */}
       <div style={{ marginBottom: 4 }}>
-        <span style={{ fontWeight: 600, fontSize: 13, color: "#111827", lineHeight: 1.3 }}>
+        <span style={{ fontWeight: 600, fontSize: 13, color: COLORS.ink0, lineHeight: 1.3 }}>
           {deal.dealname || "Sans nom"}
         </span>
       </div>
-
-      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
-        {fmt(deal.amount)}{deal.closedate ? ` · ${fmtDate(deal.closedate)}` : ""}
-        {deal.ownerName && <span style={{ color: "#9ca3af" }}> · {deal.ownerName}</span>}
+      <div style={{ fontSize: 12, color: COLORS.ink2, marginBottom: 6 }}>
+        {fmt(deal.amount)}
+        {deal.closedate ? ` · ${fmtDate(deal.closedate)}` : ""}
+        {deal.ownerName && <span style={{ color: COLORS.ink3 }}> · {deal.ownerName}</span>}
       </div>
-
       {ref && (
-        <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 8 }}>
+        <div style={{ fontSize: 11, color: COLORS.ink3, marginBottom: 8 }}>
           {timeAgo(ref)}
         </div>
       )}
-
-      {/* Score */}
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         {hasScore && badge ? (
-          <span style={{
-            fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 99,
-            color: badge.color, background: badge.bg,
-          }}>
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              padding: "2px 8px",
+              borderRadius: 99,
+              color: badge.color,
+              background: badge.bg,
+            }}
+          >
             {deal.score!.total}
           </span>
         ) : (
-          <span style={{ fontSize: 11, color: "#9ca3af", fontStyle: "italic" }}>Non scoré</span>
+          <span style={{ fontSize: 11, color: COLORS.ink3, fontStyle: "italic" }}>Non scoré</span>
         )}
       </div>
     </div>
@@ -161,9 +78,13 @@ const DealCard = memo(function DealCard({ deal, selected, onClick }: { deal: Dea
 // ─── Kanban Column ─────────────────────────────────────────────────────────────
 
 const KanbanColumn = memo(function KanbanColumn({
-  stage, deals, selectedId, onSelect, color,
+  stage,
+  deals,
+  selectedId,
+  onSelect,
+  color,
 }: {
-  stage: Stage;
+  stage: { id: string; label: string };
   deals: Deal[];
   selectedId: string | null;
   onSelect: (d: Deal) => void;
@@ -173,28 +94,42 @@ const KanbanColumn = memo(function KanbanColumn({
 
   return (
     <div style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column" }}>
-      {/* Column header */}
-      <div style={{
-        padding: "8px 12px", borderRadius: "8px 8px 0 0", marginBottom: 4,
-        background: color + "18", borderBottom: `2px solid ${color}`,
-      }}>
+      <div
+        style={{
+          padding: "8px 12px",
+          borderRadius: "8px 8px 0 0",
+          marginBottom: 4,
+          background: color + "18",
+          borderBottom: `2px solid ${color}`,
+        }}
+      >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", minHeight: 34 }}>
-          <span style={{ fontWeight: 600, fontSize: 12, color: color, lineHeight: 1.4 }}>{stage.label}</span>
-          <span style={{ fontSize: 11, color: "#6b7280", background: "#f3f4f6", padding: "1px 6px", borderRadius: 99, flexShrink: 0, marginLeft: 6 }}>
+          <span style={{ fontWeight: 600, fontSize: 12, color, lineHeight: 1.4 }}>{stage.label}</span>
+          <span
+            style={{
+              fontSize: 11,
+              color: COLORS.ink2,
+              background: COLORS.bgSoft,
+              padding: "1px 6px",
+              borderRadius: 99,
+              flexShrink: 0,
+              marginLeft: 6,
+            }}
+          >
             {deals.length}
           </span>
         </div>
         {totalAmount > 0 && (
-          <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+          <div style={{ fontSize: 11, color: COLORS.ink2, marginTop: 2 }}>
             {(totalAmount / 1000).toFixed(0)}k€
           </div>
         )}
       </div>
-
-      {/* Cards */}
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
         {deals.length === 0 ? (
-          <div style={{ textAlign: "center", fontSize: 11, color: "#d1d5db", padding: "16px 0" }}>Aucun deal</div>
+          <div style={{ textAlign: "center", fontSize: 11, color: COLORS.ink5, padding: "16px 0" }}>
+            Aucun deal
+          </div>
         ) : (
           deals.map((deal) => (
             <DealCard
@@ -210,980 +145,6 @@ const KanbanColumn = memo(function KanbanColumn({
   );
 });
 
-// ─── Format deal for Slack ────────────────────────────────────────────────────
-
-function formatDealForSlack(details: DealDetails, stageLabel: string, score: DealScore | null, reasoning: string | null, nextAction: string | null, qualification: Record<string, string | null> | null): string {
-  const lines: string[] = [
-    `*Deal — ${details.dealname}*`,
-    "",
-    `*Stage :* ${stageLabel}`,
-  ];
-  if (details.amount) lines.push(`*Montant :* ${parseFloat(details.amount).toLocaleString("fr-FR")}€`);
-  if (details.closedate) lines.push(`*Clôture :* ${new Date(details.closedate).toLocaleDateString("fr-FR")}`);
-  if (details.ownerName) lines.push(`*Owner :* ${details.ownerName}`);
-
-  // Score
-  if (score) {
-    const badge = scoreBadge(score.total);
-    lines.push("", `*Score :* ${score.total}/100 — ${badge.label}`);
-    if (score.components?.length) {
-      lines.push(...score.components.map((c) => `  • ${c.name} : ${c.earned}/${c.max}`));
-    }
-  }
-
-  // Reasoning
-  if (reasoning) {
-    lines.push("", `*Analyse :*`, reasoning);
-  }
-
-  // Next action
-  if (nextAction) {
-    lines.push("", `*Prochaine action :* ${nextAction}`);
-  }
-
-  // Qualification
-  if (qualification) {
-    const QUAL_LABELS: Record<string, string> = {
-      budget: "Budget", estimatedBudget: "Budget estimé", authority: "Autorité",
-      need: "Besoin", champion: "Champion", needDetailed: "Besoin détaillé",
-      timeline: "Timeline", strategicFit: "Fit stratégique",
-    };
-    const entries = Object.entries(qualification).filter(([, v]) => !!v);
-    if (entries.length > 0) {
-      lines.push("", `*Qualification :*`);
-      entries.forEach(([k, v]) => {
-        lines.push(`  • ${QUAL_LABELS[k] ?? k} : ${v}`);
-      });
-    }
-  }
-
-  // Company
-  if (details.company?.name) {
-    const cp = details.company;
-    const companyParts = [
-      cp.name,
-      cp.industry ? `Secteur : ${cp.industry}` : null,
-      cp.employees ? `Effectifs : ${cp.employees}` : null,
-    ].filter(Boolean);
-    lines.push("", `*Entreprise :*`, ...companyParts.map((p) => `  • ${p}`));
-  }
-
-  // Contacts
-  if (details.contacts?.length > 0) {
-    lines.push("", `*Contacts :*`);
-    details.contacts.forEach((c) => {
-      const parts = [c.name, c.jobTitle, c.email].filter(Boolean);
-      lines.push(`  • ${parts.join(" — ")}`);
-    });
-  }
-
-  return lines.join("\n");
-}
-
-// ─── Deal Drawer ───────────────────────────────────────────────────────────────
-
-function DealDrawer({
-  details,
-  loading,
-  onClose,
-  onRescore,
-  stageLabel,
-  stageColor: color,
-  slackName,
-}: {
-  details: DealDetails | null;
-  loading: boolean;
-  onClose: () => void;
-  onRescore: (dealId: string, score: DealScore, reasoning: string, next_action: string) => void;
-  stageLabel: string;
-  stageColor: string;
-  slackName: string | null;
-}) {
-  const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analyzeError, setAnalyzeError] = useState("");
-  const [slackSending, setSlackSending] = useState(false);
-  const [slackSent, setSlackSent] = useState(false);
-
-  const [emailDraft, setEmailDraft] = useState<{ subject: string; body: string; toEmail: string } | null>(null);
-  const [generating, setGenerating] = useState(false);
-  const [emailSubject, setEmailSubject] = useState("");
-  const [emailBody, setEmailBody] = useState("");
-  const [emailTo, setEmailTo] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [showComposer, setShowComposer] = useState(false);
-  const [showEngagements, setShowEngagements] = useState(false);
-  const [claudeOpen, setClaudeOpen] = useState(false);
-  const [rescoring, setRescoring] = useState(false);
-  const [localScore, setLocalScore] = useState<{ score: DealScore; reasoning: string; next_action: string; scoredAt: string; qualification: Record<string, string | null> | null } | null>(null);
-
-  // Reset when deal changes
-  useEffect(() => {
-    setAnalysis(null);
-    setAnalyzeError("");
-    setEmailDraft(null);
-    setShowComposer(false);
-    setSent(false);
-    setShowEngagements(false);
-    setClaudeOpen(false);
-    setLocalScore(null);
-    setSlackSent(false);
-  }, [details?.id]);
-
-  // Sync email fields when draft arrives
-  useEffect(() => {
-    if (emailDraft) {
-      setEmailSubject(emailDraft.subject);
-      setEmailBody(emailDraft.body);
-      setEmailTo(emailDraft.toEmail);
-      setShowComposer(true);
-    }
-  }, [emailDraft]);
-
-  const analyze = useCallback(async () => {
-    if (!details) return;
-    setAnalyzing(true);
-    setAnalyzeError("");
-    try {
-      const r = await fetch("/api/deals/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dealId: details.id }),
-      });
-      const ct = r.headers.get("content-type") ?? "";
-      if (!ct.includes("application/json")) {
-        throw new Error("Le serveur a renvoyé une réponse inattendue. Réessaie dans un moment.");
-      }
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "Erreur");
-      setAnalysis(data);
-    } catch (e) {
-      setAnalyzeError(e instanceof Error ? e.message : "Erreur");
-    } finally {
-      setAnalyzing(false);
-    }
-  }, [details]);
-
-  const generateEmail = useCallback(async () => {
-    if (!details) return;
-    setGenerating(true);
-    try {
-      const r = await fetch("/api/deals/generate-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dealId: details.id }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "Erreur");
-      setEmailDraft(data);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setGenerating(false);
-    }
-  }, [details]);
-
-  const sendEmail = useCallback(async () => {
-    if (!emailTo || !emailSubject || !emailBody) return;
-    setSending(true);
-    try {
-      const r = await fetch("/api/gmail/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: emailTo, subject: emailSubject, body: emailBody }),
-      });
-      if (r.ok) {
-        setSent(true);
-        setShowComposer(false);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSending(false);
-    }
-  }, [emailTo, emailSubject, emailBody]);
-
-  const rescore = useCallback(async () => {
-    if (!details) return;
-    setRescoring(true);
-    try {
-      const r = await fetch("/api/deals/score", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dealId: details.id }),
-      });
-      const data = await r.json();
-      if (r.ok) {
-        const newScore: DealScore = { total: data.total, components: data.components, reliability: data.reliability };
-        setLocalScore({
-          score: newScore,
-          reasoning: data.reasoning ?? "",
-          next_action: data.next_action ?? "",
-          scoredAt: new Date().toISOString(),
-          qualification: data.qualification ?? null,
-        });
-        onRescore(details.id, newScore, data.reasoning ?? "", data.next_action ?? "");
-      }
-    } catch { /* ignore */ } finally {
-      setRescoring(false);
-    }
-  }, [details]);
-
-  const sendToSlack = useCallback(async () => {
-    if (!details) return;
-    setSlackSending(true);
-    try {
-      const activeScore = localScore?.score ?? details.score;
-      const activeReasoning = localScore?.reasoning ?? details.reasoning;
-      const activeNextAction = localScore?.next_action ?? details.next_action;
-      const activeQualification = localScore?.qualification ?? details.qualification;
-      const text = formatDealForSlack(details, stageLabel, activeScore, activeReasoning, activeNextAction, activeQualification);
-      const r = await fetch("/api/deals/send-slack", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (!r.ok) {
-        const data = await r.json();
-        throw new Error(data.error ?? "Erreur");
-      }
-      setSlackSent(true);
-    } catch (e) {
-      console.error("send-slack error:", e);
-    } finally {
-      setSlackSending(false);
-    }
-  }, [details, localScore, stageLabel]);
-
-  const riskColors: Record<string, string> = { Faible: "#16a34a", Moyen: "#ca8a04", Élevé: "#dc2626" };
-
-  return (
-    <div style={{
-      width: "65%", borderLeft: "1px solid #e5e7eb", background: "white",
-      display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0,
-    }}>
-      {/* Header */}
-      <div style={{ padding: "14px 16px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "flex-start", gap: 8 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {loading ? (
-            <div style={{ height: 16, background: "#f3f4f6", borderRadius: 4, width: "60%", marginBottom: 8 }} />
-          ) : details ? (
-            <>
-              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>{details.dealname}</div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                <span style={{
-                  fontSize: 11, padding: "2px 8px", borderRadius: 99,
-                  background: color + "18", color: color, fontWeight: 600,
-                }}>{stageLabel}</span>
-                {details.amount && (
-                  <span style={{ fontSize: 12, color: "#374151", fontWeight: 600 }}>
-                    {parseFloat(details.amount).toLocaleString("fr-FR")}€
-                  </span>
-                )}
-                {details.closedate && (
-                  <span style={{ fontSize: 11, color: "#6b7280" }}>
-                    Clôture {new Date(details.closedate).toLocaleDateString("fr-FR")}
-                  </span>
-                )}
-              </div>
-            </>
-          ) : null}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          {details && (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-              <button
-                onClick={rescore}
-                disabled={rescoring}
-                title={(localScore?.scoredAt ?? details?.scoredAt) ? `Scoré ${timeAgo((localScore?.scoredAt ?? details?.scoredAt)!)}` : "Rescorer ce deal"}
-                style={{
-                  padding: "5px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-                  background: rescoring ? "#eef2ff" : "linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)",
-                  color: rescoring ? "#818cf8" : "#4f46e5",
-                  border: "1px solid #c7d2fe", cursor: rescoring ? "not-allowed" : "pointer",
-                  display: "flex", alignItems: "center", gap: 4,
-                }}
-              >
-                {rescoring ? <><RefreshCw size={12} className="animate-spin" /> Scoring…</> : <><Zap size={12} /> Rescorer</>}
-              </button>
-              {(localScore?.scoredAt ?? details?.scoredAt) && (
-                <span style={{ fontSize: 9, color: "#9ca3af" }}>
-                  {timeAgo((localScore?.scoredAt ?? details?.scoredAt)!)}
-                </span>
-              )}
-            </div>
-          )}
-          {details && slackName && (
-            slackSent ? (
-              <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#16a34a", flexShrink: 0 }}>
-                <CheckCircle size={13} /> Envoyé
-              </span>
-            ) : (
-              <button
-                onClick={sendToSlack}
-                disabled={slackSending}
-                title="Envoyer le topo en DM Slack"
-                style={{
-                  padding: "5px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-                  background: slackSending ? "#f3f4f6" : "#f8fafc",
-                  color: slackSending ? "#9ca3af" : "#374151",
-                  border: "1px solid #e5e7eb", cursor: slackSending ? "not-allowed" : "pointer",
-                  display: "flex", alignItems: "center", gap: 4,
-                }}
-              >
-                {slackSending ? <><RefreshCw size={12} className="animate-spin" /> Envoi…</> : <><Send size={12} /> Slack</>}
-              </button>
-            )
-          )}
-        </div>
-        <button onClick={onClose} style={{ padding: 4, color: "#9ca3af", cursor: "pointer", background: "none", border: "none", flexShrink: 0 }}>
-          <X size={18} />
-        </button>
-      </div>
-
-      {/* Scrollable body */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px" }}>
-        {loading ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {[80, 60, 70, 50].map((w, i) => (
-              <div key={i} style={{ height: 12, background: "#f3f4f6", borderRadius: 4, width: `${w}%` }} />
-            ))}
-          </div>
-        ) : details ? (
-          <>
-            {/* Description */}
-            {details.description && (
-              <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 16, lineHeight: 1.5 }}>
-                {details.description}
-              </p>
-            )}
-
-            {/* ── Score + Qualification side by side ── */}
-            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-
-              {/* Left: Score breakdown */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <Section title="About the deal">
-                  {(() => {
-                    const activeScore = localScore?.score ?? details.score;
-                    const activeReasoning = localScore?.reasoning ?? details.reasoning;
-                    const activeNextAction = localScore?.next_action ?? details.next_action;
-                    const activeScoredAt = localScore?.scoredAt ?? details.scoredAt;
-
-                    if (!activeScore) {
-                      return (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          <p style={{ fontSize: 12, color: "#9ca3af", margin: 0 }}>Ce deal n'a pas encore été scoré.</p>
-                          <button
-                            onClick={rescore}
-                            disabled={rescoring}
-                            style={{
-                              padding: "8px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-                              background: "#eef2ff", color: "#4338ca", border: "1px solid #6366f1",
-                              cursor: rescoring ? "not-allowed" : "pointer",
-                              display: "flex", alignItems: "center", gap: 5,
-                            }}
-                          >
-                            {rescoring ? <><RefreshCw size={12} className="animate-spin" /> Scoring…</> : <><Zap size={12} /> Scorer ce deal</>}
-                          </button>
-                        </div>
-                      );
-                    }
-
-                    const badge = scoreBadge(activeScore.total);
-                    const relColor = reliabilityColor(activeScore.reliability);
-                    return (
-                      <div style={{ marginBottom: 8 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 22, fontWeight: 800, color: badge.color }}>{activeScore.total}</span>
-                            <span style={{ fontSize: 13, color: "#6b7280" }}>/100</span>
-                            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: badge.bg, color: badge.color, fontWeight: 600 }}>
-                              {badge.label}
-                            </span>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <div style={{ display: "flex", gap: 2 }}>
-                              {[0, 1, 2, 3, 4].map((i) => (
-                                <span key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: i < activeScore.reliability ? relColor : "#e5e7eb" }} />
-                              ))}
-                            </div>
-                            <span style={{ fontSize: 11, color: relColor, fontWeight: 500 }}>
-                              {reliabilityLabel(activeScore.reliability)}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* AI reasoning */}
-                        {activeReasoning && (
-                          <div style={{ padding: "6px 10px", background: "#f8fafc", borderRadius: 6, border: "1px solid #e2e8f0", marginBottom: 6 }}>
-                            {activeReasoning.includes("✓") || activeReasoning.includes("✗") || activeReasoning.includes("⚠") ? (
-                              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                                {activeReasoning.split("\n").filter(Boolean).map((line, i) => {
-                                  const color = line.startsWith("✓") ? "#16a34a" : line.startsWith("✗") ? "#dc2626" : line.startsWith("⚠") ? "#d97706" : "#64748b";
-                                  return (
-                                    <p key={i} style={{ fontSize: 12, color, margin: 0, lineHeight: 1.5 }}>{line}</p>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <p style={{ fontSize: 12, color: "#64748b", margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>{activeReasoning}</p>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Next action */}
-                        {activeNextAction && (
-                          <div style={{ padding: "8px 10px", background: "#f0fdf4", borderRadius: 6, border: "1px solid #bbf7d0", marginBottom: 10, display: "flex", gap: 7, alignItems: "flex-start" }}>
-                            <span style={{ fontSize: 13, lineHeight: 1 }}>→</span>
-                            <p style={{ fontSize: 12, color: "#111827", margin: 0, lineHeight: 1.5, fontWeight: 500 }}>{activeNextAction}</p>
-                          </div>
-                        )}
-
-                        {/* Components */}
-                        {activeScore.components.map((c) => (
-                          <div key={c.name} style={{ marginBottom: 6 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
-                              <span style={{ fontSize: 12, color: "#374151" }}>
-                                {c.name}
-                              </span>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: "#111827" }}>{c.earned}/{c.max}</span>
-                            </div>
-                            <div style={{ height: 4, background: "#f3f4f6", borderRadius: 2, overflow: "hidden" }}>
-                              <div style={{ height: "100%", background: "#6366f1", width: `${(c.earned / c.max) * 100}%`, borderRadius: 2 }} />
-                            </div>
-                          </div>
-                        ))}
-
-                      </div>
-                    );
-                  })()}
-                </Section>
-              </div>
-
-              {/* Right: Deal qualification */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                {(() => {
-                  const activeQualification = localScore?.qualification ?? details.qualification;
-                  if (!activeQualification) return null;
-                  const QUAL_FIELDS: { key: string; label: string }[] = [
-                    { key: "budget",          label: "Budget" },
-                    { key: "estimatedBudget", label: "Budget estimé" },
-                    { key: "authority",       label: "Autorité (décisionnaire)" },
-                    { key: "need",            label: "Besoin" },
-                    { key: "champion",        label: "Champion interne" },
-                    { key: "needDetailed",    label: "Besoin détaillé" },
-                    { key: "timeline",        label: "Timeline" },
-                    { key: "strategicFit",    label: "Fit stratégique" },
-                  ];
-                  const q = activeQualification;
-                  const known = QUAL_FIELDS.filter((f) => !!q[f.key]);
-                  const missing = QUAL_FIELDS.filter((f) => !q[f.key]);
-                  return (
-                    <Section title="Qualification">
-                      <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 10 }}>
-                        {known.length}/{QUAL_FIELDS.length} informations collectées
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 0, border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
-                        {known.map((f, i) => (
-                          <div key={f.key} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px", borderBottom: i < known.length - 1 || missing.length > 0 ? "1px solid #f3f4f6" : undefined }}>
-                            <span className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ background: "#22c55e" }} />
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7280", marginBottom: 2 }}>{f.label}</div>
-                              <div style={{ fontSize: 12, color: "#111827", lineHeight: 1.4 }}>{q[f.key]}</div>
-                            </div>
-                          </div>
-                        ))}
-                        {missing.length > 0 && (
-                          <div style={{ padding: "8px 12px", background: "#fffbfb" }}>
-                            <div style={{ fontSize: 10, fontWeight: 600, color: "#9ca3af", marginBottom: 6 }}>À collecter</div>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                              {missing.map((f) => (
-                                <span key={f.key} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, border: "1px solid #fecaca", background: "#fff", color: "#dc2626" }}>
-                                  {f.label}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </Section>
-                  );
-                })()}
-              </div>
-
-            </div>
-
-            {/* ── Contacts ── */}
-            {details.contacts.length > 0 && (
-              <Section title="Contacts">
-                {details.contacts.map((c) => (
-                  <ContactRow key={c.id} contact={c} />
-                ))}
-              </Section>
-            )}
-
-            {/* ── Quick actions: Email + Claude ── */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-              <button
-                onClick={generateEmail}
-                disabled={generating}
-                style={{
-                  flex: 1,
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  border: "none",
-                  background: "#f3f4f6",
-                  cursor: generating ? "not-allowed" : "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  transition: "background 0.15s",
-                }}
-                onMouseEnter={(e) => { if (!generating) e.currentTarget.style.background = "#e5e7eb"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "#f3f4f6"; }}
-              >
-                <Mail size={16} style={{ color: "#6366f1", flexShrink: 0 }} />
-                <div style={{ textAlign: "left" }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>
-                    {generating ? "Génération…" : "Email de suivi"}
-                  </div>
-                  <div style={{ fontSize: 10, color: "#9ca3af" }}>Rédiger un follow-up</div>
-                </div>
-              </button>
-              <AskClaudeButton onClick={() => setClaudeOpen(true)} />
-            </div>
-
-            {/* ── Claude chat panel (expands below) ── */}
-            {claudeOpen && (
-              <AskClaudePanel
-                context={{
-                  deal: {
-                    name: details.dealname,
-                    stage: stageLabel,
-                    amount: details.amount,
-                    closeDate: details.closedate,
-                    probability: details.probability,
-                    type: details.dealType,
-                    description: details.description,
-                    score: details.score,
-                    reasoning: details.reasoning,
-                    nextAction: details.next_action,
-                    qualification: details.qualification,
-                  },
-                  contacts: details.contacts,
-                  company: details.company,
-                  engagements: details.engagements,
-                  analysis: analysis ?? undefined,
-                }}
-                placeholder="Poser une question sur ce deal…"
-                onClose={() => setClaudeOpen(false)}
-              />
-            )}
-
-            {/* ── Email composer (expands when generated) ── */}
-            {sent && (
-              <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#16a34a", fontSize: 13, marginBottom: 16 }}>
-                <CheckCircle size={14} /> Email envoyé avec succès
-              </div>
-            )}
-
-            {showComposer && !sent && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-                <input
-                  value={emailTo}
-                  onChange={(e) => setEmailTo(e.target.value)}
-                  placeholder="À (email)"
-                  style={{
-                    fontSize: 12, padding: "6px 10px", borderRadius: 6,
-                    border: "1px solid #e5e7eb", outline: "none", width: "100%",
-                  }}
-                />
-                <input
-                  value={emailSubject}
-                  onChange={(e) => setEmailSubject(e.target.value)}
-                  placeholder="Objet"
-                  style={{
-                    fontSize: 12, padding: "6px 10px", borderRadius: 6,
-                    border: "1px solid #e5e7eb", outline: "none", width: "100%",
-                  }}
-                />
-                <textarea
-                  value={emailBody}
-                  onChange={(e) => setEmailBody(e.target.value)}
-                  rows={8}
-                  style={{
-                    fontSize: 12, padding: "8px 10px", borderRadius: 6,
-                    border: "1px solid #e5e7eb", outline: "none",
-                    resize: "vertical", fontFamily: "inherit", lineHeight: 1.5, width: "100%",
-                  }}
-                />
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button
-                    onClick={sendEmail}
-                    disabled={sending || !emailTo}
-                    style={{
-                      flex: 1, padding: "8px", borderRadius: 6,
-                      background: sending || !emailTo ? "#f3f4f6" : "#6366f1",
-                      color: sending || !emailTo ? "#9ca3af" : "white",
-                      border: "none", fontSize: 12, fontWeight: 600,
-                      cursor: sending || !emailTo ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {sending ? "Envoi…" : "Envoyer via Gmail"}
-                  </button>
-                  <button
-                    onClick={() => setShowComposer(false)}
-                    style={{
-                      padding: "8px 12px", borderRadius: 6,
-                      background: "none", border: "1px solid #e5e7eb",
-                      color: "#6b7280", fontSize: 12, cursor: "pointer",
-                    }}
-                  >
-                    Annuler
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ── Recent activity ── */}
-            {details.engagements.length > 0 && (
-              <div style={{ marginBottom: 20, padding: "12px 14px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fafafa" }}>
-                <button
-                  onClick={() => setShowEngagements((v) => !v)}
-                  style={{
-                    width: "100%", background: "none", border: "none", cursor: "pointer",
-                    padding: 0, display: "flex", alignItems: "center", gap: 6, marginBottom: showEngagements ? 10 : 0,
-                  }}
-                >
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    Activité récente
-                  </span>
-                  <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500 }}>
-                    ({details.engagements.length})
-                  </span>
-                  <span style={{
-                    fontSize: 11, color: "#9ca3af", marginLeft: "auto",
-                    transform: showEngagements ? "rotate(180deg)" : "rotate(0deg)",
-                    transition: "transform 0.15s",
-                    display: "inline-block",
-                  }}>▾</span>
-                </button>
-                {showEngagements && details.engagements.map((e, i) => (
-                  <div key={i} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: i < details.engagements.length - 1 ? "1px solid #f9fafb" : "none" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                      <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 99, background: "#f3f4f6", color: "#374151", fontWeight: 600 }}>
-                        {engagementTypeBadge(e.type)}
-                      </span>
-                      {e.date && <span style={{ fontSize: 10, color: "#9ca3af" }}>{e.date}</span>}
-                    </div>
-                    <p style={{ fontSize: 12, color: "#6b7280", margin: 0, lineHeight: 1.5 }}>{e.body}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ── AI Analysis ── */}
-            <Section title="Analyse IA">
-              {!analysis && !analyzing && !analyzeError && (
-                <button
-                  onClick={analyze}
-                  style={{
-                    width: "100%", padding: "10px", borderRadius: 8,
-                    background: "#6366f1", color: "white", border: "none",
-                    fontSize: 13, fontWeight: 600, cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                  }}
-                >
-                  <Zap size={14} />
-                  Analyse approfondie
-                </button>
-              )}
-
-              {analyzing && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#6366f1", fontSize: 13 }}>
-                  <RefreshCw size={14} className="animate-spin" />
-                  Analyse en cours…
-                </div>
-              )}
-
-              {analyzeError && (
-                <div style={{ color: "#dc2626", fontSize: 12, padding: "8px 10px", background: "#fee2e2", borderRadius: 6 }}>
-                  {analyzeError}
-                </div>
-              )}
-
-              {analysis && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  {/* Risk level + synthèse */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 12, color: "#6b7280" }}>Niveau de risque :</span>
-                    <span style={{
-                      fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 99,
-                      color: riskColors[analysis.riskLevel] ?? "#374151",
-                      background: (riskColors[analysis.riskLevel] ?? "#374151") + "18",
-                    }}>{analysis.riskLevel}</span>
-                  </div>
-                  <p style={{ fontSize: 13, color: "#374151", lineHeight: 1.6, margin: 0 }}>{analysis.synthese ?? analysis.summary}</p>
-
-                  {/* Dynamique */}
-                  {analysis.dynamique && (
-                    <div style={{ padding: "8px 10px", background: "#f8fafc", borderRadius: 6, border: "1px solid #e2e8f0" }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
-                        <TrendingUp size={11} />
-                        Dynamique du deal
-                        <span style={{
-                          fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 99, marginLeft: 4,
-                          color: analysis.dynamique.momentum === "En accélération" ? "#16a34a" : analysis.dynamique.momentum === "En perte de vitesse" ? "#dc2626" : "#ca8a04",
-                          background: analysis.dynamique.momentum === "En accélération" ? "#dcfce7" : analysis.dynamique.momentum === "En perte de vitesse" ? "#fee2e2" : "#fef9c3",
-                        }}>{analysis.dynamique.momentum}</span>
-                      </div>
-                      <p style={{ fontSize: 12, color: "#4b5563", margin: 0, lineHeight: 1.5 }}>{analysis.dynamique.analyse}</p>
-                    </div>
-                  )}
-
-                  {/* Qualification BANT+ */}
-                  {analysis.qualification && (
-                    <div style={{ borderRadius: 6, border: "1px solid #e2e8f0", overflow: "hidden" }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", padding: "6px 10px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                        Qualification
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
-                      {[
-                        { key: "budget", label: "Budget", color: "#0369a1" },
-                        { key: "authority", label: "Autorité", color: "#7c3aed" },
-                        { key: "need", label: "Besoin", color: "#b45309" },
-                        { key: "timeline", label: "Timeline", color: "#0f766e" },
-                        { key: "fit", label: "Fit stratégique", color: "#16a34a" },
-                      ].map(({ key, label, color }) => {
-                        const val = analysis.qualification?.[key as keyof typeof analysis.qualification];
-                        if (!val) return null;
-                        return (
-                          <div key={key} style={{ padding: "5px 10px", borderBottom: "1px solid #f1f5f9", borderRight: "1px solid #f1f5f9" }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color, marginBottom: 2 }}>{label}</div>
-                            <div style={{ fontSize: 11, color: "#374151", lineHeight: 1.4 }}>{val}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    </div>
-                  )}
-
-                  {/* Score insight */}
-                  {(analysis.scoreInsight ?? analysis.scoringInsight) && (
-                    <div style={{ padding: "8px 10px", background: "#f0f4ff", borderRadius: 6, border: "1px solid #c7d2fe" }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#4338ca", marginBottom: 3 }}>Insight score</div>
-                      <p style={{ fontSize: 12, color: "#4338ca", margin: 0, lineHeight: 1.5 }}>{analysis.scoreInsight ?? analysis.scoringInsight}</p>
-                    </div>
-                  )}
-
-                  {/* Signaux positifs */}
-                  {(analysis.signaux?.positifs ?? analysis.positiveSignals)?.length > 0 && (
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#16a34a", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                        <CheckCircle size={12} /> Signaux positifs
-                      </div>
-                      {(analysis.signaux?.positifs ?? analysis.positiveSignals ?? []).map((s, i) => (
-                        <div key={i} style={{ fontSize: 12, color: "#374151", marginBottom: 3, paddingLeft: 12, position: "relative" }}>
-                          <span style={{ position: "absolute", left: 0, color: "#16a34a" }}>·</span>
-                          {s}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Signaux négatifs */}
-                  {(analysis.signaux?.negatifs ?? analysis.negativeSignals)?.length > 0 && (
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                        <AlertCircle size={12} /> Points d'attention
-                      </div>
-                      {(analysis.signaux?.negatifs ?? analysis.negativeSignals ?? []).map((s, i) => (
-                        <div key={i} style={{ fontSize: 12, color: "#374151", marginBottom: 3, paddingLeft: 12, position: "relative" }}>
-                          <span style={{ position: "absolute", left: 0, color: "#dc2626" }}>·</span>
-                          {s}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Risques */}
-                  {analysis.risques?.length > 0 && (
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#92400e", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                        <AlertCircle size={12} /> Risques identifiés
-                      </div>
-                      {analysis.risques.map((r, i) => (
-                        <div key={i} style={{ fontSize: 12, color: "#374151", marginBottom: 4, display: "flex", alignItems: "flex-start", gap: 6 }}>
-                          <span style={{
-                            fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 99, marginTop: 2, whiteSpace: "nowrap",
-                            color: r.severite === "Élevé" ? "#dc2626" : r.severite === "Moyen" ? "#ca8a04" : "#6b7280",
-                            background: r.severite === "Élevé" ? "#fee2e2" : r.severite === "Moyen" ? "#fef9c3" : "#f3f4f6",
-                          }}>{r.severite}</span>
-                          {r.risque}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Prochaines étapes */}
-                  {((analysis.prochaines_etapes?.length ?? 0) > 0 || (analysis.nextSteps?.length ?? 0) > 0) && (
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                        <TrendingUp size={12} /> Prochaines étapes
-                      </div>
-                      {analysis.prochaines_etapes
-                        ? analysis.prochaines_etapes.map((s, i) => (
-                          <div key={i} style={{ fontSize: 12, color: "#374151", marginBottom: 6, paddingLeft: 12, position: "relative" }}>
-                            <span style={{ position: "absolute", left: 0, color: "#6366f1", fontWeight: 700 }}>{i + 1}.</span>
-                            <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-                              <span style={{
-                                fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 99,
-                                color: s.priorite === "Urgent" ? "#dc2626" : s.priorite === "Moyen" ? "#ca8a04" : "#6b7280",
-                                background: s.priorite === "Urgent" ? "#fee2e2" : s.priorite === "Moyen" ? "#fef9c3" : "#f3f4f6",
-                              }}>{s.priorite}</span>
-                              <span>{s.action}</span>
-                            </div>
-                            {s.impact && <div style={{ fontSize: 11, color: "#6b7280", marginTop: 1, fontStyle: "italic" }}>{s.impact}</div>}
-                          </div>
-                        ))
-                        : (analysis.nextSteps ?? []).map((s, i) => (
-                          <div key={i} style={{ fontSize: 12, color: "#374151", marginBottom: 3, paddingLeft: 12, position: "relative" }}>
-                            <span style={{ position: "absolute", left: 0, color: "#6366f1" }}>{i + 1}.</span>
-                            {s}
-                          </div>
-                        ))
-                      }
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => { setAnalysis(null); analyze(); }}
-                    style={{
-                      padding: "6px 12px", borderRadius: 6, background: "none",
-                      border: "1px solid #e5e7eb", color: "#6b7280",
-                      fontSize: 11, cursor: "pointer",
-                    }}
-                  >
-                    Re-analyser
-                  </button>
-                </div>
-              )}
-            </Section>
-
-
-          </>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-// ─── Contact row with LinkedIn ──────────────────────────────────────────────────
-
-function ContactRow({ contact }: { contact: { id: string; name: string; jobTitle: string; email: string; linkedinUrl: string | null } }) {
-  const [msgState, setMsgState] = useState<"idle" | "loading" | "done">("idle");
-  const [msg, setMsg] = useState("");
-  const [copied, setCopied] = useState(false);
-
-  async function generateMsg() {
-    setMsgState("loading");
-    try {
-      const r = await fetch("/api/linkedin/message", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: contact.name, jobTitle: contact.jobTitle, company: "", industry: "" }),
-      });
-      const data = await r.json();
-      setMsg(data.message ?? "");
-      setMsgState("done");
-    } catch {
-      setMsgState("idle");
-    }
-  }
-
-  async function copyMsg() {
-    await navigator.clipboard.writeText(msg);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  return (
-    <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid #f9fafb" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{contact.name}</div>
-          {contact.jobTitle && <div style={{ fontSize: 11, color: "#6b7280" }}>{contact.jobTitle}</div>}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {contact.linkedinUrl && (
-            <a href={contact.linkedinUrl} target="_blank" rel="noreferrer" style={{ color: "#0a66c2", display: "flex" }}>
-              <Linkedin size={14} />
-            </a>
-          )}
-          {contact.email && (
-            <a href={`mailto:${contact.email}`} style={{ fontSize: 11, color: "#6366f1", textDecoration: "none" }}>
-              {contact.email}
-            </a>
-          )}
-        </div>
-      </div>
-      {contact.linkedinUrl && msgState !== "done" && (
-        <button
-          onClick={generateMsg}
-          disabled={msgState === "loading"}
-          style={{
-            marginTop: 5, fontSize: 10, padding: "2px 8px", borderRadius: 6,
-            border: "1px solid #e5e7eb", background: "white", color: "#374151",
-            cursor: msgState === "loading" ? "not-allowed" : "pointer",
-            display: "flex", alignItems: "center", gap: 4,
-          }}
-        >
-          {msgState === "loading" ? <><RefreshCw size={9} className="animate-spin" /> Génération…</> : <><Linkedin size={9} /> Message LinkedIn</>}
-        </button>
-      )}
-      {msgState === "done" && msg && (
-        <div style={{ marginTop: 6, padding: "6px 8px", background: "#f8fafc", borderRadius: 6, border: "1px solid #e2e8f0", position: "relative" }}>
-          <p style={{ fontSize: 11, color: "#374151", margin: 0, lineHeight: 1.5, paddingRight: 24 }}>{msg}</p>
-          <button
-            onClick={copyMsg}
-            style={{ position: "absolute", top: 6, right: 6, background: "none", border: "none", cursor: "pointer", color: copied ? "#16a34a" : "#9ca3af" }}
-          >
-            {copied ? <Check size={12} /> : <Copy size={12} />}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Section helper ────────────────────────────────────────────────────────────
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{
-        fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase",
-        letterSpacing: "0.05em", marginBottom: 10, display: "flex", alignItems: "center", gap: 6,
-      }}>
-        <ChevronRight size={10} />
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 5, gap: 8 }}>
-      <span style={{ fontSize: 12, color: "#9ca3af", flexShrink: 0 }}>{label}</span>
-      <span style={{ fontSize: 12, color: "#374151", textAlign: "right" }}>{value}</span>
-    </div>
-  );
-}
-
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function DealsPage() {
@@ -1192,9 +153,8 @@ export default function DealsPage() {
   const [scoreResult, setScoreResult] = useState<{ scored: number; total: number } | null>(null);
   const [filters, setFilters] = useState<DealFilters>(DEFAULT_DEAL_FILTERS);
 
-  // SWR-cached data fetching — ownerMode drives the server-side owner filter
   const [appliedQuery, setAppliedQuery] = useState("");
-  const { stages, deals, myOwnerId, owners, isLoading: loading, error, reload } = useDeals(appliedQuery, filters.ownerMode);
+  const { stages, deals, owners, isLoading: loading, error, reload } = useDeals(appliedQuery, filters.ownerMode);
 
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [details, setDetails] = useState<DealDetails | null>(null);
@@ -1202,8 +162,9 @@ export default function DealsPage() {
 
   const { isAdmin, slackName } = useUserMe();
 
-  // Auto-detect HubSpot owner once
-  useEffect(() => { fetch("/api/hubspot/auto-link-owner").catch(() => {}); }, []);
+  useEffect(() => {
+    fetch("/api/hubspot/auto-link-owner").catch(() => {});
+  }, []);
 
   const scoreAll = useCallback(async () => {
     setScoring(true);
@@ -1219,7 +180,9 @@ export default function DealsPage() {
         setScoreResult({ scored: data.scored, total: data.total });
         await reload();
       }
-    } catch { /* ignore */ } finally {
+    } catch {
+      /* ignore */
+    } finally {
       setScoring(false);
     }
   }, [reload]);
@@ -1240,7 +203,11 @@ export default function DealsPage() {
     }
   }, []);
 
-  // Filter deals — search + advanced filters
+  const closeDeal = useCallback(() => {
+    setSelectedDeal(null);
+    setDetails(null);
+  }, []);
+
   const filteredDeals = useMemo(() => {
     const bySearch = searchQuery
       ? deals.filter((d) => d.dealname.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -1248,13 +215,11 @@ export default function DealsPage() {
     return applyDealFilters(bySearch, filters);
   }, [deals, searchQuery, filters]);
 
-  // Stages whose label contains "nurture" (excluded from top-right metrics)
   const nurtureStageIds = useMemo(
     () => new Set(stages.filter((s) => s.label.toLowerCase().includes("nurture")).map((s) => s.id)),
     [stages]
   );
 
-  // Metrics exclude "To nurture" deals
   const metricsDeals = useMemo(
     () => filteredDeals.filter((d) => !nurtureStageIds.has(d.dealstage)),
     [filteredDeals, nurtureStageIds]
@@ -1264,138 +229,250 @@ export default function DealsPage() {
     () => metricsDeals.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0),
     [metricsDeals]
   );
-  // Forecast pondéré = sum(amount × score/100) sur les deals scorés
+
   const weightedTotal = useMemo(
-    () => metricsDeals.reduce((s, d) => s + (parseFloat(d.amount) || 0) * ((d.score?.total ?? 0) / 100), 0),
+    () =>
+      metricsDeals.reduce(
+        (s, d) => s + (parseFloat(d.amount) || 0) * ((d.score?.total ?? 0) / 100),
+        0
+      ),
     [metricsDeals]
   );
 
-  // Group by stage
-  const dealsByStage = stages.reduce<Record<string, Deal[]>>((acc, s) => {
-    acc[s.id] = filteredDeals.filter((d) => d.dealstage === s.id);
-    return acc;
-  }, {});
+  const dealsByStage = useMemo(
+    () =>
+      stages.reduce<Record<string, Deal[]>>((acc, s) => {
+        acc[s.id] = filteredDeals.filter((d) => d.dealstage === s.id);
+        return acc;
+      }, {}),
+    [stages, filteredDeals]
+  );
 
   const selectedStage = stages.find((s) => s.id === selectedDeal?.dealstage);
   const stageIdx = selectedStage ? stages.indexOf(selectedStage) : 0;
-
+  const isListMode = !!selectedDeal;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", background: "#fafafa" }}>
-      {/* ── Header ── */}
-      <div style={{
-        flexShrink: 0, padding: "10px 20px", borderBottom: "1px solid #e5e7eb",
-        background: "white", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-      }}>
-        {/* Search */}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        overflow: "hidden",
+        background: COLORS.bgPage,
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          flexShrink: 0,
+          padding: "10px 20px",
+          borderBottom: `1px solid ${COLORS.line}`,
+          background: COLORS.bgCard,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        {isListMode && (
+          <button
+            type="button"
+            onClick={closeDeal}
+            aria-label="Retour au pipeline"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 12,
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: `1px solid ${COLORS.line}`,
+              background: COLORS.bgCard,
+              color: COLORS.ink2,
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = COLORS.brand;
+              e.currentTarget.style.color = COLORS.brand;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = COLORS.line;
+              e.currentTarget.style.color = COLORS.ink2;
+            }}
+          >
+            <ArrowLeft size={13} />
+            Pipeline
+          </button>
+        )}
+
         <div style={{ position: "relative", flex: "0 0 220px" }}>
-          <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }} />
+          <Search
+            size={14}
+            style={{
+              position: "absolute",
+              left: 10,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: COLORS.ink3,
+            }}
+          />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Rechercher un deal…"
             style={{
-              width: "100%", paddingLeft: 32, paddingRight: 10, paddingTop: 7, paddingBottom: 7,
-              borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13,
-              outline: "none", background: "#f9fafb",
+              width: "100%",
+              paddingLeft: 32,
+              paddingRight: 10,
+              paddingTop: 7,
+              paddingBottom: 7,
+              borderRadius: 8,
+              border: `1px solid ${COLORS.line}`,
+              fontSize: 13,
+              outline: "none",
+              background: COLORS.bgSoft,
             }}
           />
         </div>
 
-        {/* Filters */}
         <DealFiltersBar filters={filters} onChange={setFilters} owners={owners} />
 
-        {/* Refresh */}
         <button
-          onClick={() => { setAppliedQuery(searchQuery); reload(); }}
+          onClick={() => {
+            setAppliedQuery(searchQuery);
+            reload();
+          }}
+          aria-label="Rafraîchir"
           style={{
-            padding: "6px 10px", borderRadius: 8, border: "1px solid #e5e7eb",
-            background: "white", color: "#6b7280", cursor: "pointer",
+            padding: "6px 10px",
+            borderRadius: 8,
+            border: `1px solid ${COLORS.line}`,
+            background: COLORS.bgCard,
+            color: COLORS.ink2,
+            cursor: "pointer",
           }}
         >
           <RefreshCw size={14} />
         </button>
 
-        {/* Score all — admin only */}
         {isAdmin && (
           <>
             <button
               onClick={scoreAll}
               disabled={scoring}
               style={{
-                padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500,
-                cursor: scoring ? "not-allowed" : "pointer", border: "1px solid",
-                borderColor: "#6366f1", background: scoring ? "#f3f4f6" : "#eef2ff",
-                color: scoring ? "#9ca3af" : "#4338ca",
-                display: "flex", alignItems: "center", gap: 5,
+                padding: "6px 12px",
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: scoring ? "not-allowed" : "pointer",
+                border: `1px solid ${COLORS.brand}`,
+                background: scoring ? COLORS.bgSoft : COLORS.brandTint,
+                color: scoring ? COLORS.ink3 : COLORS.brand,
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
               }}
             >
               {scoring ? (
-                <><RefreshCw size={12} className="animate-spin" /> Scoring…</>
+                <>
+                  <RefreshCw size={12} className="animate-spin" /> Scoring…
+                </>
               ) : (
-                <><Zap size={12} /> Scorer tous les deals</>
+                <>
+                  <Zap size={12} /> Scorer tous les deals
+                </>
               )}
             </button>
             {scoreResult && !scoring && (
-              <span style={{ fontSize: 11, color: "#6b7280" }}>
+              <span style={{ fontSize: 11, color: COLORS.ink2 }}>
                 {scoreResult.scored}/{scoreResult.total} scorés
               </span>
             )}
           </>
         )}
 
-        {/* Metrics */}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 16, fontSize: 12, color: "#6b7280" }}>
-          <span>
-            Pipeline: <strong style={{ color: "#111827" }}>{(pipelineTotal / 1000).toFixed(0)}k€</strong>
-          </span>
-          <span title="Forecast pondéré = somme(montant × score/100)">
-            Pondéré: <strong style={{ color: "#111827" }}>{(weightedTotal / 1000).toFixed(0)}k€</strong>
-          </span>
-          <span>
-            <strong style={{ color: "#111827" }}>{metricsDeals.length}</strong> deals
-          </span>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          <StatPill label="Pipeline" value={`${(pipelineTotal / 1000).toFixed(0)}k€`} />
+          <StatPill label="Pondéré" value={`${(weightedTotal / 1000).toFixed(0)}k€`} />
+          <StatPill label="Deals" value={metricsDeals.length} />
         </div>
       </div>
 
-      {/* ── Board ── */}
+      {/* Board */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {/* Kanban board */}
-        <div style={{ flex: 1, overflowX: "auto", overflowY: "hidden" }}>
+        {/* Left: kanban (default) OR grouped list (when a deal is selected) */}
+        <div
+          style={{
+            width: isListMode ? 380 : "100%",
+            flexShrink: 0,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            transition: "width 0.2s ease",
+            borderRight: isListMode ? `1px solid ${COLORS.line}` : "none",
+            background: isListMode ? COLORS.bgCard : "transparent",
+          }}
+        >
           {error ? (
-            <div style={{ padding: 32, color: "#dc2626", fontSize: 14 }}>{error}</div>
+            <div style={{ padding: 32, color: COLORS.err, fontSize: 14 }}>{error}</div>
           ) : loading ? (
-            <div style={{ padding: 32, color: "#9ca3af", fontSize: 14 }}>Chargement…</div>
+            <div style={{ padding: 32, color: COLORS.ink3, fontSize: 14 }}>Chargement…</div>
+          ) : isListMode ? (
+            <DealListGrouped
+              stages={stages}
+              dealsByStage={dealsByStage}
+              selectedId={selectedDeal?.id ?? null}
+              onSelect={openDeal}
+            />
           ) : (
-            <div style={{
-              display: "flex", height: "100%", gap: 10, padding: "12px 16px",
-              minWidth: stages.length * 258,
-            }}>
-              {stages.map((stage, idx) => (
-                <KanbanColumn
-                  key={stage.id}
-                  stage={stage}
-                  deals={dealsByStage[stage.id] ?? []}
-                  selectedId={selectedDeal?.id ?? null}
-                  onSelect={openDeal}
-                  color={stageColor(idx)}
-                />
-              ))}
-              {stages.length === 0 && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, color: "#9ca3af", fontSize: 14 }}>
-                  Aucun pipeline trouvé dans HubSpot
-                </div>
-              )}
+            <div style={{ flex: 1, overflowX: "auto", overflowY: "hidden" }}>
+              <div
+                style={{
+                  display: "flex",
+                  height: "100%",
+                  gap: 10,
+                  padding: "12px 16px",
+                  minWidth: stages.length * 258,
+                }}
+              >
+                {stages.map((stage, idx) => (
+                  <KanbanColumn
+                    key={stage.id}
+                    stage={stage}
+                    deals={dealsByStage[stage.id] ?? []}
+                    selectedId={null}
+                    onSelect={openDeal}
+                    color={stageColor(idx)}
+                  />
+                ))}
+                {stages.length === 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flex: 1,
+                      color: COLORS.ink3,
+                      fontSize: 14,
+                    }}
+                  >
+                    Aucun pipeline trouvé dans HubSpot
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
 
-        {/* Drawer */}
+        {/* Right: detail panel */}
         {selectedDeal && (
-          <DealDrawer
+          <DealDetailPanel
             details={details}
             loading={loadingDetails}
-            onClose={() => { setSelectedDeal(null); setDetails(null); }}
+            onClose={closeDeal}
             onRescore={() => {}}
             stageLabel={selectedStage?.label ?? ""}
             stageColor={stageColor(stageIdx)}
