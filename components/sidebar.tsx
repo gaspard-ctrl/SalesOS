@@ -159,10 +159,10 @@ function SidebarBody({
           />
           {!collapsed && (
             <span
-              className="font-semibold text-sm tracking-tight truncate"
+              className="font-bold text-xl tracking-tight truncate"
               style={{ color: "#111" }}
             >
-              SalesOS
+              Sales<span style={{ color: "#f01563" }}>OS</span>
             </span>
           )}
         </div>

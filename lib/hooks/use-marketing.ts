@@ -192,7 +192,13 @@ interface LeadsResponse {
   error?: string;
 }
 
-const EMPTY_COUNTS: LeadsCounts = { pending: 0, validated: 0, rejected: 0, validatedNoDeal: 0 };
+const EMPTY_COUNTS: LeadsCounts = {
+  pending: 0,
+  validated: 0,
+  rejected: 0,
+  validatedNoDeal: 0,
+  validatedWithDeal: 0,
+};
 
 export function useLeads(status: LeadsStatusFilter, analysis: LeadsAnalysisFilter = "all") {
   const params = new URLSearchParams({ status });

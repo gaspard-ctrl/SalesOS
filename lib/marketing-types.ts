@@ -230,11 +230,19 @@ export interface LeadsCounts {
   validated: number;
   rejected: number;
   validatedNoDeal: number;
+  validatedWithDeal: number;
 }
 
 export type LeadAnalysisStatus = "pending" | "done" | "no_match" | "error";
 
 export type LeadMatchStrategy = "email" | "person" | "company" | "none";
+
+export interface LeadDealScoreSummary {
+  total: number;
+  reliability: number;
+  scored_at: string | null;
+  next_action: string | null;
+}
 
 export interface LeadAnalysis {
   id: string;
@@ -262,6 +270,7 @@ export interface LeadAnalysis {
   error_message: string | null;
   created_at: string;
   updated_at: string;
+  deal_score?: LeadDealScoreSummary | null;
 }
 
 export interface LeadWithAnalysis extends Lead {
@@ -276,6 +285,8 @@ export interface LeadsFunnel {
     withDeal: number;
     disco: number;
     closedWon: number;
+    closedLost: number;
   };
   openPipelineAmount: number;
+  closedLostAmount: number;
 }

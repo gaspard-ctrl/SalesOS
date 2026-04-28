@@ -7,6 +7,7 @@ const ACCENT = "#f01563";
 const GREEN = "#10b981";
 const BLUE = "#3b82f6";
 const PURPLE = "#8b5cf6";
+const RED = "#ef4444";
 
 function formatAmount(n: number): string {
   return n.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + "€";
@@ -39,12 +40,13 @@ export default function FunnelStats() {
     );
   }
 
-  const { funnel: f, openPipelineAmount } = funnel;
+  const { funnel: f, openPipelineAmount, closedLostAmount } = funnel;
   const steps = [
     { label: "Leads totaux", count: f.totalLeads, color: "#9ca3af", base: f.totalLeads },
     { label: "Validés", count: f.validated, color: ACCENT, base: f.totalLeads },
     { label: "Avec deal", count: f.withDeal, color: BLUE, base: f.validated },
     { label: "Closed won", count: f.closedWon, color: GREEN, base: f.withDeal },
+    { label: "Closed lost", count: f.closedLost, color: RED, base: f.withDeal },
   ];
 
   return (
@@ -94,7 +96,7 @@ export default function FunnelStats() {
         })}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
         <KpiCard
           label="% leads → disco"
           value={pct(f.disco, f.validated)}
@@ -110,8 +112,14 @@ export default function FunnelStats() {
         <KpiCard
           label="Pipeline ouvert"
           value={formatAmount(openPipelineAmount)}
-          subtitle="Deals en cours liés aux leads"
+          subtitle="Deals en cours (closed lost exclus)"
           color={PURPLE}
+        />
+        <KpiCard
+          label="Closed lost"
+          value={formatAmount(closedLostAmount)}
+          subtitle={`${f.closedLost} deal${f.closedLost > 1 ? "s" : ""} perdu${f.closedLost > 1 ? "s" : ""}`}
+          color={RED}
         />
       </div>
     </div>

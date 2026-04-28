@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BarChart3, Search, Sparkles, BookOpen, Inbox } from "lucide-react";
 import OverviewTab from "./_components/overview-tab";
 import SeoTab from "./_components/seo-tab";
@@ -13,8 +13,22 @@ import { TabBar } from "@/components/ui/tab-bar";
 
 type TabId = "overview" | "articles" | "seo" | "content" | "leads";
 
+const VALID_TABS: TabId[] = ["overview", "articles", "seo", "content", "leads"];
+
+function isValidTab(value: string | null): value is TabId {
+  return value !== null && (VALID_TABS as string[]).includes(value);
+}
+
 export default function MarketingPage() {
   const [tab, setTab] = useState<TabId>("overview");
+
+  // Read ?tab= from URL after hydration to avoid Suspense requirement and
+  // server/client mismatch.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const param = new URLSearchParams(window.location.search).get("tab");
+    if (isValidTab(param)) setTab(param);
+  }, []);
   const { counts } = useLeads("pending");
   const pendingCount = counts.pending;
 
