@@ -209,7 +209,7 @@ export default function BriefingPage() {
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto" style={{ padding: "20px 24px" }}>
+          <div className="flex-1 overflow-y-auto thin-scrollbar" style={{ padding: "20px 24px" }}>
             <div style={{ maxWidth: 1280, margin: "0 auto" }}>
             {/* Loading: gather */}
             {gatherState === "loading" && (

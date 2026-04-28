@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { scoreBadge } from "@/lib/deal-scoring";
 import { COLORS } from "@/lib/design/tokens";
-import { CompanyAvatar } from "@/components/ui/company-avatar";
 import { ListItem } from "@/components/ui/list-item";
 import type { Deal, Stage } from "../_helpers";
 import { fmt, fmtDate, stageColor, timeAgo } from "../_helpers";
@@ -19,8 +19,13 @@ export function DealListGrouped({
   selectedId: string | null;
   onSelect: (d: Deal) => void;
 }) {
+  const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({});
+  const toggle = (id: string) =>
+    setCollapsed((c) => ({ ...c, [id]: !c[id] }));
+
   return (
     <div
+      className="thin-scrollbar"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -35,9 +40,13 @@ export function DealListGrouped({
         if (items.length === 0) return null;
         const color = stageColor(idx);
         const total = items.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
+        const isCollapsed = !!collapsed[stage.id];
         return (
           <section key={stage.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <header
+            <button
+              type="button"
+              onClick={() => toggle(stage.id)}
+              aria-expanded={!isCollapsed}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -45,10 +54,19 @@ export function DealListGrouped({
                 padding: "6px 10px",
                 borderRadius: 8,
                 background: `${color}10`,
+                border: "none",
                 borderLeft: `3px solid ${color}`,
+                cursor: "pointer",
+                width: "100%",
+                textAlign: "left",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {isCollapsed ? (
+                  <ChevronRight size={12} style={{ color }} />
+                ) : (
+                  <ChevronDown size={12} style={{ color }} />
+                )}
                 <span style={{ fontSize: 11, fontWeight: 700, color, letterSpacing: "0.04em", textTransform: "uppercase" }}>
                   {stage.label}
                 </span>
@@ -59,7 +77,8 @@ export function DealListGrouped({
               <span style={{ fontSize: 11, color: COLORS.ink2, fontWeight: 600 }}>
                 {(total / 1000).toFixed(0)}k€
               </span>
-            </header>
+            </button>
+            {!isCollapsed && (
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {items.map((d) => {
                 const ref = d.lastContacted || d.lastModified;
@@ -69,13 +88,6 @@ export function DealListGrouped({
                     key={d.id}
                     active={d.id === selectedId}
                     onClick={() => onSelect(d)}
-                    left={
-                      <CompanyAvatar
-                        name={d.dealname.split("—")[0]?.trim() || d.dealname}
-                        size={28}
-                        rounded="md"
-                      />
-                    }
                     right={
                       d.score && badge ? (
                         <span
@@ -119,6 +131,7 @@ export function DealListGrouped({
                 );
               })}
             </div>
+            )}
           </section>
         );
       })}

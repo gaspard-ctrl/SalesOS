@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { ArrowUp, Paperclip, Sparkles } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import { COLORS } from "@/lib/design/tokens";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 export const ChatInputBar = React.forwardRef<
   HTMLTextAreaElement,
@@ -15,8 +14,6 @@ export const ChatInputBar = React.forwardRef<
     placeholder?: string;
   }
 >(function ChatInputBar({ value, onChange, onSend, loading, placeholder }, ref) {
-  const [betterThinking, setBetterThinking] = React.useState(false);
-
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -65,60 +62,10 @@ export const ChatInputBar = React.forwardRef<
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
+          justifyContent: "flex-end",
           gap: 8,
         }}
       >
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  disabled
-                  aria-label="Joindre un fichier (bientôt)"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                    padding: "4px 8px",
-                    fontSize: 12,
-                    color: COLORS.ink3,
-                    background: "transparent",
-                    border: "none",
-                    cursor: "not-allowed",
-                    opacity: 0.6,
-                  }}
-                >
-                  <Paperclip size={13} />
-                  <span>Joindre</span>
-                </button>
-              }
-            />
-            <TooltipContent side="top">Bientôt</TooltipContent>
-          </Tooltip>
-          <button
-            type="button"
-            onClick={() => setBetterThinking((v) => !v)}
-            aria-pressed={betterThinking}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              padding: "4px 10px",
-              fontSize: 12,
-              borderRadius: 999,
-              border: `1px solid ${betterThinking ? COLORS.brand : COLORS.line}`,
-              background: betterThinking ? COLORS.brandTint : "transparent",
-              color: betterThinking ? COLORS.brand : COLORS.ink3,
-              cursor: "pointer",
-              transition: "all 0.15s",
-            }}
-          >
-            <Sparkles size={12} />
-            <span>Better thinking</span>
-          </button>
-        </div>
         <button
           onClick={onSend}
           disabled={!canSend}
