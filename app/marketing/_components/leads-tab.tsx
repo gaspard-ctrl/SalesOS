@@ -16,6 +16,7 @@ import {
 import type { LeadFile, LeadWithAnalysis } from "@/lib/marketing-types";
 import { SlackText } from "@/lib/slack-mrkdwn";
 import LeadAnalysisBadge from "../leads/_components/lead-analysis-badge";
+import LeadDealSide from "../leads/_components/lead-deal-side";
 import FunnelStats from "../leads/_components/funnel-stats";
 
 const ACCENT = "#f01563";
@@ -82,6 +83,7 @@ function LeadCard({
   const otherFiles = lead.files.filter((f) => !isImage(f));
   const analyzing = lead.analysis_status === "pending";
   const a = lead.analysis;
+  const hasDeal = !!(a && a.hubspot_deal_id);
 
   return (
     <div
@@ -91,124 +93,131 @@ function LeadCard({
         borderRadius: 8,
         padding: 16,
         display: "flex",
-        flexDirection: "column",
-        gap: 12,
+        gap: 16,
+        alignItems: "stretch",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>
-          {lead.author_name ?? "(auteur inconnu)"}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>
+            {lead.author_name ?? "(auteur inconnu)"}
+          </div>
+          <div style={{ fontSize: 12, color: "#888" }}>{formatDate(lead.posted_at)}</div>
+          {lead.slack_permalink && (
+            <a
+              href={lead.slack_permalink}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                fontSize: 12,
+                color: "#555",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                textDecoration: "none",
+              }}
+            >
+              <ExternalLink size={12} /> Slack
+            </a>
+          )}
+          {!hasDeal && (
+            <div style={{ marginLeft: "auto" }}>
+              <LeadAnalysisBadge analysis={a} analysisStatus={lead.analysis_status} />
+            </div>
+          )}
         </div>
-        <div style={{ fontSize: 12, color: "#888" }}>{formatDate(lead.posted_at)}</div>
-        {lead.slack_permalink && (
-          <a
-            href={lead.slack_permalink}
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              fontSize: 12,
-              color: "#555",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              textDecoration: "none",
-            }}
-          >
-            <ExternalLink size={12} /> Slack
-          </a>
+
+        {a && (a.extracted_email || a.extracted_name || a.extracted_company) && (
+          <div style={{ fontSize: 12, color: "#666", display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {a.extracted_name && <span>👤 {a.extracted_name}</span>}
+            {a.extracted_email && <span>✉️ {a.extracted_email}</span>}
+            {a.extracted_company && <span>🏢 {a.extracted_company}</span>}
+          </div>
         )}
-        <div style={{ marginLeft: "auto" }}>
-          <LeadAnalysisBadge analysis={a} analysisStatus={lead.analysis_status} />
-        </div>
-      </div>
 
-      {a && (a.extracted_email || a.extracted_name || a.extracted_company) && (
-        <div style={{ fontSize: 12, color: "#666", display: "flex", gap: 12, flexWrap: "wrap" }}>
-          {a.extracted_name && <span>👤 {a.extracted_name}</span>}
-          {a.extracted_email && <span>✉️ {a.extracted_email}</span>}
-          {a.extracted_company && <span>🏢 {a.extracted_company}</span>}
-        </div>
-      )}
+        {lead.text && (
+          <div style={{ fontSize: 14, color: "#222", lineHeight: 1.5, wordBreak: "break-word" }}>
+            <SlackText text={lead.text} />
+          </div>
+        )}
 
-      {lead.text && (
-        <div style={{ fontSize: 14, color: "#222", lineHeight: 1.5, wordBreak: "break-word" }}>
-          <SlackText text={lead.text} />
-        </div>
-      )}
+        {imageFiles.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {imageFiles.map((f) => {
+              const thumbUrl = fileProxyUrl(lead.id, f.id, "thumb");
+              const fullUrl = fileProxyUrl(lead.id, f.id, "full");
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => onOpenImage(fullUrl)}
+                  style={{
+                    width: 140,
+                    height: 140,
+                    border: "1px solid #eee",
+                    borderRadius: 6,
+                    overflow: "hidden",
+                    padding: 0,
+                    cursor: "pointer",
+                    background: "#f4f4f4",
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={thumbUrl}
+                    alt={f.name}
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-      {imageFiles.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {imageFiles.map((f) => {
-            const thumbUrl = fileProxyUrl(lead.id, f.id, "thumb");
-            const fullUrl = fileProxyUrl(lead.id, f.id, "full");
-            return (
-              <button
-                key={f.id}
-                onClick={() => onOpenImage(fullUrl)}
-                style={{
-                  width: 140,
-                  height: 140,
-                  border: "1px solid #eee",
-                  borderRadius: 6,
-                  overflow: "hidden",
-                  padding: 0,
-                  cursor: "pointer",
-                  background: "#f4f4f4",
-                }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={thumbUrl}
-                  alt={f.name}
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                />
-              </button>
-            );
-          })}
-        </div>
-      )}
+        {otherFiles.length > 0 && (
+          <div style={{ fontSize: 12, color: "#666" }}>
+            {otherFiles.map((f) => (
+              <div key={f.id}>📎 {f.name || f.id}</div>
+            ))}
+          </div>
+        )}
 
-      {otherFiles.length > 0 && (
-        <div style={{ fontSize: 12, color: "#666" }}>
-          {otherFiles.map((f) => (
-            <div key={f.id}>📎 {f.name || f.id}</div>
-          ))}
-        </div>
-      )}
-
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          justifyContent: "flex-end",
-          borderTop: "1px solid #f4f4f4",
-          paddingTop: 12,
-        }}
-      >
-        <button
-          onClick={onAnalyze}
-          disabled={busy || analyzing}
-          className="text-sm px-3 py-1.5 font-medium transition-colors"
+        <div
           style={{
-            background: "#fff",
-            color: "#555",
-            border: "1px solid #e5e5e5",
-            borderRadius: 6,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            cursor: busy || analyzing ? "wait" : "pointer",
-            opacity: busy || analyzing ? 0.6 : 1,
+            display: "flex",
+            gap: 8,
+            justifyContent: "flex-end",
+            borderTop: "1px solid #f4f4f4",
+            paddingTop: 12,
+            marginTop: "auto",
           }}
         >
-          {analyzing ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <RefreshCw size={14} />
-          )}
-          Réanalyser
-        </button>
+          <button
+            onClick={onAnalyze}
+            disabled={busy || analyzing}
+            className="text-sm px-3 py-1.5 font-medium transition-colors"
+            style={{
+              background: "#fff",
+              color: "#555",
+              border: "1px solid #e5e5e5",
+              borderRadius: 6,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              cursor: busy || analyzing ? "wait" : "pointer",
+              opacity: busy || analyzing ? 0.6 : 1,
+            }}
+          >
+            {analyzing ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <RefreshCw size={14} />
+            )}
+            Réanalyser
+          </button>
+        </div>
       </div>
+
+      {hasDeal && a && <LeadDealSide analysis={a} />}
     </div>
   );
 }
@@ -234,11 +243,40 @@ export default function LeadsTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header bar with management button */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+      {errorMsg && <div style={{ fontSize: 12, color: "#ef4444" }}>{errorMsg}</div>}
+
+      <FunnelStats />
+
+      {/* Filters on validated leads + management button on the right */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <FilterButton
+          active={analysisFilter === "all"}
+          onClick={() => setAnalysisFilter("all")}
+          label="Tous validés"
+          count={counts.validated}
+        />
+        <FilterButton
+          active={analysisFilter === "done"}
+          onClick={() => setAnalysisFilter("done")}
+          label="Avec deal"
+          count={counts.validatedWithDeal}
+        />
+        <FilterButton
+          active={analysisFilter === "no_match"}
+          onClick={() => setAnalysisFilter("no_match")}
+          label="Sans deal"
+          count={counts.validatedNoDeal}
+        />
+        <FilterButton
+          active={analysisFilter === "error"}
+          onClick={() => setAnalysisFilter("error")}
+          label="Erreurs"
+        />
+
         <Link
           href="/marketing/leads"
           style={{
+            marginLeft: "auto",
             display: "inline-flex",
             alignItems: "center",
             gap: 8,
@@ -254,6 +292,9 @@ export default function LeadsTab() {
         >
           <Settings size={15} />
           Gestion des leads
+          <span style={{ color: "#888", fontWeight: 500 }}>
+            · {counts.pending} non validé{counts.pending > 1 ? "s" : ""}
+          </span>
           {counts.pending > 0 && (
             <span
               style={{
@@ -275,35 +316,6 @@ export default function LeadsTab() {
             </span>
           )}
         </Link>
-        {errorMsg && <div style={{ fontSize: 12, color: "#ef4444" }}>{errorMsg}</div>}
-      </div>
-
-      <FunnelStats />
-
-      {/* Filters on validated leads */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <FilterButton
-          active={analysisFilter === "all"}
-          onClick={() => setAnalysisFilter("all")}
-          label="Tous validés"
-          count={counts.validated}
-        />
-        <FilterButton
-          active={analysisFilter === "done"}
-          onClick={() => setAnalysisFilter("done")}
-          label="Avec deal"
-        />
-        <FilterButton
-          active={analysisFilter === "no_match"}
-          onClick={() => setAnalysisFilter("no_match")}
-          label="Sans deal"
-          count={counts.validatedNoDeal}
-        />
-        <FilterButton
-          active={analysisFilter === "error"}
-          onClick={() => setAnalysisFilter("error")}
-          label="Erreurs"
-        />
       </div>
 
       {/* List */}

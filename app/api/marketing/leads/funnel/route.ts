@@ -78,7 +78,9 @@ export async function GET(req: NextRequest) {
   let withDeal = 0;
   let disco = 0;
   let closedWon = 0;
+  let closedLost = 0;
   let openPipelineAmount = 0;
+  let closedLostAmount = 0;
 
   for (const l of periodLeads) {
     if (l.validation_status !== "validated") continue;
@@ -87,6 +89,10 @@ export async function GET(req: NextRequest) {
     if (a.hubspot_deal_id) withDeal++;
     if (isDiscoReached(a)) disco++;
     if (a.deal_is_closed_won) closedWon++;
+    if (a.deal_is_closed === true && a.deal_is_closed_won === false) {
+      closedLost++;
+      if (typeof a.deal_amount === "number") closedLostAmount += a.deal_amount;
+    }
     if (a.hubspot_deal_id && a.deal_is_closed === false && typeof a.deal_amount === "number") {
       openPipelineAmount += a.deal_amount;
     }
@@ -94,7 +100,8 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     period: { from, to },
-    funnel: { totalLeads, validated, withDeal, disco, closedWon },
+    funnel: { totalLeads, validated, withDeal, disco, closedWon, closedLost },
     openPipelineAmount,
+    closedLostAmount,
   });
 }

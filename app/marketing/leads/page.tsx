@@ -401,7 +401,7 @@ export default function LeadsManagementPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: 20, padding: 24 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <Link
-          href="/marketing"
+          href="/marketing?tab=leads"
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -415,7 +415,7 @@ export default function LeadsManagementPage() {
             background: "#fff",
           }}
         >
-          <ArrowLeft size={14} /> Retour
+          <ArrowLeft size={14} /> Retour aux leads
         </Link>
         <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0, color: "#111" }}>
           Gestion des leads

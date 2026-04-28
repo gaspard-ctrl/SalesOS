@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { rematchHubspotForLead, runLeadAnalysis } from "@/lib/lead-analysis";
-import type { LeadAnalysisStatus, LeadValidationStatus } from "@/lib/marketing-types";
+import type {
+  LeadAnalysisStatus,
+  LeadDealScoreSummary,
+  LeadValidationStatus,
+} from "@/lib/marketing-types";
+import type { DealScore } from "@/lib/deal-scoring";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -37,6 +42,56 @@ function isValidAnalysis(s: string): s is LeadAnalysisStatus {
   return (VALID_ANALYSIS as string[]).includes(s);
 }
 
+interface LeadWithAnalysisRow {
+  id: string;
+  analysis_status: string | null;
+  analysis: {
+    hubspot_deal_id: string | null;
+    [k: string]: unknown;
+  } | null;
+}
+
+async function attachDealScores<T extends LeadWithAnalysisRow>(rows: T[]): Promise<T[]> {
+  const dealIds = Array.from(
+    new Set(
+      rows
+        .map((r) => r.analysis?.hubspot_deal_id)
+        .filter((v): v is string => typeof v === "string" && v.length > 0),
+    ),
+  );
+  if (dealIds.length === 0) return rows;
+
+  const { data: scores, error } = await db
+    .from("deal_scores")
+    .select("deal_id, score, next_action, scored_at")
+    .in("deal_id", dealIds);
+
+  if (error || !scores) return rows;
+
+  const byDealId = new Map<string, LeadDealScoreSummary>();
+  for (const row of scores as Array<{
+    deal_id: string;
+    score: DealScore | null;
+    next_action: string | null;
+    scored_at: string | null;
+  }>) {
+    if (!row.score) continue;
+    byDealId.set(row.deal_id, {
+      total: row.score.total,
+      reliability: row.score.reliability,
+      scored_at: row.scored_at,
+      next_action: row.next_action,
+    });
+  }
+
+  return rows.map((r) => {
+    const dealId = r.analysis?.hubspot_deal_id;
+    if (!dealId || !r.analysis) return r;
+    const summary = byDealId.get(dealId) ?? null;
+    return { ...r, analysis: { ...r.analysis, deal_score: summary } };
+  });
+}
+
 export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -60,37 +115,50 @@ export async function GET(req: NextRequest) {
   if (status !== "all") query = query.eq("validation_status", status);
   if (analysis !== "all") query = query.eq("analysis_status", analysis);
 
-  const [listRes, pendingRes, validatedRes, rejectedRes, validatedNoDealRes] = await Promise.all([
-    query,
-    db
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("validation_status", "pending")
-      .gte("posted_at", LEADS_SINCE),
-    db
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("validation_status", "validated")
-      .gte("posted_at", LEADS_SINCE),
-    db
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("validation_status", "rejected")
-      .gte("posted_at", LEADS_SINCE),
-    db
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("validation_status", "validated")
-      .in("analysis_status", ["no_match", "error"])
-      .gte("posted_at", LEADS_SINCE),
-  ]);
+  const [listRes, pendingRes, validatedRes, rejectedRes, validatedNoDealRes, validatedWithDealRes] =
+    await Promise.all([
+      query,
+      db
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("validation_status", "pending")
+        .gte("posted_at", LEADS_SINCE),
+      db
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("validation_status", "validated")
+        .gte("posted_at", LEADS_SINCE),
+      db
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("validation_status", "rejected")
+        .gte("posted_at", LEADS_SINCE),
+      db
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("validation_status", "validated")
+        .in("analysis_status", ["no_match", "error"])
+        .gte("posted_at", LEADS_SINCE),
+      db
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("validation_status", "validated")
+        .eq("analysis_status", "done")
+        .gte("posted_at", LEADS_SINCE),
+    ]);
 
   if (listRes.error) {
     return NextResponse.json(
       {
         error: listRes.error.message,
         leads: [],
-        counts: { pending: 0, validated: 0, rejected: 0, validatedNoDeal: 0 },
+        counts: {
+          pending: 0,
+          validated: 0,
+          rejected: 0,
+          validatedNoDeal: 0,
+          validatedWithDeal: 0,
+        },
       },
       { status: 500 },
     );
@@ -115,25 +183,33 @@ export async function GET(req: NextRequest) {
     if (analysis !== "all") refreshQuery = refreshQuery.eq("analysis_status", analysis);
     const refreshed = await refreshQuery;
     if (!refreshed.error && refreshed.data) {
+      const enriched = await attachDealScores(
+        refreshed.data as unknown as LeadWithAnalysisRow[],
+      );
       return NextResponse.json({
-        leads: refreshed.data,
+        leads: enriched,
         counts: {
           pending: pendingRes.count ?? 0,
           validated: validatedRes.count ?? 0,
           rejected: rejectedRes.count ?? 0,
           validatedNoDeal: validatedNoDealRes.count ?? 0,
+          validatedWithDeal: validatedWithDealRes.count ?? 0,
         },
       });
     }
   }
 
+  const enriched = await attachDealScores(
+    (listRes.data ?? []) as unknown as LeadWithAnalysisRow[],
+  );
   return NextResponse.json({
-    leads: listRes.data ?? [],
+    leads: enriched,
     counts: {
       pending: pendingRes.count ?? 0,
       validated: validatedRes.count ?? 0,
       rejected: rejectedRes.count ?? 0,
       validatedNoDeal: validatedNoDealRes.count ?? 0,
+      validatedWithDeal: validatedWithDealRes.count ?? 0,
     },
   });
 }
