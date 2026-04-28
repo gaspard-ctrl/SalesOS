@@ -1,14 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Check, X, ExternalLink, RefreshCw, Inbox, Loader2, Undo2 } from "lucide-react";
-import { useLeads, type LeadsStatusFilter } from "@/lib/hooks/use-marketing";
-import type { Lead, LeadFile, LeadValidationStatus } from "@/lib/marketing-types";
+import Link from "next/link";
+import { useState } from "react";
+import {
+  ExternalLink,
+  Inbox,
+  Loader2,
+  RefreshCw,
+  Settings,
+} from "lucide-react";
+import {
+  useLeads,
+  type LeadsAnalysisFilter,
+} from "@/lib/hooks/use-marketing";
+import type { LeadFile, LeadWithAnalysis } from "@/lib/marketing-types";
 import { SlackText } from "@/lib/slack-mrkdwn";
+import LeadAnalysisBadge from "../leads/_components/lead-analysis-badge";
+import FunnelStats from "../leads/_components/funnel-stats";
 
 const ACCENT = "#f01563";
-const GREEN = "#10b981";
-const RED = "#ef4444";
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -27,29 +37,6 @@ function isImage(file: LeadFile): boolean {
 
 function fileProxyUrl(leadId: string, fileId: string, variant: "thumb" | "full" = "full"): string {
   return `/api/marketing/leads/file?leadId=${encodeURIComponent(leadId)}&fileId=${encodeURIComponent(fileId)}&variant=${variant}`;
-}
-
-function StatusBadge({ status }: { status: LeadValidationStatus }) {
-  if (status === "pending") return null;
-  const validated = status === "validated";
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        fontSize: 11,
-        fontWeight: 600,
-        padding: "2px 8px",
-        borderRadius: 10,
-        color: "#fff",
-        background: validated ? GREEN : RED,
-      }}
-    >
-      {validated ? <Check size={11} /> : <X size={11} />}
-      {validated ? "Validé" : "Rejeté"}
-    </span>
-  );
 }
 
 function FilterButton({
@@ -82,17 +69,19 @@ function FilterButton({
 
 function LeadCard({
   lead,
-  onValidate,
+  onAnalyze,
   onOpenImage,
   busy,
 }: {
-  lead: Lead;
-  onValidate: (status: LeadValidationStatus) => void;
+  lead: LeadWithAnalysis;
+  onAnalyze: () => void;
   onOpenImage: (url: string) => void;
   busy: boolean;
 }) {
   const imageFiles = lead.files.filter(isImage);
   const otherFiles = lead.files.filter((f) => !isImage(f));
+  const analyzing = lead.analysis_status === "pending";
+  const a = lead.analysis;
 
   return (
     <div
@@ -106,7 +95,6 @@ function LeadCard({
         gap: 12,
       }}
     >
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>
           {lead.author_name ?? "(auteur inconnu)"}
@@ -130,18 +118,24 @@ function LeadCard({
           </a>
         )}
         <div style={{ marginLeft: "auto" }}>
-          <StatusBadge status={lead.validation_status} />
+          <LeadAnalysisBadge analysis={a} analysisStatus={lead.analysis_status} />
         </div>
       </div>
 
-      {/* Text */}
+      {a && (a.extracted_email || a.extracted_name || a.extracted_company) && (
+        <div style={{ fontSize: 12, color: "#666", display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {a.extracted_name && <span>👤 {a.extracted_name}</span>}
+          {a.extracted_email && <span>✉️ {a.extracted_email}</span>}
+          {a.extracted_company && <span>🏢 {a.extracted_company}</span>}
+        </div>
+      )}
+
       {lead.text && (
         <div style={{ fontSize: 14, color: "#222", lineHeight: 1.5, wordBreak: "break-word" }}>
           <SlackText text={lead.text} />
         </div>
       )}
 
-      {/* Image grid */}
       {imageFiles.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {imageFiles.map((f) => {
@@ -174,7 +168,6 @@ function LeadCard({
         </div>
       )}
 
-      {/* Other files (non-image) */}
       {otherFiles.length > 0 && (
         <div style={{ fontSize: 12, color: "#666" }}>
           {otherFiles.map((f) => (
@@ -183,166 +176,147 @@ function LeadCard({
         </div>
       )}
 
-      {/* Actions */}
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", borderTop: "1px solid #f4f4f4", paddingTop: 12 }}>
-        {lead.validation_status === "pending" ? (
-          <>
-            <button
-              onClick={() => onValidate("rejected")}
-              disabled={busy}
-              className="text-sm px-3 py-1.5 font-medium transition-colors"
-              style={{
-                background: "#fff",
-                color: RED,
-                border: `1px solid ${RED}`,
-                borderRadius: 6,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                cursor: busy ? "wait" : "pointer",
-                opacity: busy ? 0.6 : 1,
-              }}
-            >
-              <X size={14} /> Rejeter
-            </button>
-            <button
-              onClick={() => onValidate("validated")}
-              disabled={busy}
-              className="text-sm px-3 py-1.5 font-medium transition-colors"
-              style={{
-                background: GREEN,
-                color: "#fff",
-                border: `1px solid ${GREEN}`,
-                borderRadius: 6,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                cursor: busy ? "wait" : "pointer",
-                opacity: busy ? 0.6 : 1,
-              }}
-            >
-              <Check size={14} /> Valider
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={() => onValidate("pending")}
-            disabled={busy}
-            className="text-sm px-3 py-1.5 font-medium transition-colors"
-            style={{
-              background: "#fff",
-              color: "#555",
-              border: "1px solid #e5e5e5",
-              borderRadius: 6,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              cursor: busy ? "wait" : "pointer",
-              opacity: busy ? 0.6 : 1,
-            }}
-          >
-            <Undo2 size={14} /> Remettre en attente
-          </button>
-        )}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          justifyContent: "flex-end",
+          borderTop: "1px solid #f4f4f4",
+          paddingTop: 12,
+        }}
+      >
+        <button
+          onClick={onAnalyze}
+          disabled={busy || analyzing}
+          className="text-sm px-3 py-1.5 font-medium transition-colors"
+          style={{
+            background: "#fff",
+            color: "#555",
+            border: "1px solid #e5e5e5",
+            borderRadius: 6,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            cursor: busy || analyzing ? "wait" : "pointer",
+            opacity: busy || analyzing ? 0.6 : 1,
+          }}
+        >
+          {analyzing ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <RefreshCw size={14} />
+          )}
+          Réanalyser
+        </button>
       </div>
     </div>
   );
 }
 
 export default function LeadsTab() {
-  const [filter, setFilter] = useState<LeadsStatusFilter>("pending");
-  const { leads, counts, isLoading, validateLead, syncLeads } = useLeads(filter);
-  const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [analysisFilter, setAnalysisFilter] = useState<LeadsAnalysisFilter>("all");
+  const { leads, counts, isLoading, analyzeLead } = useLeads("validated", analysisFilter);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  const autoSyncDone = useRef(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const runSync = async (silent = false) => {
-    setSyncing(true);
-    setSyncMessage(null);
-    try {
-      const { inserted } = await syncLeads();
-      if (!silent) {
-        setSyncMessage(
-          inserted > 0 ? `${inserted} nouveau${inserted > 1 ? "x" : ""} lead${inserted > 1 ? "s" : ""}` : "Aucun nouveau lead",
-        );
-      }
-    } catch (e) {
-      setSyncMessage(`Erreur sync : ${e instanceof Error ? e.message : "inconnue"}`);
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  useEffect(() => {
-    if (autoSyncDone.current) return;
-    autoSyncDone.current = true;
-    void runSync(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleValidate = async (lead: Lead, status: LeadValidationStatus) => {
+  const handleAnalyze = async (lead: LeadWithAnalysis) => {
     setBusyId(lead.id);
+    setErrorMsg(null);
     try {
-      await validateLead(lead.id, status);
+      await analyzeLead(lead.id);
     } catch (e) {
-      setSyncMessage(`Erreur : ${e instanceof Error ? e.message : "inconnue"}`);
+      setErrorMsg(`Erreur analyse : ${e instanceof Error ? e.message : "inconnue"}`);
     } finally {
       setBusyId(null);
     }
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Toolbar */}
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Header bar with management button */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <Link
+          href="/marketing/leads"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            background: "#fff",
+            border: "1px solid #e5e5e5",
+            borderRadius: 8,
+            padding: "10px 14px",
+            textDecoration: "none",
+            color: "#111",
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
+          <Settings size={15} />
+          Gestion des leads
+          {counts.pending > 0 && (
+            <span
+              style={{
+                minWidth: 20,
+                height: 20,
+                borderRadius: 10,
+                background: "#ef4444",
+                color: "#fff",
+                fontSize: 11,
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 6px",
+                marginLeft: 4,
+              }}
+            >
+              {counts.pending > 99 ? "99+" : counts.pending}
+            </span>
+          )}
+        </Link>
+        {errorMsg && <div style={{ fontSize: 12, color: "#ef4444" }}>{errorMsg}</div>}
+      </div>
+
+      <FunnelStats />
+
+      {/* Filters on validated leads */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <FilterButton
-          active={filter === "pending"}
-          onClick={() => setFilter("pending")}
-          label="À valider"
-          count={counts.pending}
-        />
-        <FilterButton
-          active={filter === "validated"}
-          onClick={() => setFilter("validated")}
-          label="Validés"
+          active={analysisFilter === "all"}
+          onClick={() => setAnalysisFilter("all")}
+          label="Tous validés"
           count={counts.validated}
         />
         <FilterButton
-          active={filter === "rejected"}
-          onClick={() => setFilter("rejected")}
-          label="Rejetés"
-          count={counts.rejected}
+          active={analysisFilter === "done"}
+          onClick={() => setAnalysisFilter("done")}
+          label="Avec deal"
         />
-        <FilterButton active={filter === "all"} onClick={() => setFilter("all")} label="Tous" />
-
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-          {syncMessage && <div style={{ fontSize: 12, color: "#888" }}>{syncMessage}</div>}
-          <button
-            onClick={() => runSync(false)}
-            disabled={syncing}
-            className="text-sm px-3 py-1.5 font-medium transition-colors"
-            style={{
-              background: "#fff",
-              color: "#555",
-              border: "1px solid #e5e5e5",
-              borderRadius: 6,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              cursor: syncing ? "wait" : "pointer",
-            }}
-          >
-            {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-            Sync Slack
-          </button>
-        </div>
+        <FilterButton
+          active={analysisFilter === "no_match"}
+          onClick={() => setAnalysisFilter("no_match")}
+          label="Sans deal"
+          count={counts.validatedNoDeal}
+        />
+        <FilterButton
+          active={analysisFilter === "error"}
+          onClick={() => setAnalysisFilter("error")}
+          label="Erreurs"
+        />
       </div>
 
       {/* List */}
       {isLoading && leads.length === 0 ? (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 40, color: "#888" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 40,
+            color: "#888",
+          }}
+        >
           <Loader2 size={16} className="animate-spin" style={{ marginRight: 8 }} /> Chargement…
         </div>
       ) : leads.length === 0 ? (
@@ -368,7 +342,7 @@ export default function LeadsTab() {
             <LeadCard
               key={lead.id}
               lead={lead}
-              onValidate={(s) => handleValidate(lead, s)}
+              onAnalyze={() => handleAnalyze(lead)}
               onOpenImage={setLightboxUrl}
               busy={busyId === lead.id}
             />
@@ -376,7 +350,6 @@ export default function LeadsTab() {
         </div>
       )}
 
-      {/* Lightbox */}
       {lightboxUrl && (
         <div
           onClick={() => setLightboxUrl(null)}

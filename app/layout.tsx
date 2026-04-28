@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SWRProvider } from "@/components/swr-provider";
 import { Prefetch } from "@/components/prefetch";
 import Sidebar from "@/components/sidebar";
+import { SidebarProvider } from "@/components/sidebar/sidebar-context";
 
 const geist = Geist({ subsets: ["latin"] });
 
@@ -30,12 +31,14 @@ export default function RootLayout({
           <SWRProvider>
             <Prefetch />
             <TooltipProvider>
-              <div className="flex h-screen overflow-hidden">
-                <Sidebar />
-                <main id="main-content" className="flex-1 overflow-y-auto" style={{ background: "#f9f9f9" }}>
-                  {children}
-                </main>
-              </div>
+              <SidebarProvider>
+                <div className="flex h-screen overflow-hidden">
+                  <Sidebar />
+                  <main id="main-content" className="flex-1 overflow-y-auto" style={{ background: "#f9f9f9" }}>
+                    {children}
+                  </main>
+                </div>
+              </SidebarProvider>
             </TooltipProvider>
           </SWRProvider>
         </body>

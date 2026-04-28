@@ -150,6 +150,78 @@ export function hubspotRecordUrl(portalId: string | number, objectType: HubspotO
   return `https://app.hubspot.com/contacts/${portalId}/${typeSegment}/${id}`;
 }
 
+/**
+ * Archive (soft-delete) a HubSpot task by id. Returns true on success.
+ */
+export async function archiveHubspotTask(taskId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`https://api.hubapi.com/crm/v3/objects/tasks/${encodeURIComponent(taskId)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${process.env.HUBSPOT_ACCESS_TOKEN}` },
+    });
+    return res.ok || res.status === 204 || res.status === 404; // 404 = already archived, treat as success
+  } catch (e) {
+    console.error("[archiveHubspotTask] failed:", e instanceof Error ? e.message : e);
+    return false;
+  }
+}
+
+/**
+ * Create a HubSpot task associated to a deal.
+ * @returns the created task id, or null on failure.
+ */
+export async function createHubspotTask(args: {
+  dealId: string;
+  ownerId?: string | null;
+  title: string;
+  body?: string;
+  /** ISO datetime string for due date. Defaults to +3 days. */
+  dueAt?: string;
+}): Promise<string | null> {
+  const { dealId, ownerId, title, body, dueAt } = args;
+  const due = dueAt ?? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+
+  type TaskProperties = {
+    hs_task_subject: string;
+    hs_task_body: string;
+    hs_task_status: string;
+    hs_task_priority: string;
+    hs_task_type: string;
+    hs_timestamp: string;
+    hubspot_owner_id?: string;
+  };
+  const properties: TaskProperties = {
+    hs_task_subject: title,
+    hs_task_body: body ?? "",
+    hs_task_status: "NOT_STARTED",
+    hs_task_priority: "MEDIUM",
+    hs_task_type: "TODO",
+    hs_timestamp: due,
+  };
+  if (ownerId) properties.hubspot_owner_id = ownerId;
+
+  // Create the task. Use v3 with associations to attach it to the deal.
+  type TaskCreateResponse = { id: string };
+  try {
+    const created = await hubspotFetch<TaskCreateResponse>("/crm/v3/objects/tasks", "POST", {
+      properties,
+      associations: [
+        {
+          to: { id: dealId },
+          types: [
+            // 216 = Task → Deal (HubSpot's standard association type id)
+            { associationCategory: "HUBSPOT_DEFINED", associationTypeId: 216 },
+          ],
+        },
+      ],
+    });
+    return created.id ?? null;
+  } catch (e) {
+    console.error("[createHubspotTask] failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 export function stripHtml(s: string): string {
   return s
     .replace(/<[^>]+>/g, " ")
@@ -189,6 +261,9 @@ export type DealSnapshot = {
   owner_name: string | null;
   deal_type: string | null;
   description: string | null;
+  is_closed: boolean | null;
+  is_closed_won: boolean | null;
+  createdate: string | null;
   contacts: DealContactSnapshot[];
   engagements: DealEngagementSnapshot[];
 };
@@ -201,6 +276,9 @@ const DEAL_PROPS = [
   "hubspot_owner_id",
   "deal_type",
   "description",
+  "hs_is_closed",
+  "hs_is_closed_won",
+  "createdate",
 ];
 
 type DealGetResponse = { properties?: Record<string, string> };
@@ -339,6 +417,9 @@ export async function fetchDealContext(dealId: string): Promise<DealSnapshot | n
     owner_name: ownerName,
     deal_type: p.deal_type ?? null,
     description: p.description ?? null,
+    is_closed: p.hs_is_closed ? p.hs_is_closed === "true" : null,
+    is_closed_won: p.hs_is_closed_won ? p.hs_is_closed_won === "true" : null,
+    createdate: p.createdate ?? null,
     contacts,
     engagements: engagements.slice(0, 30),
   };

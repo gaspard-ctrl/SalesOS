@@ -75,6 +75,91 @@ export function pickTranscriptUrl(rec: ClaapRecording): string | null {
   return any?.textUrl ?? null;
 }
 
+/**
+ * Pick the active JSON transcript URL (with timestamped speaker segments).
+ * Used for talk-ratio + key-moment timestamp resolution. The text-format URL
+ * returned by `pickTranscriptUrl` is what we send to Claude; this JSON URL is
+ * for structured analysis.
+ */
+export function pickTranscriptJsonUrl(rec: ClaapRecording): string | null {
+  const active = rec.transcripts?.find((t) => t.isActive && t.url);
+  if (active?.url) return active.url;
+  const any = rec.transcripts?.find((t) => t.url);
+  return any?.url ?? null;
+}
+
+export type TranscriptSegment = {
+  start: number;     // seconds
+  end: number;       // seconds
+  speakerId: string;
+  text: string;
+};
+
+export type TranscriptSpeaker = {
+  speakerId: string;
+  name?: string;
+  email?: string;
+  isRecorder?: boolean;
+};
+
+export type TranscriptStructured = {
+  segments: TranscriptSegment[];
+  speakers: TranscriptSpeaker[];
+};
+
+/**
+ * Fetch the JSON transcript from a signed Claap URL. The shape varies a bit
+ * between Claap workspaces — we try a few common keys (`segments` / `chunks`,
+ * `speakers` / `participants`) and normalise.
+ */
+export async function fetchTranscriptSegments(jsonUrl: string): Promise<TranscriptStructured | null> {
+  try {
+    const res = await fetch(jsonUrl);
+    if (!res.ok) return null;
+    const data = (await res.json()) as Record<string, unknown>;
+
+    type RawSeg = {
+      start?: number;
+      end?: number;
+      speakerId?: string;
+      speaker_id?: string;
+      speaker?: string;
+      text?: string;
+    };
+    type RawSpeaker = {
+      speakerId?: string;
+      id?: string;
+      speaker_id?: string;
+      name?: string;
+      email?: string;
+      isRecorder?: boolean;
+    };
+
+    const segmentsRaw = (data.segments ?? data.chunks ?? data.utterances ?? []) as RawSeg[];
+    const speakersRaw = (data.speakers ?? data.participants ?? []) as RawSpeaker[];
+
+    const segments: TranscriptSegment[] = segmentsRaw
+      .map((s) => ({
+        start: typeof s.start === "number" ? s.start : 0,
+        end: typeof s.end === "number" ? s.end : 0,
+        speakerId: String(s.speakerId ?? s.speaker_id ?? s.speaker ?? "unknown"),
+        text: typeof s.text === "string" ? s.text : "",
+      }))
+      .filter((s) => s.end >= s.start);
+
+    const speakers: TranscriptSpeaker[] = speakersRaw.map((s) => ({
+      speakerId: String(s.speakerId ?? s.id ?? s.speaker_id ?? ""),
+      name: s.name,
+      email: s.email,
+      isRecorder: s.isRecorder,
+    }));
+
+    return { segments, speakers };
+  } catch {
+    return null;
+  }
+}
+
 export type ExternalParticipant = {
   name: string | null;
   email: string;

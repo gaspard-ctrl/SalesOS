@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { logUsage } from "@/lib/log-usage";
 import { sendSalesCoachSlack } from "@/lib/sales-coach/slack";
 import { fetchDealContext, renderDealContextForPrompt, resolveDealFromParticipants } from "@/lib/hubspot";
-import { getClaapRecording } from "@/lib/claap";
+import { getClaapRecording, fetchTranscriptSegments, pickTranscriptJsonUrl } from "@/lib/claap";
+import { computeTalkRatio } from "@/lib/sales-coach/talk-ratio";
 import {
   SALES_COACH_SYSTEM_PROMPT,
   salesCoachTool,
@@ -94,25 +95,48 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     } catch { /* keep default */ }
 
-    // ── Auto-resolve deal from participants if not linked yet ─────────
+    // ── Auto-resolve deal from participants if not linked yet + grab JSON
+    //    transcript for talk-ratio ─────────────────────────────────────
     let dealId = row.hubspot_deal_id as string | null;
-    if (!dealId && row.claap_recording_id && row.recorder_email && process.env.CLAAP_API_TOKEN) {
+    let talkRatio: ReturnType<typeof computeTalkRatio> | null = null;
+
+    if (row.claap_recording_id && process.env.CLAAP_API_TOKEN) {
       try {
         const rec = await getClaapRecording(row.claap_recording_id);
-        const participantEmails = (rec?.meeting?.participants ?? [])
-          .map((p) => p.email)
-          .filter((e): e is string => !!e);
-        const resolved = await resolveDealFromParticipants(participantEmails, row.recorder_email);
-        if (resolved) {
-          dealId = resolved;
-          await db
-            .from("sales_coach_analyses")
-            .update({ hubspot_deal_id: resolved })
-            .eq("id", id);
-          console.log(`[sales-coach/analyze/${id}] auto-resolved deal ${resolved} from participants`);
+        const participants = rec?.meeting?.participants ?? [];
+
+        if (!dealId && row.recorder_email) {
+          const participantEmails = participants
+            .map((p) => p.email)
+            .filter((e): e is string => !!e);
+          const resolved = await resolveDealFromParticipants(participantEmails, row.recorder_email);
+          if (resolved) {
+            dealId = resolved;
+            await db.from("sales_coach_analyses").update({ hubspot_deal_id: resolved }).eq("id", id);
+            console.log(`[sales-coach/analyze/${id}] auto-resolved deal ${resolved} from participants`);
+          }
+        }
+
+        // Fetch JSON transcript (segments) for talk ratio
+        const jsonUrl = rec ? pickTranscriptJsonUrl(rec) : null;
+        if (jsonUrl) {
+          const structured = await fetchTranscriptSegments(jsonUrl);
+          if (structured) {
+            // Backfill speaker emails from participants if missing
+            const enrichedSpeakers = structured.speakers.map((sp) => {
+              if (sp.email) return sp;
+              const match = participants.find((p) => p.name && sp.name && p.name === sp.name);
+              return match ? { ...sp, email: match.email, isRecorder: match.email === rec?.recorder?.email } : sp;
+            });
+            talkRatio = computeTalkRatio({
+              segments: structured.segments,
+              speakers: enrichedSpeakers,
+              recorderEmail: row.recorder_email,
+            });
+          }
         }
       } catch (e) {
-        console.warn(`[sales-coach/analyze/${id}] deal auto-resolve failed:`, e instanceof Error ? e.message : e);
+        console.warn(`[sales-coach/analyze/${id}] Claap enrichment failed:`, e instanceof Error ? e.message : e);
       }
     }
 
@@ -188,6 +212,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         transcript_text: rawText,
         deal_snapshot: snapshot,
         meeting_kind: analysis.meeting_kind,
+        talk_ratio: talkRatio,
         status: "done",
         error_message: null,
         updated_at: new Date().toISOString(),

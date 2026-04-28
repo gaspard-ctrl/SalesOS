@@ -4,7 +4,7 @@ import { resolveDealFromParticipants } from "@/lib/hubspot";
 import { extractExternalParticipants } from "@/lib/claap";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 10;
+export const maxDuration = 30;
 
 type ClaapParticipant = {
   id?: string;
@@ -153,17 +153,32 @@ export async function POST(req: NextRequest) {
     const internalSecret = process.env.INTERNAL_SECRET;
 
     if (siteUrl && internalSecret) {
-      // No await — let it run in background. No AbortSignal: we don't await the
-      // response, and aborting prematurely would truncate the request body
-      // before the analyze endpoint can read it.
-      void fetch(`${siteUrl}/api/sales-coach/analyze/${inserted.id}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-internal-secret": internalSecret,
-        },
-        body: JSON.stringify({ transcriptUrl }),
-      }).catch((e) => console.error("[claap-webhook] trigger fetch failed:", e));
+      // Await the trigger fetch so Netlify doesn't kill the function before the
+      // request goes out. The analyzer flips status to "analyzing" and returns
+      // ~immediately, so we wait at most a couple of seconds — Claude itself
+      // runs on its own request budget after that.
+      try {
+        const triggerRes = await fetch(`${siteUrl}/api/sales-coach/analyze/${inserted.id}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-internal-secret": internalSecret,
+          },
+          body: JSON.stringify({ transcriptUrl }),
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!triggerRes.ok) {
+          const text = await triggerRes.text().catch(() => "");
+          console.error(`[claap-webhook] trigger non-2xx (${triggerRes.status}):`, text.slice(0, 200));
+        }
+      } catch (e) {
+        // AbortError after 8s is expected when Claude takes longer than that to
+        // start streaming; the analyzer keeps running server-side.
+        const msg = e instanceof Error ? e.message : String(e);
+        if (!msg.includes("aborted") && !msg.includes("timeout")) {
+          console.error("[claap-webhook] trigger fetch failed:", msg);
+        }
+      }
     } else {
       console.warn("[claap-webhook] missing SITE_URL or INTERNAL_SECRET — analysis will not start");
     }

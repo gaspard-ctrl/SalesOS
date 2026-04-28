@@ -1,6 +1,7 @@
 import useSWR from "swr";
 import type { SalesCoachAnalysis, MeetingKind } from "@/lib/guides/sales-coach";
 import type { DealSnapshot } from "@/lib/hubspot";
+import type { TalkRatio } from "@/lib/sales-coach/talk-ratio";
 
 const SWR_OPTS = { revalidateOnFocus: false, dedupingInterval: 15_000 } as const;
 
@@ -35,6 +36,9 @@ export interface SalesCoachDetail extends SalesCoachListItem {
   transcript_text: string | null;
   analysis: SalesCoachAnalysis | null;
   deal_snapshot: DealSnapshot | null;
+  talk_ratio: TalkRatio | null;
+  email_draft: { subject: string; body: string; generated_at: string } | null;
+  hubspot_task_ids: string[] | null;
   claap_event_id: string | null;
   updated_at: string;
 }
@@ -103,6 +107,47 @@ export function useSalesCoachDealHistory(dealId: string | null, excludeId?: stri
   const analyses = (data?.analyses ?? []).filter((a) => !excludeId || a.id !== excludeId);
   return {
     history: analyses,
+    isLoading,
+    error: error ? (error instanceof Error ? error.message : "Erreur de chargement") : "",
+  };
+}
+
+export type TrendPoint = {
+  id: string;
+  title: string | null;
+  date: string | null;
+  meeting_kind: string | null;
+  score_global: number | null;
+  axes: {
+    opening: number;
+    discovery: number;
+    active_listening: number;
+    value_articulation: number;
+    objection_handling: number;
+    next_steps: number;
+  } | null;
+  meddic: {
+    metrics: number;
+    economic_buyer: number;
+    decision_criteria: number;
+    decision_process: number;
+    identify_pain: number;
+    champion: number;
+  } | null;
+};
+
+export function useSalesCoachTrends(args: { dealId?: string | null; excludeId?: string | null; limit?: number }) {
+  const { dealId, excludeId, limit = 5 } = args;
+  const params = new URLSearchParams();
+  if (dealId) params.set("dealId", dealId);
+  else params.set("scope", "mine");
+  if (excludeId) params.set("excludeId", excludeId);
+  params.set("limit", String(limit));
+  const key = `/api/sales-coach/trends?${params.toString()}`;
+
+  const { data, error, isLoading } = useSWR<{ trends: TrendPoint[] }>(key, SWR_OPTS);
+  return {
+    trends: data?.trends ?? [],
     isLoading,
     error: error ? (error instanceof Error ? error.message : "Erreur de chargement") : "",
   };
