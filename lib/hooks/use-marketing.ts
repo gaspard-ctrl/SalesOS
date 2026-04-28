@@ -21,6 +21,9 @@ import type {
   Lead,
   LeadsCounts,
   LeadValidationStatus,
+  LeadAnalysisStatus,
+  LeadWithAnalysis,
+  LeadsFunnel,
 } from "@/lib/marketing-types";
 
 const SWR_OPTS = { revalidateOnFocus: false, dedupingInterval: 30_000 } as const;
@@ -181,16 +184,21 @@ export function useMarketingContent() {
 // ─── Leads (admin) ───────────────────────────────────────────────────────────
 
 export type LeadsStatusFilter = LeadValidationStatus | "all";
+export type LeadsAnalysisFilter = LeadAnalysisStatus | "all";
 
 interface LeadsResponse {
-  leads: Lead[];
+  leads: LeadWithAnalysis[];
   counts: LeadsCounts;
   error?: string;
 }
 
-export function useLeads(status: LeadsStatusFilter) {
+const EMPTY_COUNTS: LeadsCounts = { pending: 0, validated: 0, rejected: 0, validatedNoDeal: 0 };
+
+export function useLeads(status: LeadsStatusFilter, analysis: LeadsAnalysisFilter = "all") {
+  const params = new URLSearchParams({ status });
+  if (analysis !== "all") params.set("analysis", analysis);
   const { data, error, isLoading, mutate } = useSWR<LeadsResponse>(
-    `/api/marketing/leads?status=${status}`,
+    `/api/marketing/leads?${params.toString()}`,
     { revalidateOnFocus: false, dedupingInterval: 10_000 },
   );
 
@@ -218,15 +226,67 @@ export function useLeads(status: LeadsStatusFilter) {
     return json as { inserted: number };
   }
 
+  async function analyzeLead(id: string) {
+    const res = await fetch(`/api/marketing/leads/${id}/analyze`, { method: "POST" });
+    if (!res.ok) {
+      const { error: err } = await res.json().catch(() => ({ error: "Unknown error" }));
+      throw new Error(err || "Failed to analyze lead");
+    }
+    await mutate();
+  }
+
+  async function reanalyzeAll(
+    onProgress?: (progress: { processed: number; ok: number; errors: number }) => void,
+  ): Promise<{ totalProcessed: number; totalOk: number; totalErrors: number }> {
+    // Anchor: only re-treat leads whose last analysis is older than this start
+    // timestamp. Prevents infinite loops where leads we just re-analyzed get
+    // re-picked because their analyzed_at is now the most recent.
+    const olderThan = new Date().toISOString();
+    let totalProcessed = 0;
+    let totalOk = 0;
+    let totalErrors = 0;
+    while (true) {
+      const res = await fetch(`/api/marketing/leads/backfill-analyses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limit: 25, force: true, olderThan }),
+      });
+      if (!res.ok) {
+        const { error: err } = await res.json().catch(() => ({ error: "Unknown error" }));
+        throw new Error(err || "Failed to reanalyze");
+      }
+      const data = (await res.json()) as { processed: number; ok: number; errors: number };
+      totalProcessed += data.processed;
+      totalOk += data.ok;
+      totalErrors += data.errors;
+      onProgress?.({ processed: totalProcessed, ok: totalOk, errors: totalErrors });
+      if (data.processed === 0) break;
+    }
+    await mutate();
+    return { totalProcessed, totalOk, totalErrors };
+  }
+
   return {
     leads: data?.leads ?? [],
-    counts: data?.counts ?? { pending: 0, validated: 0, rejected: 0 },
+    counts: data?.counts ?? EMPTY_COUNTS,
     leadsError: data?.error ?? null,
     isLoading,
     error: error ? "Loading error" : "",
     validateLead,
     syncLeads,
+    analyzeLead,
+    reanalyzeAll,
     refresh: () => mutate(),
   };
+}
+
+// ─── Leads funnel ────────────────────────────────────────────────────────────
+
+export function useLeadsFunnel() {
+  const { data, error, isLoading } = useSWR<LeadsFunnel>(
+    `/api/marketing/leads/funnel`,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
+  );
+  return { funnel: data ?? null, isLoading, error: error ? "Loading error" : "" };
 }
 

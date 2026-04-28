@@ -220,10 +220,62 @@ export interface Lead {
   validation_status: LeadValidationStatus;
   validated_by: string | null;
   validated_at: string | null;
+  last_analysis_id: string | null;
+  analysis_status: LeadAnalysisStatus | null;
+  analyzed_at: string | null;
 }
 
 export interface LeadsCounts {
   pending: number;
   validated: number;
   rejected: number;
+  validatedNoDeal: number;
+}
+
+export type LeadAnalysisStatus = "pending" | "done" | "no_match" | "error";
+
+export type LeadMatchStrategy = "email" | "person" | "company" | "none";
+
+export interface LeadAnalysis {
+  id: string;
+  lead_id: string;
+  status: LeadAnalysisStatus;
+  extracted_email: string | null;
+  extracted_name: string | null;
+  extracted_company: string | null;
+  extraction_confidence: number | null;
+  extraction_notes: string | null;
+  hubspot_contact_id: string | null;
+  hubspot_deal_id: string | null;
+  match_strategy: LeadMatchStrategy | null;
+  deal_name: string | null;
+  deal_stage: string | null;
+  deal_stage_label: string | null;
+  deal_amount: number | null;
+  deal_close_date: string | null;
+  deal_owner_id: string | null;
+  deal_owner_name: string | null;
+  deal_is_closed: boolean | null;
+  deal_is_closed_won: boolean | null;
+  time_to_deal_seconds: number | null;
+  time_to_close_seconds: number | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeadWithAnalysis extends Lead {
+  analysis: LeadAnalysis | null;
+}
+
+export interface LeadsFunnel {
+  period: { from: string; to: string };
+  funnel: {
+    totalLeads: number;
+    validated: number;
+    withDeal: number;
+    disco: number;
+    closedWon: number;
+  };
+  openPipelineAmount: number;
 }

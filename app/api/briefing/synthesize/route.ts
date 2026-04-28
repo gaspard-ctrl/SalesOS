@@ -42,7 +42,7 @@ const briefingTool: Anthropic.Tool = {
           keyFact: { type: "string", description: "1 phrase max : positionnement marché ou fait clé, ou null" },
         },
       },
-      personInsights: { type: "string", description: "Insights sur les interlocuteurs. Utiliser \\n pour séparer chaque personne." },
+      personInsights: { type: "string", description: "Insights sur les interlocuteurs (1-2 phrases par personne, séparées par \\n). Si aucune donnée exploitable, écrire exactement 'Données insuffisantes'. Ne JAMAIS inclure d'autres champs (questionsToAsk, recentNews, etc.) dans cette string." },
       linkedinInsights: {
         type: "array",
         description: "Profils LinkedIn des interlocuteurs (si données LinkedIn disponibles). 1 objet par personne.",
@@ -125,7 +125,7 @@ const briefingTool: Anthropic.Tool = {
         },
       },
     },
-    required: ["identity", "meetingType", "isSalesMeeting", "objective", "contextSummary", "confidence"],
+    required: ["identity", "meetingType", "isSalesMeeting", "objective", "contextSummary", "confidence", "personInsights"],
   },
 };
 
@@ -322,6 +322,16 @@ Génère le briefing pour cette réunion.`;
     // Sinon le LLM peut halluciner un profil "LinkedIn" à partir des données HubSpot/Gmail.
     if (!rawData.linkedinProfiles || rawData.linkedinProfiles.length === 0) {
       delete briefing.linkedinInsights;
+    }
+
+    // Garde-fou : le LLM laisse parfois fuiter du JSON brut (ex: `","questionsToAsk":[...]`) dans
+    // personInsights. On coupe à la première occurrence d'un nom de champ du schéma suivi de `:`.
+    if (typeof briefing.personInsights === "string") {
+      const leakPattern = /["']\s*,\s*["'](?:questionsToAsk|recentNews|meetingTakeaways|nextStep|confidence|dealQualification|strategicHistory|growthDynamics|companyProfile|linkedinInsights|contextSummary|objective|identity|meetingType|isSalesMeeting)["']\s*:/i;
+      const match = briefing.personInsights.match(leakPattern);
+      if (match && typeof match.index === "number") {
+        briefing.personInsights = briefing.personInsights.slice(0, match.index).replace(/["']?\s*$/, "").trim();
+      }
     }
 
     // ── Upsert with briefing ──────────────────────────────────────────────────

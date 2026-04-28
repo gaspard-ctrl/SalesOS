@@ -203,6 +203,294 @@
   }
 }
 
+/* ============================================================
+   SalesOS Design System tokens (additive — phase 0)
+   Used by components/ui/* and progressively by page refactors.
+   Existing inline hex strings keep working; this is additive only.
+   ============================================================ */
+:root {
+  /* Brand */
+  --c-brand: #f01563;
+  --c-brand-dark: #d0114f;
+  --c-brand-tint: #fde8ef;
+  --c-brand-tint-soft: #fff9fb;
+  /* Neutrals */
+  --c-ink-0: #111111;
+  --c-ink-1: #444444;
+  --c-ink-2: #666666;
+  --c-ink-3: #888888;
+  --c-ink-4: #aaaaaa;
+  --c-ink-5: #bbbbbb;
+  --c-line: #eeeeee;
+  --c-line-strong: #e5e5e5;
+  --c-bg-page: #f9f9f9;
+  --c-bg-soft: #fafafa;
+  --c-bg-card: #ffffff;
+  /* Status */
+  --c-ok: #059669;
+  --c-ok-bg: #ecfdf5;
+  --c-warn: #b45309;
+  --c-warn-bg: #fef3c7;
+  --c-err: #dc2626;
+  --c-err-bg: #fee2e2;
+  --c-info: #6d28d9;
+  --c-info-bg: #ede9fe;
+  /* Stage palette (rotation 9) */
+  --c-stage-0: #3b82f6;
+  --c-stage-1: #7c3aed;
+  --c-stage-2: #0891b2;
+  --c-stage-3: #16a34a;
+  --c-stage-4: #ca8a04;
+  --c-stage-5: #ea580c;
+  --c-stage-6: #dc2626;
+  --c-stage-7: #db2777;
+  --c-stage-8: #be185d;
+  /* Radii */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  /* Shadows */
+  --sh-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --sh-md: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --sh-card: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* Card primitive */
+.ds-card {
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-card);
+}
+.ds-card-hover {
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.ds-card-hover:hover {
+  border-color: var(--c-line-strong);
+  box-shadow: var(--sh-md);
+}
+
+/* Section header */
+.ds-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-ink-3);
+  margin-bottom: 8px;
+}
+
+/* Chip primitives */
+.ds-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid var(--c-line-strong);
+  background: var(--c-bg-card);
+  color: var(--c-ink-1);
+  line-height: 1.4;
+}
+.ds-chip-brand {
+  background: var(--c-brand-tint);
+  border-color: var(--c-brand-tint);
+  color: var(--c-brand);
+}
+.ds-chip-ok {
+  background: var(--c-ok-bg);
+  border-color: var(--c-ok-bg);
+  color: var(--c-ok);
+}
+.ds-chip-warn {
+  background: var(--c-warn-bg);
+  border-color: var(--c-warn-bg);
+  color: var(--c-warn);
+}
+.ds-chip-err {
+  background: var(--c-err-bg);
+  border-color: var(--c-err-bg);
+  color: var(--c-err);
+}
+.ds-chip-info {
+  background: var(--c-info-bg);
+  border-color: var(--c-info-bg);
+  color: var(--c-info);
+}
+
+/* Icon button */
+.ds-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--c-line-strong);
+  background: var(--c-bg-card);
+  color: var(--c-ink-2);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ds-icon-btn:hover {
+  border-color: var(--c-brand);
+  color: var(--c-brand);
+  background: var(--c-brand-tint-soft);
+}
+.ds-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ds-icon-btn-lg {
+  width: 40px;
+  height: 40px;
+}
+
+/* Stat pill */
+.ds-stat-pill {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 12px;
+  border-radius: var(--r-md);
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-line);
+}
+.ds-kpi-num {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--c-ink-0);
+  line-height: 1.1;
+}
+.ds-kpi-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--c-ink-3);
+}
+
+/* List row */
+.ds-list-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background 0.12s;
+  border-left: 2px solid transparent;
+}
+.ds-list-row:hover {
+  background: var(--c-bg-soft);
+}
+.ds-list-row-active {
+  background: var(--c-brand-tint);
+  border-left-color: var(--c-brand);
+}
+
+/* Tab bar (underline) */
+.ds-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid var(--c-line);
+  overflow-x: auto;
+}
+.ds-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--c-ink-2);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.12s, border-color 0.12s;
+}
+.ds-tab:hover {
+  color: var(--c-ink-0);
+}
+.ds-tab-active {
+  color: var(--c-brand);
+  border-bottom-color: var(--c-brand);
+}
+
+/* Tab bar (pill) */
+.ds-tab-bar-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--c-bg-soft);
+  border-radius: 999px;
+  border: 1px solid var(--c-line);
+  width: fit-content;
+}
+.ds-tab-pill {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--c-ink-2);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s;
+}
+.ds-tab-pill:hover {
+  color: var(--c-ink-0);
+}
+.ds-tab-pill-active {
+  background: var(--c-bg-card);
+  color: var(--c-ink-0);
+  box-shadow: var(--sh-sm);
+}
+
+/* Suggestion chip (Chat welcome) */
+.ds-suggestion-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--c-ink-1);
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-line-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ds-suggestion-chip:hover {
+  border-color: var(--c-brand);
+  color: var(--c-brand);
+  background: var(--c-brand-tint-soft);
+}
+
+/* Connector chip */
+.ds-connector-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--c-ink-3);
+  background: transparent;
+}
+
 /* Chat markdown table styling */
 .prose table {
   width: 100%;

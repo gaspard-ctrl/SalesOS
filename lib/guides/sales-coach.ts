@@ -95,6 +95,23 @@ Top 3 actions ultra-concrètes à faire différemment / en plus au prochain call
 
 2-3 phrases : ce qui a été bien fait + le principal point à travailler.
 
+## 6. strengths / weaknesses (récap exécutif)
+
+- **strengths** : 3 points où le commercial a été bon — formulés courts (ex : "Opening structuré, agenda clair en 30s").
+- **weaknesses** : 3 points à travailler — formulés courts et précis (pas "discovery faible" mais "Pas de challenge sur le budget").
+
+Ces deux listes alimentent un récap visuel — sois bref et concret.
+
+## 7. key_moments (frise temporelle)
+
+4 à 6 moments-pivots du meeting, chacun avec :
+- **timestamp_seconds** : seconde dans le meeting (depuis le début).
+- **kind** : engagement / objection / pivot / doubt / next_step / concession.
+- **label** : 1 phrase courte qui résume le moment.
+- **quote** : citation ≤15 mots du transcript.
+
+Si la transcription n'a pas de timestamps, mets 0 partout.
+
 Utilise l'outil sales_coach_analysis pour retourner ton analyse.`;
 
 const axisSchema = {
@@ -215,8 +232,35 @@ export const salesCoachTool: Anthropic.Tool = {
         description: "Risques identifiés sur le deal depuis la transcription",
         items: { type: "string" },
       },
+      strengths: {
+        type: "array",
+        description: "3 points où le commercial a été bon (formulés courts)",
+        items: { type: "string" },
+      },
+      weaknesses: {
+        type: "array",
+        description: "3 points à travailler (courts et précis)",
+        items: { type: "string" },
+      },
+      key_moments: {
+        type: "array",
+        description: "4-6 moments-pivots du meeting avec timestamp",
+        items: {
+          type: "object",
+          properties: {
+            timestamp_seconds: { type: "number", description: "Seconde dans le meeting (0 si inconnu)" },
+            kind: {
+              type: "string",
+              enum: ["engagement", "objection", "pivot", "doubt", "next_step", "concession"],
+            },
+            label: { type: "string", description: "1 phrase qui résume le moment" },
+            quote: { type: "string", description: "Citation ≤15 mots" },
+          },
+          required: ["timestamp_seconds", "kind", "label", "quote"],
+        },
+      },
     },
-    required: ["meeting_kind", "meeting_kind_reasoning", "summary", "axes", "meddic", "bosche", "coaching_priorities", "risks"],
+    required: ["meeting_kind", "meeting_kind_reasoning", "summary", "axes", "meddic", "bosche", "coaching_priorities", "risks", "strengths", "weaknesses", "key_moments"],
   },
 };
 
@@ -249,6 +293,15 @@ export type BoscheScore = {
   exit_criteria_met: boolean;
 };
 
+export type KeyMomentKind = "engagement" | "objection" | "pivot" | "doubt" | "next_step" | "concession";
+
+export type KeyMoment = {
+  timestamp_seconds: number;
+  kind: KeyMomentKind;
+  label: string;
+  quote: string;
+};
+
 export type SalesCoachAnalysis = {
   meeting_kind: MeetingKind;
   meeting_kind_reasoning: string;
@@ -265,6 +318,18 @@ export type SalesCoachAnalysis = {
   bosche: BoscheScore;
   coaching_priorities: string[];
   risks: string[];
+  strengths?: string[];
+  weaknesses?: string[];
+  key_moments?: KeyMoment[];
+};
+
+export const KEY_MOMENT_LABELS: Record<KeyMomentKind, string> = {
+  engagement: "Engagement",
+  objection: "Objection",
+  pivot: "Pivot",
+  doubt: "Doute",
+  next_step: "Next step",
+  concession: "Concession",
 };
 
 const DISCOVERY_KINDS: MeetingKind[] = ["discovery_r1", "discovery_deeper"];

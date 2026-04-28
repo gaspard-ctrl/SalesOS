@@ -24,6 +24,10 @@ import {
 import { useSalesCoachDetail, useSalesCoachDealHistory } from "@/lib/hooks/use-sales-coach";
 import type { SalesCoachAnalysis, AxisScore, MeddicScore } from "@/lib/guides/sales-coach";
 import { MEETING_KIND_LABELS, isDiscoveryKind } from "@/lib/guides/sales-coach";
+import { RecapTab } from "./recap-tab";
+import { TrendsTab } from "./trends-tab";
+import { EmailDraftModal } from "./email-draft-modal";
+import { Sparkles } from "lucide-react";
 
 interface Props {
   analysisId: string;
@@ -31,7 +35,7 @@ interface Props {
   onDeleted?: () => void;
 }
 
-type TabId = "axes" | "meddic" | "bosche" | "history" | "transcript";
+type TabId = "recap" | "axes" | "meddic" | "bosche" | "trends" | "history" | "transcript";
 
 function scoreColor(score: number): string {
   if (score >= 7.5) return "#059669";
@@ -381,10 +385,49 @@ function MeetingKindBadge({ kind, size = "sm" }: { kind: string | null; size?: "
 export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: Props) {
   const { detail, isLoading, error, reload } = useSalesCoachDetail(analysisId);
   const { history } = useSalesCoachDealHistory(detail?.hubspot_deal_id ?? null, analysisId);
-  const [tab, setTab] = useState<TabId>("axes");
+  const [tab, setTab] = useState<TabId>("recap");
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [creatingTasks, setCreatingTasks] = useState(false);
+  const [deletingTasks, setDeletingTasks] = useState(false);
+  const [taskResult, setTaskResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  async function createTasks() {
+    setCreatingTasks(true);
+    setTaskResult(null);
+    try {
+      const res = await fetch(`/api/sales-coach/${analysisId}/create-tasks`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erreur");
+      const n = (data.taskIds ?? []).length;
+      setTaskResult({ ok: true, msg: `${n} tâche${n > 1 ? "s" : ""} créée${n > 1 ? "s" : ""}` });
+      await reload();
+    } catch (e) {
+      setTaskResult({ ok: false, msg: e instanceof Error ? e.message : "Erreur" });
+    } finally {
+      setCreatingTasks(false);
+    }
+  }
+
+  async function deleteTasks() {
+    if (!confirm("Archiver les tâches HubSpot créées pour cette analyse ?")) return;
+    setDeletingTasks(true);
+    setTaskResult(null);
+    try {
+      const res = await fetch(`/api/sales-coach/${analysisId}/create-tasks`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erreur");
+      setTaskResult({ ok: true, msg: data.warning ? data.warning : `${data.deleted} tâche${data.deleted > 1 ? "s" : ""} archivée${data.deleted > 1 ? "s" : ""}` });
+      await reload();
+    } catch (e) {
+      setTaskResult({ ok: false, msg: e instanceof Error ? e.message : "Erreur" });
+    } finally {
+      setDeletingTasks(false);
+    }
+  }
 
   async function resendSlack() {
     setSending(true);
@@ -471,7 +514,7 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
           </>
         )}
         <div className="mt-4 flex items-center gap-2">
-          {(detail.status === "skipped" || detail.status === "error") && (
+          {(detail.status === "skipped" || detail.status === "error" || detail.status === "pending") && (
             <button
               onClick={forceAnalyze}
               disabled={forcing}
@@ -479,7 +522,11 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
               style={{ background: "#f01563", color: "#fff" }}
             >
               <RefreshCw size={12} className={forcing ? "animate-spin" : ""} />
-              {forcing ? "Lancement…" : "Analyser quand même"}
+              {forcing
+                ? "Lancement…"
+                : detail.status === "pending"
+                  ? "Analyser maintenant"
+                  : "Analyser quand même"}
             </button>
           )}
           <button
@@ -615,9 +662,11 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
       <div className="px-6 mt-2" style={{ background: "#fff", borderBottom: "1px solid #eeeeee" }}>
         <div className="flex gap-1">
           {[
-            { id: "axes" as const, label: "6 axes coaching", icon: Target },
+            { id: "recap" as const, label: "Récap", icon: Sparkles },
+            { id: "axes" as const, label: "6 axes", icon: Target },
             { id: "meddic" as const, label: "MEDDIC", icon: TrendingUp },
             ...(isDisco ? [{ id: "bosche" as const, label: "BOSCHE", icon: TrendingUp }] : []),
+            { id: "trends" as const, label: "Tendances", icon: TrendingUp },
             { id: "history" as const, label: `Historique${history.length > 0 ? ` (${history.length})` : ""}`, icon: History },
             { id: "transcript" as const, label: "Transcript", icon: FileText },
           ].map((t) => {
@@ -643,7 +692,26 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      <div className="flex-1 overflow-y-auto px-8 py-6">
+        {tab === "recap" && (
+          <RecapTab
+            analysis={a}
+            talkRatio={detail.talk_ratio}
+            hubspotTaskIds={detail.hubspot_task_ids}
+            onOpenEmailDraft={() => setEmailModalOpen(true)}
+            onCreateTasks={createTasks}
+            onDeleteTasks={deleteTasks}
+            creatingTasks={creatingTasks}
+            deletingTasks={deletingTasks}
+            taskResult={taskResult}
+            onGoToAxes={() => setTab("axes")}
+          />
+        )}
+
+        {tab === "trends" && (
+          <TrendsTab analysisId={analysisId} dealId={detail.hubspot_deal_id} />
+        )}
+
         {tab === "axes" && (
           <div className="space-y-3">
             {AXES_LABELS.map(({ key, label }) => (
@@ -864,6 +932,16 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
           </div>
         )}
       </div>
+
+      <EmailDraftModal
+        open={emailModalOpen}
+        analysisId={analysisId}
+        defaultRecipients={(detail.deal_snapshot?.contacts ?? [])
+          .filter((c) => c.email)
+          .map((c) => ({ name: `${c.firstname} ${c.lastname}`.trim() || null, email: c.email }))}
+        initialDraft={detail.email_draft}
+        onClose={() => setEmailModalOpen(false)}
+      />
     </div>
   );
 }
