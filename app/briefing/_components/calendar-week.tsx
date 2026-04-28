@@ -123,7 +123,7 @@ export function CalendarWeek({
               </p>
               <p style={{ fontSize: 9, color: "#bbb", margin: 0 }}>{MONTH_SHORT[day.getMonth()]}</p>
             </div>
-            <div style={{ flex: 1, overflowY: "auto", padding: 6, display: "flex", flexDirection: "column", gap: 6 }}>
+            <div className="thin-scrollbar" style={{ flex: 1, overflowY: "auto", padding: 6, display: "flex", flexDirection: "column", gap: 6 }}>
               {dayEvents.length === 0 && (
                 <div style={{ display: "flex", justifyContent: "center", paddingTop: 16 }}>
                   <span style={{ fontSize: 10, color: "#e5e5e5" }}>—</span>

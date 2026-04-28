@@ -77,6 +77,7 @@ export function MeetingSidebar({
       </div>
 
       <div
+        className="thin-scrollbar"
         style={{
           flex: 1,
           overflowY: "auto",
