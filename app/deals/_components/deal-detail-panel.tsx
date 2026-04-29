@@ -1052,7 +1052,7 @@ export function DealDetailPanel({
                         fontSize: 14,
                         fontWeight: 600,
                         color: COLORS.warn,
-                        justifyContent: "flex-end",
+                        justifyContent: "center",
                         flexWrap: "wrap",
                       }}
                     >
@@ -1060,7 +1060,7 @@ export function DealDetailPanel({
                       <span>
                         {missingBant.map((f) => f.label).join(", ")}
                         {" "}
-                        {missingBant.length === 1 ? "manquante" : "manquantes"}
+                        {missingBant.length === 1 ? "manquant" : "manquants"}
                       </span>
                     </div>
                   )}
