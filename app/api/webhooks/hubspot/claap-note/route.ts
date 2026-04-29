@@ -305,6 +305,7 @@ async function processNote(noteId: string): Promise<ProcessResult> {
       text: fallbackText,
       blocks,
       unfurl_links: false,
+      unfurl_media: false,
     });
   } catch (e) {
     console.error("[hubspot-claap-note] slack post failed:", e);
