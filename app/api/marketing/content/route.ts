@@ -5,7 +5,7 @@ import { logUsage } from "@/lib/log-usage";
 import { db } from "@/lib/db";
 import { fetchTopPages } from "@/lib/google-analytics";
 import { fetchKeywords } from "@/lib/google-search-console";
-import { fetchAllArticles } from "@/lib/wordpress";
+import { fetchAllArticles, hydrateArticleBodies } from "@/lib/wordpress";
 import { classifyKeywords } from "@/lib/keyword-relevance";
 import { BUSINESS_CONTEXT_PROMPT_BLOCK } from "@/lib/business-context";
 import type { Keyword, KeywordRelevance } from "@/lib/marketing-types";
@@ -826,6 +826,12 @@ async function runGeneration(userId: string, recommendationId: string) {
   } catch {
     // Search Console unavailable
   }
+
+  // ── Hydrate empty bodies (workaround until WP REST exposes content.rendered) ─
+  // The REST API on coachello.ai returns content.rendered="" today, so the
+  // 3 style references would have no prose to teach the LLM voice. Scrape
+  // just these 3 from their public URL — never the whole list.
+  await hydrateArticleBodies(styleArticles);
 
   // ── Build structure analysis for each reference article ────────────────────
   const structureAnalyses = styleArticles.map((a) => {
