@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { fetchArticleById } from "@/lib/wordpress";
+import { fetchArticleById, fetchArticleBody } from "@/lib/wordpress";
 import { fetchArticleStats, fetchTopPages } from "@/lib/google-analytics";
 
 export const dynamic = "force-dynamic";
@@ -77,6 +77,17 @@ export async function GET(req: NextRequest) {
     try {
       const article = await fetchArticleById(parseInt(articleId, 10));
       if (!article) return NextResponse.json({ error: "Article not found" }, { status: 404 });
+
+      // Workaround: WP REST returns content.rendered="" today. Scrape the
+      // public page to fill the body so the article view can render it.
+      // Cached 12h per URL — remove once the WP-side mu-plugin lands.
+      if (!article.contentText && article.link) {
+        const body = await fetchArticleBody(article.link);
+        if (body.contentHtml) {
+          article.contentHtml = body.contentHtml;
+          article.contentText = body.contentText;
+        }
+      }
 
       // Try to fetch stats — non-blocking if GA4 fails (bounded to 5s so a slow GA4 never blocks the article view).
       let stats = null;
