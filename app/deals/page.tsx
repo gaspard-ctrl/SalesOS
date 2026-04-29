@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, memo } from "react";
+import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import { useUserMe } from "@/lib/hooks/use-user-me";
 import { useDeals } from "@/lib/hooks/use-deals";
 import { Zap, Search, RefreshCw, ArrowLeft } from "lucide-react";
@@ -252,6 +252,52 @@ export default function DealsPage() {
   const stageIdx = selectedStage ? stages.indexOf(selectedStage) : 0;
   const isListMode = !!selectedDeal;
 
+  // Resizable left panel (list mode)
+  const LIST_MIN = 280;
+  const LIST_MAX = 800;
+  const LIST_DEFAULT = 350;
+  const [listWidth, setListWidth] = useState<number>(LIST_DEFAULT);
+  const listWidthRef = useRef(listWidth);
+  const draggingRef = useRef(false);
+
+  useEffect(() => {
+    listWidthRef.current = listWidth;
+  }, [listWidth]);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("deals.listWidth");
+      if (saved) {
+        const n = parseInt(saved, 10);
+        if (!Number.isNaN(n)) setListWidth(Math.min(LIST_MAX, Math.max(LIST_MIN, n)));
+      }
+    } catch {}
+  }, []);
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    const onMove = (ev: MouseEvent) => {
+      if (!draggingRef.current) return;
+      const next = Math.min(LIST_MAX, Math.max(LIST_MIN, ev.clientX));
+      setListWidth(next);
+    };
+    const onUp = () => {
+      draggingRef.current = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      try {
+        window.localStorage.setItem("deals.listWidth", String(Math.round(listWidthRef.current)));
+      } catch {}
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, []);
+
   return (
     <div
       style={{
@@ -406,13 +452,12 @@ export default function DealsPage() {
         {/* Left: kanban (default) OR grouped list (when a deal is selected) */}
         <div
           style={{
-            width: isListMode ? 380 : "100%",
+            width: isListMode ? listWidth : "100%",
             flexShrink: 0,
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
-            transition: "width 0.2s ease",
-            borderRight: isListMode ? `1px solid ${COLORS.line}` : "none",
+            transition: draggingRef.current ? "none" : "width 0.2s ease",
             background: isListMode ? COLORS.bgCard : "transparent",
           }}
         >
@@ -466,6 +511,39 @@ export default function DealsPage() {
             </div>
           )}
         </div>
+
+        {/* Resize handle */}
+        {selectedDeal && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Redimensionner la liste des deals"
+            onMouseDown={startResize}
+            onDoubleClick={() => {
+              setListWidth(LIST_DEFAULT);
+              try {
+                window.localStorage.setItem("deals.listWidth", String(LIST_DEFAULT));
+              } catch {}
+            }}
+            style={{
+              flexShrink: 0,
+              width: 6,
+              marginLeft: -3,
+              marginRight: -3,
+              cursor: "col-resize",
+              background: "transparent",
+              borderLeft: `1px solid ${COLORS.line}`,
+              position: "relative",
+              zIndex: 1,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = COLORS.brand + "22";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+            }}
+          />
+        )}
 
         {/* Right: detail panel */}
         {selectedDeal && (

@@ -60,20 +60,22 @@ export function DealListGrouped({
                 textAlign: "left",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 6, minWidth: 0 }}>
                 {isCollapsed ? (
-                  <ChevronRight size={12} style={{ color }} />
+                  <ChevronRight size={12} style={{ color, marginTop: 2, flexShrink: 0 }} />
                 ) : (
-                  <ChevronDown size={12} style={{ color }} />
+                  <ChevronDown size={12} style={{ color, marginTop: 2, flexShrink: 0 }} />
                 )}
-                <span style={{ fontSize: 11, fontWeight: 700, color, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                  {stage.label}
-                </span>
-                <span style={{ fontSize: 10, color: COLORS.ink3 }}>
-                  {items.length} deal{items.length > 1 ? "s" : ""}
-                </span>
+                <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                    {stage.label}
+                  </span>
+                  <span style={{ fontSize: 10, color: COLORS.ink3 }}>
+                    {items.length} deal{items.length > 1 ? "s" : ""}
+                  </span>
+                </div>
               </div>
-              <span style={{ fontSize: 11, color: COLORS.ink2, fontWeight: 600 }}>
+              <span style={{ fontSize: 11, color: COLORS.ink2, fontWeight: 600, flexShrink: 0 }}>
                 {(total / 1000).toFixed(0)}k€
               </span>
             </button>
