@@ -19,9 +19,9 @@ export function DealListGrouped({
   selectedId: string | null;
   onSelect: (d: Deal) => void;
 }) {
-  const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({});
   const toggle = (id: string) =>
-    setCollapsed((c) => ({ ...c, [id]: !c[id] }));
+    setExpanded((c) => ({ ...c, [id]: !c[id] }));
 
   return (
     <div
@@ -37,10 +37,9 @@ export function DealListGrouped({
     >
       {stages.map((stage, idx) => {
         const items = dealsByStage[stage.id] ?? [];
-        if (items.length === 0) return null;
         const color = stageColor(idx);
         const total = items.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
-        const isCollapsed = !!collapsed[stage.id];
+        const isCollapsed = !expanded[stage.id];
         return (
           <section key={stage.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <button
@@ -80,6 +79,11 @@ export function DealListGrouped({
             </button>
             {!isCollapsed && (
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {items.length === 0 && (
+                <div style={{ fontSize: 11, color: COLORS.ink4, fontStyle: "italic", padding: "6px 10px" }}>
+                  Aucun deal
+                </div>
+              )}
               {items.map((d) => {
                 const ref = d.lastContacted || d.lastModified;
                 const badge = d.score ? scoreBadge(d.score.total) : null;
