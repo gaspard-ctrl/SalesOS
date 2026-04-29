@@ -63,7 +63,7 @@ async function slackGet<T>(path: string, params: Record<string, string> = {}): P
  * Resolve a Slack channel name ("1a-new-incoming-leads") to its channel ID.
  * Paginated scan of public + private channels the bot is a member of.
  */
-async function findChannelId(name: string): Promise<string | null> {
+export async function findChannelId(name: string): Promise<string | null> {
   const target = name.replace(/^#/, "").toLowerCase();
   let cursor: string | undefined;
   do {
