@@ -6,6 +6,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/gmail/callback(.*)", // Google OAuth callback — user browser has session cookie
   "/api/deals/score-all(.*)", // Cron endpoint — authenticated via Bearer CRON_SECRET in handler
   "/api/webhooks/claap(.*)", // Claap webhook — authenticated via x-claap-webhook-secret in handler
+  "/api/webhooks/hubspot(.*)", // HubSpot webhook — authenticated via HMAC v3 / shared secret in handler
   "/api/sales-coach/analyze(.*)", // Fire-and-forget internal trigger — authenticated via x-internal-secret in handler
 ]);
 
