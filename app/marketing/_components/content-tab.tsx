@@ -60,6 +60,12 @@ function ContentTab() {
   const [previewLang, setPreviewLang] = useState<"fr" | "en">("fr");
   const [focusedRecId, setFocusedRecId] = useState<string | null>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  // Articles approuvés DANS CETTE SESSION (via clic sur "Approve"). Sépare les
+  // nouveaux choix du compteur "Next: Write" et de l'éditeur des anciens articles.
+  const [sessionApprovedIds, setSessionApprovedIds] = useState<Set<string>>(new Set());
+  // Mode d'affichage de l'éditeur (step 3): "new" = approbations de la session,
+  // "all" = tous (pour ouvrir un ancien article depuis Previous Articles).
+  const [step3View, setStep3View] = useState<"new" | "all">("new");
 
   // Load persisted analysis/recommendations on mount
   useEffect(() => {
@@ -134,6 +140,11 @@ function ContentTab() {
 
   const handleApprove = useCallback((id: string) => {
     setLocalRecs((prev) => prev.map((r) => r.id === id ? { ...r, status: "approved" as const } : r));
+    setSessionApprovedIds((prev) => {
+      const s = new Set(prev);
+      s.add(id);
+      return s;
+    });
     fetch("/api/marketing/content", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -181,7 +192,13 @@ function ContentTab() {
   }, [handleGenerate]);
 
   const handleOpenPrevious = useCallback((id: string) => {
+    setStep3View("all");
     setFocusedRecId(id);
+    setStep(3);
+  }, []);
+
+  const goToWriteNew = useCallback(() => {
+    setStep3View("new");
     setStep(3);
   }, []);
 
@@ -200,6 +217,7 @@ function ContentTab() {
     setLocalRecs((prev) => prev.filter((r) => r.id !== id));
     setGeneratedDrafts((prev) => { const m = new Map(prev); m.delete(id); return m; });
     setGenerateErrors((prev) => { const m = new Map(prev); m.delete(id); return m; });
+    setSessionApprovedIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
     try {
       await fetch("/api/marketing/content", {
         method: "POST",
@@ -237,7 +255,13 @@ ${draft.content[lang]}
     URL.revokeObjectURL(url);
   }, []);
 
-  const approvedCount = localRecs.filter((r) => r.status === "approved" || r.status === "writing" || r.status === "published").length;
+  // Compte uniquement les articles approuvés DANS CETTE SESSION (le bouton
+  // "Next: Write" est réservé aux nouveaux choix; les anciens vivent dans
+  // "Previous articles").
+  const approvedCount = localRecs.filter((r) =>
+    sessionApprovedIds.has(r.id) &&
+    (r.status === "approved" || r.status === "writing" || r.status === "published")
+  ).length;
 
   if (isLoading) return <div className="text-sm" style={{ color: "#888" }}>Loading...</div>;
 
@@ -459,11 +483,14 @@ ${draft.content[lang]}
       {/* Step 2 — Recommendations */}
       {step === 2 && (() => {
         const pendingRecs = localRecs.filter((r) => r.status === "recommended");
-        const previousRecs = localRecs.filter((r) => r.status === "approved" || r.status === "writing" || r.status === "published");
+        const previousRecs = localRecs.filter((r) =>
+          !sessionApprovedIds.has(r.id) &&
+          (r.status === "approved" || r.status === "writing" || r.status === "published")
+        );
         return (
         <div className="space-y-4">
           {/* Top nav — mirror of the bottom nav for quick access. */}
-          <StepNav step={2} setStep={setStep} approvedCount={approvedCount} compact />
+          <StepNav step={2} setStep={setStep} approvedCount={approvedCount} compact onNextWrite={goToWriteNew} />
           {/* Previous articles — quick access to already-approved articles in step 3 */}
           {previousRecs.length > 0 && (
             <div className="rounded-xl" style={{ background: "#fff", border: "1px solid #eeeeee", padding: "14px 18px" }}>
@@ -475,7 +502,7 @@ ${draft.content[lang]}
                   </p>
                 </div>
                 <button
-                  onClick={() => setStep(3)}
+                  onClick={() => { setStep3View("all"); setStep(3); }}
                   className="flex items-center gap-1 text-xs font-medium rounded-lg px-3 py-1.5"
                   style={{ background: "#fff", color: "#16a34a", border: "1px solid #bbf7d0" }}
                 >
@@ -639,7 +666,7 @@ ${draft.content[lang]}
               Back
             </button>
             <button
-              onClick={() => setStep(3)}
+              onClick={goToWriteNew}
               disabled={approvedCount === 0}
               className="text-sm font-medium rounded-lg px-5 py-2 transition-opacity"
               style={{
@@ -661,7 +688,12 @@ ${draft.content[lang]}
           {/* Top nav — mirror of the bottom "Back" for quick access. */}
           <StepNav step={3} setStep={setStep} approvedCount={approvedCount} compact />
           {localRecs
-            .filter((r) => r.status === "approved" || r.status === "writing" || r.status === "published")
+            .filter((r) => {
+              if (!(r.status === "approved" || r.status === "writing" || r.status === "published")) return false;
+              // step3View "new": uniquement les approbations de la session;
+              // "all": tous les approuvés (entrée via Previous articles).
+              return step3View === "all" || sessionApprovedIds.has(r.id);
+            })
             .map((rec) => {
               const draft = generatedDrafts.get(rec.id);
               const isGenerating = generatingIds.has(rec.id);
@@ -856,13 +888,14 @@ ${draft.content[lang]}
 }
 
 function StepNav({
-  step, setStep, approvedCount, showBack = true, compact = false,
+  step, setStep, approvedCount, showBack = true, compact = false, onNextWrite,
 }: {
   step: 1 | 2 | 3;
   setStep: (s: 1 | 2 | 3) => void;
   approvedCount: number;
   showBack?: boolean;
   compact?: boolean;
+  onNextWrite?: () => void;
 }) {
   const size = compact ? { btn: "text-xs font-medium rounded-lg px-3 py-1.5", next: "text-xs font-medium rounded-lg px-4 py-1.5" } : { btn: "text-sm font-medium rounded-lg px-4 py-2", next: "text-sm font-medium rounded-lg px-5 py-2" };
   return (
@@ -888,7 +921,7 @@ function StepNav({
       )}
       {step === 2 && (
         <button
-          onClick={() => setStep(3)}
+          onClick={onNextWrite ?? (() => setStep(3))}
           disabled={approvedCount === 0}
           className={`${size.next} transition-opacity`}
           style={{
