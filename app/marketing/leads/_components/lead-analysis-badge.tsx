@@ -1,11 +1,12 @@
 "use client";
 
-import { AlertTriangle, ExternalLink, Loader2, Trophy, XCircle } from "lucide-react";
+import { AlertTriangle, ExternalLink, Loader2, Trophy, User, XCircle } from "lucide-react";
 import type { LeadAnalysis } from "@/lib/marketing-types";
 
 const GREEN = "#10b981";
 const BLUE = "#3b82f6";
 const ORANGE = "#f59e0b";
+const AMBER = "#d97706";
 const RED = "#ef4444";
 const GREY = "#9ca3af";
 
@@ -14,6 +15,11 @@ const HUBSPOT_PORTAL_ID = process.env.NEXT_PUBLIC_HUBSPOT_PORTAL_ID;
 function dealUrl(dealId: string): string | null {
   if (!HUBSPOT_PORTAL_ID) return null;
   return `https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/deal/${dealId}`;
+}
+
+function contactUrl(contactId: string): string | null {
+  if (!HUBSPOT_PORTAL_ID) return null;
+  return `https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/contact/${contactId}`;
 }
 
 function formatAmount(amount: number | null): string {
@@ -62,10 +68,40 @@ export default function LeadAnalysisBadge({
     );
   }
 
-  if (analysis?.status === "no_match" || (!analysis?.hubspot_deal_id && analysis)) {
+  if (analysis && !analysis.hubspot_deal_id) {
+    const strategy = analysis.match_strategy;
+
+    if (analysis.hubspot_contact_id && (strategy === "email" || strategy === "person")) {
+      const label = strategy === "email" ? "Contact HubSpot (email) · pas de deal" : "Contact HubSpot · pas de deal";
+      const url = contactUrl(analysis.hubspot_contact_id);
+      const content = (
+        <>
+          <User size={12} />
+          {label}
+          {url && <ExternalLink size={11} />}
+        </>
+      );
+      if (url) {
+        return (
+          <a href={url} target="_blank" rel="noreferrer" style={{ ...pillStyle(AMBER), textDecoration: "none" }}>
+            {content}
+          </a>
+        );
+      }
+      return <span style={pillStyle(AMBER)}>{content}</span>;
+    }
+
+    if (strategy === "company") {
+      return (
+        <span style={pillStyle(AMBER)}>
+          <AlertTriangle size={12} /> Société HubSpot · pas de deal
+        </span>
+      );
+    }
+
     return (
       <span style={pillStyle(ORANGE)}>
-        <AlertTriangle size={12} /> Aucun deal HubSpot trouvé
+        <AlertTriangle size={12} /> Aucun match HubSpot
       </span>
     );
   }

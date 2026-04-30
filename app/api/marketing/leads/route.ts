@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { rematchHubspotForLead, runLeadAnalysis } from "@/lib/lead-analysis";
+import { resolveMentionsInText, type SlackUser } from "@/lib/slack-leads";
 import type {
   LeadAnalysisStatus,
   LeadDealScoreSummary,
   LeadValidationStatus,
 } from "@/lib/marketing-types";
 import type { DealScore } from "@/lib/deal-scoring";
+
+// Module-level cache for Slack user lookups: avoids re-fetching the same user
+// on every leads request. Cleared on cold start — names rarely change and the
+// worst case is one extra users.info call.
+const SLACK_USER_CACHE = new Map<string, SlackUser | null>();
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -49,6 +55,18 @@ interface LeadWithAnalysisRow {
     hubspot_deal_id: string | null;
     [k: string]: unknown;
   } | null;
+}
+
+async function hydrateLeadMentions<T>(rows: T[]): Promise<T[]> {
+  if (!process.env.SLACK_BOT_TOKEN) return rows;
+  return Promise.all(
+    rows.map(async (r) => {
+      const text = (r as { text?: string | null }).text;
+      if (!text || !text.includes("<@")) return r;
+      const resolved = await resolveMentionsInText(text, SLACK_USER_CACHE);
+      return resolved === text ? r : { ...r, text: resolved };
+    }),
+  );
 }
 
 async function attachDealScores<T extends LeadWithAnalysisRow>(rows: T[]): Promise<T[]> {
@@ -186,8 +204,9 @@ export async function GET(req: NextRequest) {
       const enriched = await attachDealScores(
         refreshed.data as unknown as LeadWithAnalysisRow[],
       );
+      const hydrated = await hydrateLeadMentions(enriched);
       return NextResponse.json({
-        leads: enriched,
+        leads: hydrated,
         counts: {
           pending: pendingRes.count ?? 0,
           validated: validatedRes.count ?? 0,
@@ -202,8 +221,9 @@ export async function GET(req: NextRequest) {
   const enriched = await attachDealScores(
     (listRes.data ?? []) as unknown as LeadWithAnalysisRow[],
   );
+  const hydrated = await hydrateLeadMentions(enriched);
   return NextResponse.json({
-    leads: enriched,
+    leads: hydrated,
     counts: {
       pending: pendingRes.count ?? 0,
       validated: validatedRes.count ?? 0,
