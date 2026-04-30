@@ -31,7 +31,7 @@ const nav: NavEntry[] = [
   { href: "/", label: "CoachelloGPT", icon: Sparkles },
   { href: "/briefing", label: "Briefing", icon: CalendarDays },
   { href: "/deals", label: "Deals", icon: Briefcase },
-  { href: "/sales-coach", label: "Sales Coach", icon: GraduationCap },
+  { href: "/sales-coach", label: "Sales Coach (beta)", icon: GraduationCap },
   { href: "/prospecting", label: "Prospection", icon: Crosshair },
   { href: "/mass-prospection", label: "Mass Prospection", icon: Target },
   //{ href: "/signals", label: "Market Intel (coming)", icon: Radar },

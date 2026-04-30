@@ -81,6 +81,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Internal meetings are dropped entirely — no row created, no UI noise.
+    if (meetingType === "internal") {
+      return NextResponse.json({ ok: true, ignored: "meeting_type_internal" });
+    }
+
     // Only skip when truly unanalysable. A missing deal is OK — analysis still
     // produces value via the 6 coaching axes + MEDDIC, and the deal can be
     // attached later from the UI.

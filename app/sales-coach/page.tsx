@@ -70,7 +70,7 @@ function SalesCoachInner() {
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <h1 style={{ fontSize: 16, fontWeight: 700, color: COLORS.ink0, margin: 0, letterSpacing: "-0.01em" }}>
-              Sales Coach
+              Sales Coach <span style={{ fontSize: 11, fontWeight: 500, color: COLORS.ink3 }}>(beta)</span>
             </h1>
             <button
               onClick={() => reload()}
@@ -130,7 +130,7 @@ function SalesCoachInner() {
             <button
               onClick={recoverStuck}
               disabled={recovering}
-              title="Relance les analyses bloquées en pending (>10 min) ou analyzing (>15 min)"
+              title="Relance les analyses bloquées en pending ou analyzing (>5 min)"
               style={{
                 marginTop: 6,
                 width: "100%",
