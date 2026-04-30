@@ -33,7 +33,7 @@ interface SlackChannel {
   is_archived?: boolean;
 }
 
-interface SlackUser {
+export interface SlackUser {
   id: string;
   name?: string;
   real_name?: string;
@@ -225,6 +225,28 @@ async function fetchUserInfoCached(
   }
 }
 
+const MENTION_REGEX = /<@([UW][A-Z0-9]+)>/g;
+
+/**
+ * Replace Slack user mentions `<@Uxxxx>` in a message body with `@DisplayName`.
+ * Falls back to the raw `<@Uxxxx>` token when the user can't be resolved.
+ */
+export async function resolveMentionsInText(
+  text: string,
+  cache: Map<string, SlackUser | null>,
+): Promise<string> {
+  if (!text || !text.includes("<@")) return text;
+  const ids = Array.from(new Set(Array.from(text.matchAll(MENTION_REGEX), (m) => m[1])));
+  if (ids.length === 0) return text;
+
+  await Promise.all(ids.map((id) => fetchUserInfoCached(id, cache)));
+
+  return text.replace(MENTION_REGEX, (raw, id: string) => {
+    const name = extractAuthorName(cache.get(id) ?? null);
+    return name ? `@${name}` : raw;
+  });
+}
+
 async function fetchPermalink(channelId: string, ts: string): Promise<string | null> {
   try {
     const data = await slackGet<{ permalink?: string }>("/chat.getPermalink", {
@@ -283,9 +305,11 @@ export async function fetchLeadMessagesPage(
   // Hydrate permalink + user info in parallel across the whole page.
   const enriched = await Promise.all(
     rawMessages.map(async (msg) => {
-      const [permalink, user] = await Promise.all([
+      const rawText = msg.text ?? "";
+      const [permalink, user, text] = await Promise.all([
         fetchPermalink(channelId, msg.ts),
         msg.user ? fetchUserInfoCached(msg.user, userCache) : Promise.resolve(null),
+        resolveMentionsInText(rawText, userCache),
       ]);
 
       const files = (msg.files ?? [])
@@ -304,7 +328,7 @@ export async function fetchLeadMessagesPage(
         slack_permalink: permalink,
         author_id: msg.user ?? null,
         author_name: extractAuthorName(user),
-        text: msg.text ?? "",
+        text,
         files,
         posted_at: new Date(parseFloat(msg.ts) * 1000).toISOString(),
       } satisfies SlackLeadMessage;

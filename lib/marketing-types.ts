@@ -153,6 +153,11 @@ export interface ContentAnalysis {
   };
 }
 
+export interface ArticleAuthor {
+  name: string | null;
+  email: string;
+}
+
 export interface ArticleRecommendation {
   id: string;
   topic: string;
@@ -165,6 +170,8 @@ export interface ArticleRecommendation {
   relevanceScore?: number;
   relevanceReason?: string;
   relevanceCategory?: "relevant" | "partial" | "irrelevant";
+  createdAt?: string;
+  author?: ArticleAuthor | null;
 }
 
 export interface KeywordRelevance {
@@ -189,6 +196,7 @@ export interface ArticleDraft {
   };
   styleMatchScore: number;
   internalLinks: { fr: InternalLink[]; en: InternalLink[] };
+  author?: ArticleAuthor | null;
 }
 
 // Recommendations

@@ -51,6 +51,11 @@ interface Analysis {
   };
 }
 
+interface ArticleAuthor {
+  name: string | null;
+  email: string;
+}
+
 interface Recommendation {
   id: string;
   topic: string;
@@ -63,6 +68,8 @@ interface Recommendation {
   relevanceScore?: number;
   relevanceReason?: string;
   relevanceCategory?: "relevant" | "partial" | "irrelevant";
+  createdAt?: string;
+  author?: ArticleAuthor | null;
 }
 
 interface InternalLink {
@@ -80,6 +87,7 @@ interface Draft {
   };
   styleMatchScore: number;
   internalLinks: { fr: InternalLink[]; en: InternalLink[] };
+  author?: ArticleAuthor | null;
 }
 
 // ─── Supabase helpers ────────────────────────────────────────────────────────
@@ -101,6 +109,7 @@ async function saveAnalysis(userId: string, analysis: Analysis): Promise<void> {
 
 interface DbRec {
   id: string;
+  user_id: string;
   topic: string;
   target_keyword: string;
   justification: string | null;
@@ -110,10 +119,22 @@ interface DbRec {
   status: string;
   relevance_score: number | null;
   relevance_reason: string | null;
+  created_at: string;
 }
 
 const REC_SELECT =
-  "id, topic, target_keyword, justification, estimated_traffic, difficulty, priority, status, relevance_score, relevance_reason";
+  "id, user_id, topic, target_keyword, justification, estimated_traffic, difficulty, priority, status, relevance_score, relevance_reason, created_at";
+
+async function fetchAuthors(userIds: string[]): Promise<Map<string, ArticleAuthor>> {
+  const unique = Array.from(new Set(userIds.filter(Boolean)));
+  if (unique.length === 0) return new Map();
+  const { data } = await db.from("users").select("id, name, email").in("id", unique);
+  const m = new Map<string, ArticleAuthor>();
+  for (const u of (data ?? []) as { id: string; name: string | null; email: string }[]) {
+    m.set(u.id, { name: u.name, email: u.email });
+  }
+  return m;
+}
 
 function mapDbRec(r: DbRec): Recommendation {
   return {
@@ -127,17 +148,24 @@ function mapDbRec(r: DbRec): Recommendation {
     status: (r.status as Recommendation["status"]) ?? "recommended",
     relevanceScore: r.relevance_score ?? undefined,
     relevanceReason: r.relevance_reason ?? undefined,
+    createdAt: r.created_at,
   };
 }
 
-async function loadRecommendations(userId: string): Promise<Recommendation[]> {
+async function loadRecommendations(): Promise<Recommendation[]> {
+  // Global read: all users see all recommendations across the team.
   const { data } = await db
     .from("marketing_content_recommendations")
     .select(REC_SELECT)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false });
 
-  return ((data as DbRec[] | null) ?? []).map(mapDbRec);
+  const rows = (data as DbRec[] | null) ?? [];
+  const authors = await fetchAuthors(rows.map((r) => r.user_id));
+  return rows.map((r) => ({
+    ...mapDbRec(r),
+    createdAt: r.created_at,
+    author: authors.get(r.user_id) ?? null,
+  }));
 }
 
 async function saveRecommendations(userId: string, recs: Recommendation[]): Promise<Recommendation[]> {
@@ -171,42 +199,40 @@ async function saveRecommendations(userId: string, recs: Recommendation[]): Prom
   return ((data as DbRec[] | null) ?? []).map(mapDbRec);
 }
 
-async function updateRecStatus(userId: string, recId: string, status: Recommendation["status"]): Promise<void> {
+async function updateRecStatus(recId: string, status: Recommendation["status"]): Promise<void> {
+  // Writes are global (team-wide): any authenticated user can transition status.
   await db
     .from("marketing_content_recommendations")
     .update({ status, updated_at: new Date().toISOString() })
-    .eq("id", recId)
-    .eq("user_id", userId);
+    .eq("id", recId);
 }
 
-async function deleteRec(userId: string, recId: string): Promise<void> {
+async function deleteRec(recId: string): Promise<void> {
   await db
     .from("marketing_content_recommendations")
     .delete()
-    .eq("id", recId)
-    .eq("user_id", userId);
+    .eq("id", recId);
 }
 
-async function deleteDraftsForRec(userId: string, recId: string): Promise<void> {
+async function deleteDraftsForRec(recId: string): Promise<void> {
   await db
     .from("marketing_content_drafts")
     .delete()
-    .eq("user_id", userId)
     .eq("recommendation_id", recId);
 }
 
-async function getRec(userId: string, recId: string): Promise<Recommendation | null> {
+async function getRec(recId: string): Promise<Recommendation | null> {
   const { data } = await db
     .from("marketing_content_recommendations")
     .select(REC_SELECT)
     .eq("id", recId)
-    .eq("user_id", userId)
     .maybeSingle();
   if (!data) return null;
   return mapDbRec(data as DbRec);
 }
 
 interface DbDraft {
+  user_id: string;
   recommendation_id: string | null;
   content: Draft["content"];
   wordpress_format: Draft["wordpressFormat"];
@@ -214,19 +240,22 @@ interface DbDraft {
   style_match_score: number | null;
 }
 
-async function loadDrafts(userId: string): Promise<Draft[]> {
+async function loadDrafts(): Promise<Draft[]> {
+  // Global read: drafts from all users.
   const { data } = await db
     .from("marketing_content_drafts")
-    .select("recommendation_id, content, wordpress_format, internal_links, style_match_score")
-    .eq("user_id", userId)
+    .select("user_id, recommendation_id, content, wordpress_format, internal_links, style_match_score")
     .order("created_at", { ascending: false });
 
-  return ((data as DbDraft[] | null) ?? []).map((d) => ({
+  const rows = (data as DbDraft[] | null) ?? [];
+  const authors = await fetchAuthors(rows.map((d) => d.user_id));
+  return rows.map((d) => ({
     recommendationId: d.recommendation_id ?? "",
     content: d.content,
     wordpressFormat: d.wordpress_format,
     internalLinks: d.internal_links ?? { fr: [], en: [] },
     styleMatchScore: d.style_match_score ?? 0,
+    author: authors.get(d.user_id) ?? null,
   }));
 }
 
@@ -252,8 +281,8 @@ export async function GET() {
 
   const [analysis, recommendations, drafts] = await Promise.all([
     loadAnalysis(user.id),
-    loadRecommendations(user.id),
-    loadDrafts(user.id),
+    loadRecommendations(),
+    loadDrafts(),
   ]);
 
   return NextResponse.json({ analysis, recommendations, drafts });
@@ -267,6 +296,13 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const { action, recommendationId } = body;
+
+  if ((action === "analyze" || action === "suggest_theme" || action === "generate") && !process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json(
+      { error: "Anthropic API key not configured. Set ANTHROPIC_API_KEY in your environment to use the Content Factory." },
+      { status: 503 },
+    );
+  }
 
   if (action === "analyze") {
     try {
@@ -287,23 +323,35 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "approve" && recommendationId) {
-    await updateRecStatus(user.id, recommendationId, "approved");
-    const recs = await loadRecommendations(user.id);
+    await updateRecStatus(recommendationId, "approved");
+    const recs = await loadRecommendations();
     return NextResponse.json({ success: true, recommendations: recs });
   }
 
   if (action === "reject" && recommendationId) {
-    await deleteRec(user.id, recommendationId);
-    const recs = await loadRecommendations(user.id);
+    await deleteRec(recommendationId);
+    const recs = await loadRecommendations();
     return NextResponse.json({ success: true, recommendations: recs });
   }
 
   if (action === "delete" && recommendationId) {
-    await deleteDraftsForRec(user.id, recommendationId);
-    await deleteRec(user.id, recommendationId);
+    await deleteDraftsForRec(recommendationId);
+    await deleteRec(recommendationId);
     const [recs, drafts] = await Promise.all([
-      loadRecommendations(user.id),
-      loadDrafts(user.id),
+      loadRecommendations(),
+      loadDrafts(),
+    ]);
+    return NextResponse.json({ success: true, recommendations: recs, drafts });
+  }
+
+  // Drop the generated draft and put the recommendation back to "approved" so
+  // the user can rewrite without losing the recommendation itself.
+  if (action === "delete_draft" && recommendationId) {
+    await deleteDraftsForRec(recommendationId);
+    await updateRecStatus(recommendationId, "approved");
+    const [recs, drafts] = await Promise.all([
+      loadRecommendations(),
+      loadDrafts(),
     ]);
     return NextResponse.json({ success: true, recommendations: recs, drafts });
   }
@@ -317,8 +365,8 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "publish" && recommendationId) {
-    await updateRecStatus(user.id, recommendationId, "published");
-    const recs = await loadRecommendations(user.id);
+    await updateRecStatus(recommendationId, "published");
+    const recs = await loadRecommendations();
     return NextResponse.json({ success: true, recommendations: recs });
   }
 
@@ -553,9 +601,10 @@ Call \`propose_content_gaps\`.`;
     };
   });
 
-  const savedRecs = await saveRecommendations(userId, newRecs);
+  await saveRecommendations(userId, newRecs);
+  const allRecs = await loadRecommendations();
 
-  return NextResponse.json({ analysis, recommendations: savedRecs });
+  return NextResponse.json({ analysis, recommendations: allRecs });
 }
 
 // ─── Theme-based suggestion ──────────────────────────────────────────────────
@@ -704,12 +753,13 @@ Call the \`suggest_articles_on_theme\` tool with your output.`;
   });
 
   // Insert new recs (keep existing approved/writing/published, replace only recommended)
-  const savedRecs = await saveRecommendations(userId, newRecs);
+  await saveRecommendations(userId, newRecs);
+  const allRecs = await loadRecommendations();
 
   return NextResponse.json({
     success: true,
     summary: parsed.summary,
-    recommendations: savedRecs,
+    recommendations: allRecs,
   });
 }
 
@@ -767,10 +817,10 @@ function analyzeStructure(html: string): {
 }
 
 async function runGeneration(userId: string, recommendationId: string) {
-  const rec = await getRec(userId, recommendationId);
+  const rec = await getRec(recommendationId);
   if (!rec) return NextResponse.json({ error: "Recommendation not found" }, { status: 404 });
 
-  await updateRecStatus(userId, rec.id, "writing");
+  await updateRecStatus(rec.id, "writing");
 
   // ── Fetch all articles (we'll pick the top performers) ─────────────────────
   const allArticles = await fetchAllArticles(5000);
@@ -1027,10 +1077,10 @@ Call the \`write_article_language\` tool with your complete output.`;
   };
 
   // Wipe any previous drafts for this rec so regenerations don't pile up in DB
-  await deleteDraftsForRec(userId, rec.id);
+  await deleteDraftsForRec(rec.id);
   await saveDraft(userId, rec, draft);
 
-  const recs = await loadRecommendations(userId);
+  const recs = await loadRecommendations();
 
   return NextResponse.json({
     success: true,

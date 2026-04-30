@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, Component, type ReactNode } from "react";
+import { useState, useCallback, useEffect, Component, type ReactNode } from "react";
 import { Sparkles, TrendingUp, AlertCircle, Search, Check, Download, Link2, Loader2, Trash2, RefreshCw, FileText, ChevronRight } from "lucide-react";
 import { useMarketingContent } from "@/lib/hooks/use-marketing";
 import type { ArticleRecommendation, ArticleDraft, ContentAnalysis } from "@/lib/marketing-types";
@@ -58,14 +58,8 @@ function ContentTab() {
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [generateErrors, setGenerateErrors] = useState<Map<string, string>>(new Map());
   const [previewLang, setPreviewLang] = useState<"fr" | "en">("fr");
-  const [focusedRecId, setFocusedRecId] = useState<string | null>(null);
-  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  // Articles approuvés DANS CETTE SESSION (via clic sur "Approve"). Sépare les
-  // nouveaux choix du compteur "Next: Write" et de l'éditeur des anciens articles.
-  const [sessionApprovedIds, setSessionApprovedIds] = useState<Set<string>>(new Set());
-  // Mode d'affichage de l'éditeur (step 3): "new" = approbations de la session,
-  // "all" = tous (pour ouvrir un ancien article depuis Previous Articles).
-  const [step3View, setStep3View] = useState<"new" | "all">("new");
+  // Article actuellement ouvert en détail au step 3. null = vue liste.
+  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
 
   // Load persisted analysis/recommendations on mount
   useEffect(() => {
@@ -138,20 +132,6 @@ function ContentTab() {
     }
   }, [themeInput]);
 
-  const handleApprove = useCallback((id: string) => {
-    setLocalRecs((prev) => prev.map((r) => r.id === id ? { ...r, status: "approved" as const } : r));
-    setSessionApprovedIds((prev) => {
-      const s = new Set(prev);
-      s.add(id);
-      return s;
-    });
-    fetch("/api/marketing/content", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "approve", recommendationId: id }),
-    });
-  }, []);
-
   const handleReject = useCallback((id: string) => {
     setLocalRecs((prev) => prev.filter((r) => r.id !== id));
     fetch("/api/marketing/content", {
@@ -192,32 +172,18 @@ function ContentTab() {
   }, [handleGenerate]);
 
   const handleOpenPrevious = useCallback((id: string) => {
-    setStep3View("all");
-    setFocusedRecId(id);
+    setSelectedArticleId(id);
     setStep(3);
   }, []);
 
-  const goToWriteNew = useCallback(() => {
-    setStep3View("new");
-    setStep(3);
-  }, []);
-
-  // When step 3 mounts (or focusedRecId changes), scroll the focused card into view.
-  useEffect(() => {
-    if (step !== 3 || !focusedRecId) return;
-    const el = cardRefs.current.get(focusedRecId);
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-    const t = setTimeout(() => setFocusedRecId(null), 1500);
-    return () => clearTimeout(t);
-  }, [step, focusedRecId]);
-
+  // Permanent removal: drops the recommendation AND its drafts. Used from the
+  // list view only (not from the article detail).
   const handleDelete = useCallback(async (id: string) => {
-    if (!confirm("Supprimer cet article ? Cela efface la recommandation et le draft générés.")) return;
+    if (!confirm("Remove this article from the library? This cannot be undone.")) return;
     setLocalRecs((prev) => prev.filter((r) => r.id !== id));
     setGeneratedDrafts((prev) => { const m = new Map(prev); m.delete(id); return m; });
     setGenerateErrors((prev) => { const m = new Map(prev); m.delete(id); return m; });
-    setSessionApprovedIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    setSelectedArticleId((cur) => (cur === id ? null : cur));
     try {
       await fetch("/api/marketing/content", {
         method: "POST",
@@ -226,6 +192,23 @@ function ContentTab() {
       });
     } catch {
       // Optimistic UI already updated; on next mount the GET will reconcile.
+    }
+  }, []);
+
+  // Drops only the generated draft and reverts status to "approved" so the
+  // recommendation stays available for a rewrite.
+  const handleDeleteDraft = useCallback(async (id: string) => {
+    setGeneratedDrafts((prev) => { const m = new Map(prev); m.delete(id); return m; });
+    setGenerateErrors((prev) => { const m = new Map(prev); m.delete(id); return m; });
+    setLocalRecs((prev) => prev.map((r) => (r.id === id ? { ...r, status: "approved" as const } : r)));
+    try {
+      await fetch("/api/marketing/content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete_draft", recommendationId: id }),
+      });
+    } catch {
+      // Optimistic UI; reconciled on next mount.
     }
   }, []);
 
@@ -254,14 +237,6 @@ ${draft.content[lang]}
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, []);
-
-  // Compte uniquement les articles approuvés DANS CETTE SESSION (le bouton
-  // "Next: Write" est réservé aux nouveaux choix; les anciens vivent dans
-  // "Previous articles").
-  const approvedCount = localRecs.filter((r) =>
-    sessionApprovedIds.has(r.id) &&
-    (r.status === "approved" || r.status === "writing" || r.status === "published")
-  ).length;
 
   if (isLoading) return <div className="text-sm" style={{ color: "#888" }}>Loading...</div>;
 
@@ -482,31 +457,37 @@ ${draft.content[lang]}
 
       {/* Step 2 — Recommendations */}
       {step === 2 && (() => {
+        // To-write: every recommendation that hasn't yet produced a draft.
+        // We keep it simple — only "recommended" lives here. "Write" navigates
+        // to Step 3 detail without flipping the status, so coming back to
+        // Step 2 (without confirming the write) leaves the card in place.
         const pendingRecs = localRecs.filter((r) => r.status === "recommended");
+        // "Articles already written" library: anything with actual content.
         const previousRecs = localRecs.filter((r) =>
-          !sessionApprovedIds.has(r.id) &&
-          (r.status === "approved" || r.status === "writing" || r.status === "published")
+          r.status === "writing" ||
+          r.status === "published" ||
+          (r.status === "approved" && generatedDrafts.has(r.id))
         );
         return (
         <div className="space-y-4">
           {/* Top nav — mirror of the bottom nav for quick access. */}
-          <StepNav step={2} setStep={setStep} approvedCount={approvedCount} compact onNextWrite={goToWriteNew} />
-          {/* Previous articles — quick access to already-approved articles in step 3 */}
+          <StepNav step={2} setStep={setStep} compact />
+          {/* Articles already written — shared library across the team */}
           {previousRecs.length > 0 && (
             <div className="rounded-xl" style={{ background: "#fff", border: "1px solid #eeeeee", padding: "14px 18px" }}>
               <div className="flex items-center justify-between gap-3 mb-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <FileText size={14} style={{ color: "#16a34a" }} />
                   <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#888" }}>
-                    Previous articles ({previousRecs.length})
+                    Articles already written ({previousRecs.length})
                   </p>
                 </div>
                 <button
-                  onClick={() => { setStep3View("all"); setStep(3); }}
+                  onClick={() => { setSelectedArticleId(null); setStep(3); }}
                   className="flex items-center gap-1 text-xs font-medium rounded-lg px-3 py-1.5"
                   style={{ background: "#fff", color: "#16a34a", border: "1px solid #bbf7d0" }}
                 >
-                  Open Write & Publish
+                  View articles already written
                   <ChevronRight size={12} />
                 </button>
               </div>
@@ -580,14 +561,13 @@ ${draft.content[lang]}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {pendingRecs.map((rec) => {
               const pStyle = PRIORITY_STYLES[rec.priority];
-              const isApproved = rec.status === "approved" || rec.status === "writing" || rec.status === "published";
               return (
                 <div
                   key={rec.id}
                   className="rounded-xl relative"
                   style={{
                     background: "#fff",
-                    border: isApproved ? "1.5px solid #16a34a" : "1px solid #eeeeee",
+                    border: "1px solid #eeeeee",
                     padding: "20px",
                   }}
                 >
@@ -597,11 +577,6 @@ ${draft.content[lang]}
                   >
                     {rec.priority === "high" ? "High" : rec.priority === "medium" ? "Medium" : "Low"}
                   </span>
-                  {isApproved && (
-                    <span className="absolute top-4 left-4 text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: "#f0fdf4", color: "#16a34a" }}>
-                      Approved
-                    </span>
-                  )}
                   <h4 className="font-semibold text-sm mt-6 mb-2" style={{ color: "#111" }}>{rec.topic}</h4>
                   <div className="flex items-center gap-1 mb-2 flex-wrap">
                     <Search size={12} style={{ color: "#888" }} />
@@ -634,48 +609,31 @@ ${draft.content[lang]}
                   <p className="text-xs mb-4" style={{ color: "#888" }}>
                     ~{rec.estimatedTraffic} sessions/mois · Difficulté: {DIFFICULTY_LABELS[rec.difficulty]}
                   </p>
-                  {!isApproved ? (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleApprove(rec.id)}
-                        className="flex-1 text-xs font-medium py-2 rounded-lg"
-                        style={{ background: "#16a34a", color: "#fff" }}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => handleReject(rec.id)}
-                        className="flex-1 text-xs font-medium py-2 rounded-lg"
-                        style={{ background: "#fff", color: "#888", border: "1px solid #ddd" }}
-                      >
-                        Skip
-                      </button>
-                    </div>
-                  ) : (
-                    <button disabled className="w-full text-xs font-medium py-2 rounded-lg opacity-50" style={{ background: "#f0fdf4", color: "#16a34a" }}>
-                      Approved
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setSelectedArticleId(rec.id); setStep(3); }}
+                      className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-lg"
+                      style={{ background: "#f01563", color: "#fff" }}
+                    >
+                      <Sparkles size={12} />
+                      Write
                     </button>
-                  )}
+                    <button
+                      onClick={() => handleReject(rec.id)}
+                      className="flex-1 text-xs font-medium py-2 rounded-lg"
+                      style={{ background: "#fff", color: "#888", border: "1px solid #ddd" }}
+                    >
+                      Skip
+                    </button>
+                  </div>
                 </div>
               );
             })}
           </div>
           )}
-          <div className="flex justify-between">
+          <div className="flex justify-start">
             <button onClick={() => setStep(1)} className="text-sm font-medium rounded-lg px-4 py-2" style={{ color: "#888", border: "1px solid #ddd" }}>
               Back
-            </button>
-            <button
-              onClick={goToWriteNew}
-              disabled={approvedCount === 0}
-              className="text-sm font-medium rounded-lg px-5 py-2 transition-opacity"
-              style={{
-                background: approvedCount > 0 ? "#f01563" : "#e5e5e5",
-                color: approvedCount > 0 ? "#fff" : "#aaa",
-                cursor: approvedCount > 0 ? "pointer" : "not-allowed",
-              }}
-            >
-              Next: Write ({approvedCount} topic{approvedCount > 1 ? "s" : ""})
             </button>
           </div>
         </div>
@@ -683,219 +641,79 @@ ${draft.content[lang]}
       })()}
 
       {/* Step 3 — Write & Publish */}
-      {step === 3 && (
-        <div className="space-y-6">
-          {/* Top nav — mirror of the bottom "Back" for quick access. */}
-          <StepNav step={3} setStep={setStep} approvedCount={approvedCount} compact />
-          {localRecs
-            .filter((r) => {
-              if (!(r.status === "approved" || r.status === "writing" || r.status === "published")) return false;
-              // step3View "new": uniquement les approbations de la session;
-              // "all": tous les approuvés (entrée via Previous articles).
-              return step3View === "all" || sessionApprovedIds.has(r.id);
-            })
-            .map((rec) => {
-              const draft = generatedDrafts.get(rec.id);
-              const isGenerating = generatingIds.has(rec.id);
-              const generateError = generateErrors.get(rec.id);
-              const hasDraft = !!draft;
-
-              const isFocused = focusedRecId === rec.id;
-              return (
-                <div
-                  key={rec.id}
-                  ref={(el) => {
-                    if (el) cardRefs.current.set(rec.id, el);
-                    else cardRefs.current.delete(rec.id);
+      {step === 3 && (() => {
+        // The library list only shows articles with actual content. Bare
+        // recommendations live in Step 2.
+        const articles = localRecs.filter((r) =>
+          r.status === "writing" ||
+          r.status === "published" ||
+          (r.status === "approved" && generatedDrafts.has(r.id))
+        );
+        // The detail view, however, can target any recommendation — including
+        // a fresh "recommended" one navigated from Step 2's "Write" button —
+        // so the user can confirm the write here.
+        const selected = selectedArticleId
+          ? localRecs.find((r) => r.id === selectedArticleId) ?? null
+          : null;
+        // Coming from Step 2's Write button = the user wants to confirm; the
+        // "Back" target is Step 2 in that case so the recommendation card is
+        // still visible. From the library list, "Back to list" stays here.
+        const backToStep2 = !!selected && selected.status === "recommended";
+        return (
+          <div className="space-y-6">
+            <StepNav step={3} setStep={setStep} compact />
+            {selected ? (
+              <>
+                <button
+                  onClick={() => {
+                    setSelectedArticleId(null);
+                    if (backToStep2) setStep(2);
                   }}
-                  className="rounded-xl transition-shadow"
-                  style={{
-                    background: "#fff",
-                    border: isFocused ? "2px solid #f01563" : "1px solid #eeeeee",
-                    boxShadow: isFocused ? "0 0 0 4px rgba(240,21,99,0.12)" : undefined,
-                    padding: "24px",
-                  }}
+                  className="flex items-center gap-1 text-xs font-medium rounded-lg px-3 py-1.5"
+                  style={{ color: "#555", border: "1px solid #ddd", background: "#fff" }}
                 >
-                  <div className="flex items-center justify-between mb-4 gap-3">
-                    <h4 className="font-semibold flex-1 min-w-0" style={{ color: "#111" }}>{rec.topic}</h4>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {hasDraft && (
-                        <button
-                          onClick={() => handleRegenerate(rec.id)}
-                          disabled={isGenerating}
-                          className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5 disabled:opacity-70"
-                          style={{ background: "#fff", color: "#555", border: "1px solid #ddd", cursor: isGenerating ? "wait" : "pointer" }}
-                          title="Regenerate this article (replaces the current draft)"
-                        >
-                          {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                          {isGenerating ? "Regenerating..." : "Regenerate"}
-                        </button>
-                      )}
-                      {!hasDraft && (
-                        <button
-                          onClick={() => handleGenerate(rec.id)}
-                          disabled={isGenerating}
-                          className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 disabled:opacity-70"
-                          style={{ background: "#f01563", color: "#fff", cursor: isGenerating ? "wait" : "pointer" }}
-                        >
-                          {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                          {isGenerating ? "Writing... (60–90s)" : "Write Article"}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleDelete(rec.id)}
-                        disabled={isGenerating}
-                        className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5 disabled:opacity-50"
-                        style={{ background: "#fff", color: "#dc2626", border: "1px solid #fecaca", cursor: isGenerating ? "not-allowed" : "pointer" }}
-                        title="Delete this article and its draft"
-                      >
-                        <Trash2 size={12} />
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-
-                  {generateError && (
-                    <div className="rounded-lg mb-4" style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: "10px 14px" }}>
-                      <p className="text-xs font-medium" style={{ color: "#dc2626" }}>Generation failed</p>
-                      <p className="text-[10px] mt-0.5" style={{ color: "#888" }}>{generateError}</p>
-                    </div>
-                  )}
-
-                  {hasDraft && draft && draft.content && draft.wordpressFormat && (
-                    <div>
-                      {/* Language toggle */}
-                      <div className="flex items-center justify-end gap-1 mb-4">
-                        {(["fr", "en"] as const).map((lang) => (
-                          <button
-                            key={lang}
-                            onClick={() => setPreviewLang(lang)}
-                            className="text-xs font-medium rounded-full px-3 py-1"
-                            style={{
-                              background: previewLang === lang ? "#f01563" : "#f5f5f5",
-                              color: previewLang === lang ? "#fff" : "#888",
-                            }}
-                          >
-                            {lang === "fr" ? "French" : "English"}
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="flex gap-4">
-                        {/* Article preview */}
-                        <div className="flex-1 rounded-xl" style={{ background: "#fafafa", border: "1px solid #eeeeee", padding: "24px" }}>
-                          <div
-                            className="prose prose-sm max-w-none"
-                            style={{ color: "#333" }}
-                            dangerouslySetInnerHTML={{ __html: draft.content[previewLang] || "" }}
-                          />
-                        </div>
-
-                        {/* WordPress metadata sidebar */}
-                        <div className="w-60 shrink-0 space-y-4">
-                          <div className="rounded-lg" style={{ background: "#f9f9f9", border: "1px solid #eeeeee", padding: "16px" }}>
-                            <h5 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#888" }}>WordPress Metadata</h5>
-                            <div className="space-y-3 text-sm">
-                              <div>
-                                <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "#aaa" }}>Category</p>
-                                <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#f0f0f0", color: "#555" }}>
-                                  {draft.wordpressFormat?.[previewLang]?.category || "—"}
-                                </span>
-                              </div>
-                              <div>
-                                <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "#aaa" }}>Tags</p>
-                                <div className="flex flex-wrap gap-1">
-                                  {(draft.wordpressFormat?.[previewLang]?.tags || []).map((t) => (
-                                    <span key={t} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#f0f0f0", color: "#666" }}>{t}</span>
-                                  ))}
-                                </div>
-                              </div>
-                              <div>
-                                <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "#aaa" }}>Excerpt</p>
-                                <p className="text-xs" style={{ color: "#555" }}>{draft.wordpressFormat?.[previewLang]?.excerpt || ""}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "#aaa" }}>Slug</p>
-                                <code className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#f0f0f0", color: "#555" }}>
-                                  /{draft.wordpressFormat?.[previewLang]?.slug || ""}
-                                </code>
-                              </div>
-                              <div>
-                                <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "#aaa" }}>Style Match</p>
-                                <div className="flex items-center gap-2">
-                                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold" style={{ border: `3px solid ${draft.styleMatchScore >= 80 ? "#16a34a" : "#d97706"}`, color: draft.styleMatchScore >= 80 ? "#16a34a" : "#d97706" }}>
-                                    {draft.styleMatchScore}%
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Internal Links */}
-                          {draft.internalLinks && draft.internalLinks[previewLang]?.length > 0 && (
-                            <div className="rounded-lg mt-4" style={{ background: "#f9f9f9", border: "1px solid #eeeeee", padding: "16px" }}>
-                              <div className="flex items-center gap-1.5 mb-3">
-                                <Link2 size={14} style={{ color: "#f01563" }} />
-                                <h5 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#888" }}>Internal Links ({draft.internalLinks[previewLang].length})</h5>
-                              </div>
-                              <div className="space-y-2.5">
-                                {draft.internalLinks[previewLang].map((link, li) => (
-                                  <div key={li} className="text-xs">
-                                    <p className="font-medium" style={{ color: "#111" }}>{link.targetArticleTitle}</p>
-                                    <p className="mt-0.5" style={{ color: "#888" }}>Anchor: <span className="italic" style={{ color: "#555" }}>"{link.anchorText}"</span></p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Download buttons */}
-                      <div className="flex items-center gap-3 mt-4">
-                        <button
-                          onClick={() => handleDownload(draft, "fr")}
-                          className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2"
-                          style={{ background: "#f01563", color: "#fff" }}
-                        >
-                          <Download size={14} />
-                          Download FR (.html)
-                        </button>
-                        <button
-                          onClick={() => handleDownload(draft, "en")}
-                          className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2"
-                          style={{ background: "#3b82f6", color: "#fff" }}
-                        >
-                          <Download size={14} />
-                          Download EN (.html)
-                        </button>
-                      </div>
-                      <p className="text-xs mt-2" style={{ color: "#888" }}>HTML file ready to paste into WordPress or any CMS.</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          <div className="flex justify-start">
-            <button onClick={() => setStep(2)} className="text-sm font-medium rounded-lg px-4 py-2" style={{ color: "#888", border: "1px solid #ddd" }}>
-              Back to recommendations
-            </button>
+                  {backToStep2 ? "← Back to recommendations" : "← Back to list"}
+                </button>
+                <ArticleDetail
+                  rec={selected}
+                  draft={generatedDrafts.get(selected.id)}
+                  isGenerating={generatingIds.has(selected.id)}
+                  generateError={generateErrors.get(selected.id)}
+                  previewLang={previewLang}
+                  setPreviewLang={setPreviewLang}
+                  onGenerate={() => handleGenerate(selected.id)}
+                  onRegenerate={() => handleRegenerate(selected.id)}
+                  onDeleteDraft={() => handleDeleteDraft(selected.id)}
+                  onDownload={handleDownload}
+                />
+              </>
+            ) : (
+              <ArticleList
+                articles={articles}
+                drafts={generatedDrafts}
+                onSelect={setSelectedArticleId}
+                onRemove={handleDelete}
+              />
+            )}
+            <div className="flex justify-start">
+              <button onClick={() => setStep(2)} className="text-sm font-medium rounded-lg px-4 py-2" style={{ color: "#888", border: "1px solid #ddd" }}>
+                Back to recommendations
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
 
 function StepNav({
-  step, setStep, approvedCount, showBack = true, compact = false, onNextWrite,
+  step, setStep, showBack = true, compact = false,
 }: {
   step: 1 | 2 | 3;
   setStep: (s: 1 | 2 | 3) => void;
-  approvedCount: number;
   showBack?: boolean;
   compact?: boolean;
-  onNextWrite?: () => void;
 }) {
   const size = compact ? { btn: "text-xs font-medium rounded-lg px-3 py-1.5", next: "text-xs font-medium rounded-lg px-4 py-1.5" } : { btn: "text-sm font-medium rounded-lg px-4 py-2", next: "text-sm font-medium rounded-lg px-5 py-2" };
   return (
@@ -919,21 +737,300 @@ function StepNav({
           Next: Recommendations →
         </button>
       )}
-      {step === 2 && (
-        <button
-          onClick={onNextWrite ?? (() => setStep(3))}
-          disabled={approvedCount === 0}
-          className={`${size.next} transition-opacity`}
-          style={{
-            background: approvedCount > 0 ? "#f01563" : "#e5e5e5",
-            color: approvedCount > 0 ? "#fff" : "#aaa",
-            cursor: approvedCount > 0 ? "pointer" : "not-allowed",
-          }}
-        >
-          Next: Write ({approvedCount} topic{approvedCount > 1 ? "s" : ""}) →
-        </button>
+      {/* Steps 2 & 3 don't surface a global "Next" — actions live on the cards. */}
+    </div>
+  );
+}
+
+function StatusBadge({ status, hasDraft }: { status: ArticleRecommendation["status"]; hasDraft: boolean }) {
+  const cfg = status === "published"
+    ? { bg: "#f0fdf4", color: "#16a34a", label: "Published" }
+    : hasDraft
+      ? { bg: "#eff6ff", color: "#3b82f6", label: "Draft ready" }
+      : status === "writing"
+        ? { bg: "#fef9c3", color: "#ca8a04", label: "Writing..." }
+        : { bg: "#f5f5f5", color: "#888", label: "Approved" };
+  return (
+    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ background: cfg.bg, color: cfg.color }}>
+      {cfg.label}
+    </span>
+  );
+}
+
+function formatRelative(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(ms) || ms < 0) return "";
+  const days = Math.floor(ms / 86400000);
+  if (days < 1) return "today";
+  if (days < 2) return "yesterday";
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function authorInitials(author?: { name: string | null; email: string } | null): string {
+  if (!author) return "?";
+  const src = author.name ?? author.email;
+  const parts = src.split(/[\s@.]/).filter(Boolean).slice(0, 2);
+  const letters = parts.map((p) => p[0]?.toUpperCase() ?? "").join("");
+  return letters || "?";
+}
+
+function ArticleList({
+  articles, drafts, onSelect, onRemove,
+}: {
+  articles: ArticleRecommendation[];
+  drafts: Map<string, ArticleDraft>;
+  onSelect: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  if (articles.length === 0) {
+    return (
+      <div className="rounded-xl text-center" style={{ background: "#fafafa", border: "1px dashed #e5e5e5", padding: "32px 20px" }}>
+        <p className="text-sm" style={{ color: "#888" }}>No articles yet.</p>
+        <p className="text-xs mt-1" style={{ color: "#aaa" }}>Approve a recommendation in Step 2 to get started.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl" style={{ background: "#fff", border: "1px solid #eeeeee", overflow: "hidden" }}>
+      <div className="px-5 py-3" style={{ borderBottom: "1px solid #eeeeee" }}>
+        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#888" }}>
+          All articles ({articles.length})
+        </p>
+      </div>
+      <ul>
+        {articles.map((r, i) => {
+          const hasDraft = drafts.has(r.id);
+          const initials = authorInitials(r.author);
+          const dateStr = r.createdAt ? formatRelative(r.createdAt) : "";
+          return (
+            <li
+              key={r.id}
+              className="group flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-gray-50"
+              style={{ borderBottom: i < articles.length - 1 ? "1px solid #f0f0f0" : undefined }}
+              onClick={() => onSelect(r.id)}
+            >
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                style={{ background: "#f5f5f5", color: "#555" }}
+                title={r.author?.email ?? ""}
+              >
+                {initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate" style={{ color: "#111" }}>{r.topic}</p>
+                <div className="flex items-center gap-2 mt-0.5 text-[11px] flex-wrap" style={{ color: "#888" }}>
+                  <span className="inline-flex items-center gap-1"><Search size={10} />{r.targetKeyword}</span>
+                  {r.author?.name && <span>· by {r.author.name}</span>}
+                  {dateStr && <span>· {dateStr}</span>}
+                  <StatusBadge status={r.status} hasDraft={hasDraft} />
+                </div>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); onRemove(r.id); }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded"
+                style={{ color: "#dc2626" }}
+                title="Remove from library (permanent)"
+              >
+                <Trash2 size={14} />
+              </button>
+              <ChevronRight size={14} style={{ color: "#aaa" }} />
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function ArticleDetail({
+  rec, draft, isGenerating, generateError, previewLang, setPreviewLang,
+  onGenerate, onRegenerate, onDeleteDraft, onDownload,
+}: {
+  rec: ArticleRecommendation;
+  draft: ArticleDraft | undefined;
+  isGenerating: boolean;
+  generateError: string | undefined;
+  previewLang: "fr" | "en";
+  setPreviewLang: (l: "fr" | "en") => void;
+  onGenerate: () => void;
+  onRegenerate: () => void;
+  onDeleteDraft: () => void;
+  onDownload: (draft: ArticleDraft, lang: "fr" | "en") => void;
+}) {
+  const hasDraft = !!draft;
+  const dateStr = rec.createdAt ? formatRelative(rec.createdAt) : "";
+  return (
+    <div
+      className="rounded-xl"
+      style={{ background: "#fff", border: "1px solid #eeeeee", padding: "24px" }}
+    >
+      <div className="flex items-start justify-between mb-2 gap-3">
+        <div className="flex-1 min-w-0">
+          <h4 className="font-semibold" style={{ color: "#111" }}>{rec.topic}</h4>
+          {(rec.author || dateStr) && (
+            <p className="text-xs mt-1" style={{ color: "#888" }}>
+              {rec.author && <>by {rec.author.name ?? rec.author.email}</>}
+              {rec.author && dateStr && " · "}
+              {dateStr}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {hasDraft && (
+            <button
+              onClick={onRegenerate}
+              disabled={isGenerating}
+              className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5 disabled:opacity-70"
+              style={{ background: "#fff", color: "#555", border: "1px solid #ddd", cursor: isGenerating ? "wait" : "pointer" }}
+              title="Regenerate this article (replaces the current draft)"
+            >
+              {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+              {isGenerating ? "Regenerating..." : "Regenerate"}
+            </button>
+          )}
+          {!hasDraft && (
+            <button
+              onClick={onGenerate}
+              disabled={isGenerating}
+              className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2 disabled:opacity-70"
+              style={{ background: "#f01563", color: "#fff", cursor: isGenerating ? "wait" : "pointer" }}
+            >
+              {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              {isGenerating ? "Writing... (60–90s)" : "Write Article"}
+            </button>
+          )}
+          {hasDraft && (
+            <button
+              onClick={onDeleteDraft}
+              disabled={isGenerating}
+              className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-1.5 disabled:opacity-50"
+              style={{ background: "#fff", color: "#888", border: "1px solid #ddd", cursor: isGenerating ? "not-allowed" : "pointer" }}
+              title="Delete the generated draft (recommendation stays — you can rewrite)"
+            >
+              <Trash2 size={12} />
+              Delete draft
+            </button>
+          )}
+        </div>
+      </div>
+
+      {generateError && (
+        <div className="rounded-lg mb-4 mt-2" style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: "10px 14px" }}>
+          <p className="text-xs font-medium" style={{ color: "#dc2626" }}>Generation failed</p>
+          <p className="text-[10px] mt-0.5" style={{ color: "#888" }}>{generateError}</p>
+        </div>
       )}
-      {/* Step 3: no "Next" — end of flow */}
+
+      {hasDraft && draft && draft.content && draft.wordpressFormat && (
+        <div className="mt-4">
+          <div className="flex items-center justify-end gap-1 mb-4">
+            {(["fr", "en"] as const).map((lang) => (
+              <button
+                key={lang}
+                onClick={() => setPreviewLang(lang)}
+                className="text-xs font-medium rounded-full px-3 py-1"
+                style={{
+                  background: previewLang === lang ? "#f01563" : "#f5f5f5",
+                  color: previewLang === lang ? "#fff" : "#888",
+                }}
+              >
+                {lang === "fr" ? "French" : "English"}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-4">
+            <div className="flex-1 rounded-xl" style={{ background: "#fafafa", border: "1px solid #eeeeee", padding: "24px" }}>
+              <div
+                className="prose prose-sm max-w-none"
+                style={{ color: "#333" }}
+                dangerouslySetInnerHTML={{ __html: draft.content[previewLang] || "" }}
+              />
+            </div>
+
+            <div className="w-60 shrink-0 space-y-4">
+              <div className="rounded-lg" style={{ background: "#f9f9f9", border: "1px solid #eeeeee", padding: "16px" }}>
+                <h5 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#888" }}>WordPress Metadata</h5>
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "#aaa" }}>Category</p>
+                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#f0f0f0", color: "#555" }}>
+                      {draft.wordpressFormat?.[previewLang]?.category || "—"}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "#aaa" }}>Tags</p>
+                    <div className="flex flex-wrap gap-1">
+                      {(draft.wordpressFormat?.[previewLang]?.tags || []).map((t) => (
+                        <span key={t} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#f0f0f0", color: "#666" }}>{t}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "#aaa" }}>Excerpt</p>
+                    <p className="text-xs" style={{ color: "#555" }}>{draft.wordpressFormat?.[previewLang]?.excerpt || ""}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "#aaa" }}>Slug</p>
+                    <code className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#f0f0f0", color: "#555" }}>
+                      /{draft.wordpressFormat?.[previewLang]?.slug || ""}
+                    </code>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "#aaa" }}>Style Match</p>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold"
+                        style={{ border: `3px solid ${draft.styleMatchScore >= 80 ? "#16a34a" : "#d97706"}`, color: draft.styleMatchScore >= 80 ? "#16a34a" : "#d97706" }}
+                      >
+                        {draft.styleMatchScore}%
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {draft.internalLinks && draft.internalLinks[previewLang]?.length > 0 && (
+                <div className="rounded-lg" style={{ background: "#f9f9f9", border: "1px solid #eeeeee", padding: "16px" }}>
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <Link2 size={14} style={{ color: "#f01563" }} />
+                    <h5 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#888" }}>Internal Links ({draft.internalLinks[previewLang].length})</h5>
+                  </div>
+                  <div className="space-y-2.5">
+                    {draft.internalLinks[previewLang].map((link, li) => (
+                      <div key={li} className="text-xs">
+                        <p className="font-medium" style={{ color: "#111" }}>{link.targetArticleTitle}</p>
+                        <p className="mt-0.5" style={{ color: "#888" }}>Anchor: <span className="italic" style={{ color: "#555" }}>&quot;{link.anchorText}&quot;</span></p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 mt-4">
+            <button
+              onClick={() => onDownload(draft, "fr")}
+              className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2"
+              style={{ background: "#f01563", color: "#fff" }}
+            >
+              <Download size={14} />
+              Download FR (.html)
+            </button>
+            <button
+              onClick={() => onDownload(draft, "en")}
+              className="flex items-center gap-1.5 text-sm font-medium rounded-lg px-4 py-2"
+              style={{ background: "#3b82f6", color: "#fff" }}
+            >
+              <Download size={14} />
+              Download EN (.html)
+            </button>
+          </div>
+          <p className="text-xs mt-2" style={{ color: "#888" }}>HTML file ready to paste into WordPress or any CMS.</p>
+        </div>
+      )}
     </div>
   );
 }

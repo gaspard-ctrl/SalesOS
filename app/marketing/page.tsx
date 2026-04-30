@@ -66,9 +66,6 @@ export default function MarketingPage() {
         <h1 style={{ fontSize: 18, fontWeight: 700, color: COLORS.ink0, margin: 0, letterSpacing: "-0.01em" }}>
           Marketing
         </h1>
-        <p style={{ fontSize: 12, color: COLORS.ink3, margin: 0, marginTop: 2 }}>
-          Blog Coachello — Performance &amp; Content
-        </p>
       </div>
 
       {/* Tabs */}
