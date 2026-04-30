@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
     .select(
       "id, claap_recording_id, user_id, recorder_email, hubspot_deal_id, meeting_title, meeting_started_at, meeting_type, meeting_kind, status, score_global, slack_sent_at, created_at, error_message, participants, deal_snapshot",
     )
+    .neq("meeting_type", "internal")
     .order("meeting_started_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(200);

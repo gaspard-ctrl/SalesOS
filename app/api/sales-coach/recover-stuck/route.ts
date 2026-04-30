@@ -6,8 +6,8 @@ import { getClaapRecording, pickTranscriptUrl } from "@/lib/claap";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const PENDING_THRESHOLD_MIN = 10;
-const ANALYZING_THRESHOLD_MIN = 15;
+const PENDING_THRESHOLD_MIN = 5;
+const ANALYZING_THRESHOLD_MIN = 5;
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
