@@ -177,8 +177,15 @@ export async function runSalesCoachAnalysis(id: string, transcriptUrl: string): 
       transcriptForClaude,
     ].filter(Boolean).join("\n");
 
-    const client = new Anthropic({ timeout: 180_000 });
-    const message = await client.messages.create({
+    // Use streaming to keep the TCP connection active during generation. Without
+    // streaming, the socket sits idle for the full duration of the response
+    // (~56s for ~5K output tokens on Haiku 4.5) and intermediate proxies (NAT,
+    // Netlify egress) close it as idle, which Anthropic then logs as
+    // 499/Client disconnected. Streaming sends SSE events as tokens are
+    // produced, keeping the connection healthy. finalMessage() returns the
+    // same shape as a non-streamed messages.create response.
+    const client = new Anthropic({ timeout: 600_000 });
+    const stream = client.messages.stream({
       model: analyzeModel,
       max_tokens: 8000,
       system: SALES_COACH_SYSTEM_PROMPT,
@@ -186,6 +193,7 @@ export async function runSalesCoachAnalysis(id: string, transcriptUrl: string): 
       tools: [salesCoachTool],
       tool_choice: { type: "tool" as const, name: "sales_coach_analysis" },
     });
+    const message = await stream.finalMessage();
 
     logUsage(row.user_id, analyzeModel, message.usage.input_tokens, message.usage.output_tokens, "sales_coach_analyze");
 
