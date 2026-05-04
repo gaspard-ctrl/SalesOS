@@ -151,16 +151,43 @@ function getFirstAssociationId(
   return r.toObjectId ? String(r.toObjectId) : r.id ? String(r.id) : null;
 }
 
-async function fetchCompanyName(companyId: string): Promise<string | null> {
+async function fetchCompanyContext(
+  companyId: string,
+): Promise<{ name: string | null; lifecyclestage: string | null }> {
   try {
-    const res = await hubspotFetch<{ properties?: { name?: string } }>(
-      `/crm/v3/objects/companies/${companyId}?properties=name`,
+    const res = await hubspotFetch<{ properties?: { name?: string; lifecyclestage?: string } }>(
+      `/crm/v3/objects/companies/${companyId}?properties=name,lifecyclestage`,
     );
-    return res.properties?.name ?? null;
+    return {
+      name: res.properties?.name ?? null,
+      lifecyclestage: res.properties?.lifecyclestage ?? null,
+    };
   } catch (e) {
-    console.warn("[hubspot-claap-note] fetchCompanyName failed:", e);
-    return null;
+    console.warn("[hubspot-claap-note] fetchCompanyContext failed:", e);
+    return { name: null, lifecyclestage: null };
   }
+}
+
+/**
+ * Decide if the meeting belongs to a client or a prospect.
+ *
+ * Priority:
+ *   1. Closed deal: closed_won → client, closed_lost → prospect.
+ *   2. Otherwise (open deal or no deal): company lifecyclestage = "customer" → client,
+ *      anything else → prospect.
+ */
+function resolveAudience(args: {
+  dealSnap: DealSnapshot | null;
+  companyLifecycleStage: string | null;
+}): "client" | "prospect" {
+  const { dealSnap, companyLifecycleStage } = args;
+
+  if (dealSnap?.is_closed === true) {
+    return dealSnap.is_closed_won === true ? "client" : "prospect";
+  }
+
+  if ((companyLifecycleStage ?? "").toLowerCase() === "customer") return "client";
+  return "prospect";
 }
 
 function truncate(s: string, max: number): string {
@@ -245,6 +272,18 @@ async function processNote(noteId: string): Promise<ProcessResult> {
     console.warn(`[hubspot-claap-note] section missing: actionItems (noteId=${noteId})`);
   }
 
+  if (!parsed.keyTakeaways && !parsed.actionItems) {
+    console.log(`[hubspot-claap-note] ignored: empty_message (noteId=${noteId})`);
+    return {
+      ok: true,
+      status: "ignored",
+      reason: "empty_message",
+      dealId: null,
+      mode: "n/a",
+      destination: null,
+    };
+  }
+
   const dealId = getFirstAssociationId(note.associations?.deals?.results);
   let dealSnap: DealSnapshot | null = null;
   if (dealId) {
@@ -257,12 +296,14 @@ async function processNote(noteId: string): Promise<ProcessResult> {
 
   const dealName = dealSnap?.name?.trim() || parsed.title || "Meeting Claap";
   const ownerName = dealSnap?.owner_name ?? null;
-  const isClosedWon = dealSnap?.is_closed_won === true;
 
   let companyName: string | null = null;
+  let companyLifecycleStage: string | null = null;
   const companyId = getFirstAssociationId(note.associations?.companies?.results);
   if (companyId) {
-    companyName = await fetchCompanyName(companyId);
+    const ctx = await fetchCompanyContext(companyId);
+    companyName = ctx.name;
+    companyLifecycleStage = ctx.lifecyclestage;
   }
   if (!companyName) {
     const externalContact = (dealSnap?.contacts ?? []).find((c) => {
@@ -272,12 +313,14 @@ async function processNote(noteId: string): Promise<ProcessResult> {
     if (externalContact?.email) companyName = companyFromEmail(externalContact.email);
   }
 
+  const audience = resolveAudience({ dealSnap, companyLifecycleStage });
+
   const mode = process.env.CLAAP_NOTE_SLACK_MODE === "channels" ? "channels" : "dm";
   let channelId: string;
   let destination: string;
 
   if (mode === "channels") {
-    const channelName = isClosedWon ? "12-everything-clients" : "11-everything-prospects";
+    const channelName = audience === "client" ? "12-everything-clients" : "11-everything-prospects";
     const id = await findChannelId(channelName);
     if (!id) {
       console.error(`[hubspot-claap-note] channel not found: ${channelName}`);
@@ -317,6 +360,10 @@ async function processNote(noteId: string): Promise<ProcessResult> {
     dealId,
     mode,
     destination,
+    audience,
+    dealClosed: dealSnap?.is_closed ?? null,
+    dealClosedWon: dealSnap?.is_closed_won ?? null,
+    companyLifecycleStage,
     takeawaysLen: parsed.keyTakeaways.length,
     actionsLen: parsed.actionItems.length,
   });
