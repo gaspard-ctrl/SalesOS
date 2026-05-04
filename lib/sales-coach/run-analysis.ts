@@ -157,6 +157,23 @@ export async function runSalesCoachAnalysis(id: string, transcriptUrl: string): 
       ? (dealScoreRes.value as { data: { score: unknown; reasoning?: string; next_action?: string } | null }).data
       : null;
 
+    // Reattribute the row to the deal owner (= actual sales rep) instead of the
+    // Claap recorder. The webhook initially sets user_id from recorder_email,
+    // which can be a shared bot account or whoever scheduled the call. The
+    // deal owner on HubSpot is the source of truth for "whose meeting is this"
+    // — used by the "Mes meetings" filter on /sales-coach.
+    if (snapshot?.owner_id) {
+      const { data: ownerUser } = await db
+        .from("users")
+        .select("id")
+        .eq("hubspot_owner_id", snapshot.owner_id)
+        .maybeSingle();
+      if (ownerUser?.id && ownerUser.id !== row.user_id) {
+        await db.from("sales_coach_analyses").update({ user_id: ownerUser.id }).eq("id", id);
+        console.log(`[sales-coach/analyze/${id}] reassigned user_id ${row.user_id ?? "null"} → ${ownerUser.id} (deal owner)`);
+      }
+    }
+
     let scoreBlock = "";
     if (dealScore?.score) {
       const s = dealScore.score as { total?: number };

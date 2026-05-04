@@ -701,12 +701,18 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
               }}
             >
               <span>{meetingDate}</span>
-              {detail.recorder_email && (
-                <>
-                  <span>·</span>
-                  <span>{detail.recorder_email}</span>
-                </>
-              )}
+              {(() => {
+                // Prefer the deal owner (actual sales rep on HubSpot) over the
+                // Claap recorder (= whoever started the bot, often a shared
+                // account or the person who scheduled the call).
+                const sellerLabel = detail.deal_snapshot?.owner_name || detail.recorder_email;
+                return sellerLabel ? (
+                  <>
+                    <span>·</span>
+                    <span>{sellerLabel}</span>
+                  </>
+                ) : null;
+              })()}
               {names.length > 0 && (
                 <>
                   <span>·</span>
