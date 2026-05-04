@@ -8,7 +8,6 @@ import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/guides/prospection";
 import { DEFAULT_BRIEFING_GUIDE } from "@/lib/guides/briefing";
 import { GuideEditor } from "../settings/_components/guide-editor";
 import { ModelPreferencesAdmin } from "./_components/model-preferences-admin";
-import { AlertConfigAdmin } from "./_components/alert-config-admin";
 import { ResetGuidesButton } from "./_components/reset-guides-button";
 import { Suspense } from "react";
 
@@ -108,7 +107,7 @@ export default async function AdminPage() {
         <div>
           <h1 className="text-xl font-semibold" style={{ color: "#111" }}>Admin</h1>
           <p className="text-xs mt-1" style={{ color: "#888" }}>
-            Console d&apos;administration : utilisateurs, modèles, guides, alertes.
+            Console d&apos;administration : utilisateurs, modèles, guides.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -155,24 +154,6 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      {/* Alertes Market Intel */}
-      <div>
-        <div className="mb-4">
-          <h2 className="text-base font-semibold" style={{ color: "#111" }}>Alertes Market Intel</h2>
-          <p className="text-xs mt-1" style={{ color: "#888" }}>
-            Configuration des alertes Slack pour les signaux prioritaires.
-          </p>
-        </div>
-        <div className="rounded-xl border p-5" style={{ borderColor: "#eeeeee", background: "#fff" }}>
-          <AlertConfigAdmin initialConfig={(() => {
-            try {
-              const raw = globalMap.alert_config;
-              return raw ? JSON.parse(raw) : null;
-            } catch { return null; }
-          })()} />
-        </div>
-      </div>
-
       {/* Guides IA */}
       <div>
         <div className="mb-4">
@@ -198,7 +179,7 @@ export default async function AdminPage() {
               defaultGuide={DEFAULT_PROSPECTION_GUIDE}
               endpoint="/api/admin/guides?key=prospection"
               title="Guide de prospection"
-              description="Instructions pour générer les emails dans Prospection et Market Intel."
+              description="Instructions pour générer les emails dans Prospection."
             />
             <GuideEditor
               initialGuide={globalMap.briefing ?? null}

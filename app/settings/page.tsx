@@ -8,7 +8,6 @@ import { GuideEditor } from "./_components/guide-editor";
 import { LockedGuideEditor } from "./_components/locked-guide-editor";
 import { SlackNameInput } from "./_components/slack-name-input";
 import { HubspotOwnerInput } from "./_components/hubspot-owner-input";
-import { AlertSettings } from "./_components/alert-settings";
 import { DEFAULT_BOT_GUIDE } from "@/lib/guides/bot";
 import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/guides/prospection";
 import { DEFAULT_BRIEFING_GUIDE } from "@/lib/guides/briefing";
@@ -49,7 +48,7 @@ export default async function SettingsPage() {
   const { claudeActive, gmailConnected, slackDisplayName, hubspotOwnerId } = await getIntegrationStatus(user.id);
 
   const [{ data: guides }, { data: globalGuides }] = await Promise.all([
-    db.from("users").select("user_prompt, prospection_guide, briefing_guide, model_preferences, alert_config").eq("id", user.id).single(),
+    db.from("users").select("user_prompt, prospection_guide, briefing_guide, model_preferences").eq("id", user.id).single(),
     db.from("guide_defaults").select("key, content"),
   ]);
 
@@ -201,18 +200,6 @@ export default async function SettingsPage() {
         />
       </div>
 
-      {/* Alertes Market Intel */}
-      <div className="mt-8 space-y-3">
-        <div>
-          <h2 className="text-base font-semibold" style={{ color: "#111" }}>Alertes Market Intel</h2>
-          <p className="text-xs mt-1" style={{ color: "#888" }}>
-            Configure les alertes Slack pour les signaux d&apos;achat prioritaires.
-          </p>
-        </div>
-        <div className="rounded-xl border p-5" style={{ borderColor: "#eeeeee", background: "#fff" }}>
-          <AlertSettings initialDmEnabled={(guides?.alert_config as { dm_enabled?: boolean } | null)?.dm_enabled ?? false} />
-        </div>
-      </div>
     </div>
   );
 }

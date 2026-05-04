@@ -8,7 +8,7 @@ import useSWR from "swr";
  * instant data from cache instead of fetching again.
  */
 export function Prefetch() {
-  // User info (used by sidebar, briefing, signals, market-admin)
+  // User info (used by sidebar, briefing)
   useSWR("/api/user/me");
 
   // Calendar events (used by briefing)
@@ -19,9 +19,6 @@ export function Prefetch() {
 
   // Deals list - default view (used by deals page)
   useSWR("/api/deals/list?");
-
-  // Market signals (used by signals page)
-  useSWR("/api/market/signals?");
 
   return null;
 }
