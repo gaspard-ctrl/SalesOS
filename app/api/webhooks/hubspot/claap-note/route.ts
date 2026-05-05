@@ -385,13 +385,31 @@ async function processNote(noteId: string): Promise<ProcessResult> {
     }
   }
 
+  // Attribute Claude usage (rescoring + summary) to the deal owner so it
+  // shows up in /admin/logs. Pattern reused from sales-coach run-analysis.
+  // Falls back to null (untracked) if no internal user matches the HubSpot
+  // owner — same behavior as today.
+  let attributedUserId: string | null = null;
+  if (dealSnap?.owner_id) {
+    try {
+      const { data: ownerUser } = await db
+        .from("users")
+        .select("id")
+        .eq("hubspot_owner_id", dealSnap.owner_id)
+        .maybeSingle();
+      attributedUserId = ownerUser?.id ?? null;
+    } catch (e) {
+      console.warn("[hubspot-claap-note] owner lookup failed:", e);
+    }
+  }
+
   // Re-score the deal with this new meeting included. Best-effort: failure
   // just means we skip the BANT+ block.
   let score: ScoreSummary = null;
   let nextAction = "";
   if (dealId) {
     try {
-      const result = await scoreOneDeal(dealId, null);
+      const result = await scoreOneDeal(dealId, attributedUserId);
       score = { total: result.total, qualification: result.qualification };
       nextAction = result.next_action;
       try {
@@ -423,7 +441,7 @@ async function processNote(noteId: string): Promise<ProcessResult> {
       parsedTakeaways: parsed.keyTakeaways,
       parsedActionItems: parsed.actionItems,
       nextAction,
-      userId: null,
+      userId: attributedUserId,
     });
   } catch (e) {
     console.warn("[hubspot-claap-note] generateMeetingSummary failed:", e);
