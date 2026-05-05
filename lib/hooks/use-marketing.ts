@@ -18,10 +18,8 @@ import type {
   ArticleTimelinePoint,
   MarketingEvent,
   MarketingEventType,
-  Lead,
   LeadsCounts,
   LeadValidationStatus,
-  LeadAnalysisStatus,
   LeadWithAnalysis,
   LeadsFunnel,
 } from "@/lib/marketing-types";
@@ -184,7 +182,13 @@ export function useMarketingContent() {
 // ─── Leads (admin) ───────────────────────────────────────────────────────────
 
 export type LeadsStatusFilter = LeadValidationStatus | "all";
-export type LeadsAnalysisFilter = LeadAnalysisStatus | "all";
+export type LeadsAnalysisFilter =
+  | "all"
+  | "with_deal"
+  | "without_deal"
+  | "with_lead"
+  | "without_lead"
+  | "with_contact";
 
 interface LeadsResponse {
   leads: LeadWithAnalysis[];
@@ -196,13 +200,16 @@ const EMPTY_COUNTS: LeadsCounts = {
   pending: 0,
   validated: 0,
   rejected: 0,
-  validatedNoDeal: 0,
   validatedWithDeal: 0,
+  validatedWithoutDeal: 0,
+  validatedWithLead: 0,
+  validatedWithoutLead: 0,
+  validatedWithContact: 0,
 };
 
 export function useLeads(status: LeadsStatusFilter, analysis: LeadsAnalysisFilter = "all") {
   const params = new URLSearchParams({ status });
-  if (analysis !== "all") params.set("analysis", analysis);
+  if (analysis !== "all") params.set("filter", analysis);
   const { data, error, isLoading, mutate } = useSWR<LeadsResponse>(
     `/api/marketing/leads?${params.toString()}`,
     { revalidateOnFocus: false, dedupingInterval: 10_000 },

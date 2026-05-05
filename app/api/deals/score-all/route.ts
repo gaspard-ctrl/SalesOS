@@ -7,6 +7,17 @@ export const dynamic = "force-dynamic";
 // Batch scoring can take a while — increase timeout to 5 minutes
 export const maxDuration = 300;
 
+const LAST_RUN_KEY = "deals_last_scoring_run";
+
+export async function GET() {
+  const { data } = await db
+    .from("guide_defaults")
+    .select("content")
+    .eq("key", LAST_RUN_KEY)
+    .maybeSingle();
+  return NextResponse.json({ lastRunAt: data?.content ?? null });
+}
+
 async function hubspot(path: string, method = "GET", body?: unknown) {
   const res = await fetch(`https://api.hubapi.com${path}`, {
     method,
@@ -92,11 +103,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const finishedAt = new Date().toISOString();
+    if (scored > 0) {
+      await db
+        .from("guide_defaults")
+        .upsert({ key: LAST_RUN_KEY, content: finishedAt }, { onConflict: "key" });
+    }
+
     return NextResponse.json({
       total: dealIds.length,
       skipped: dealIds.length - toScore.length,
       scored,
       errors,
+      lastRunAt: scored > 0 ? finishedAt : null,
     });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur" }, { status: 500 });

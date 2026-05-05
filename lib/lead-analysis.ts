@@ -4,6 +4,7 @@ import { logUsage } from "@/lib/log-usage";
 import {
   fetchDealContext,
   hubspotBatchAssociations,
+  hubspotFetch,
   hubspotSearchAll,
   type DealSnapshot,
 } from "@/lib/hubspot";
@@ -370,6 +371,231 @@ function computeTimings(
   return { time_to_deal_seconds: toDeal, time_to_close_seconds: toClose };
 }
 
+interface ContactSnapshot {
+  email: string | null;
+  name: string | null;
+  lifecyclestage: string | null;
+  hs_lead_status: string | null;
+  owner_id: string | null;
+  owner_name: string | null;
+}
+
+const EMPTY_CONTACT_SNAPSHOT: ContactSnapshot = {
+  email: null,
+  name: null,
+  lifecyclestage: null,
+  hs_lead_status: null,
+  owner_id: null,
+  owner_name: null,
+};
+
+type ContactGetResponse = { id?: string; properties?: Record<string, string> };
+type OwnersResponse = {
+  results?: { id: string; firstName?: string; lastName?: string; email?: string }[];
+};
+
+const CONTACT_PROPS = [
+  "firstname",
+  "lastname",
+  "email",
+  "lifecyclestage",
+  "hs_lead_status",
+  "hubspot_owner_id",
+];
+
+async function fetchContactSnapshot(contactId: string): Promise<ContactSnapshot> {
+  if (!process.env.HUBSPOT_ACCESS_TOKEN) return EMPTY_CONTACT_SNAPSHOT;
+  try {
+    const contact = await hubspotFetch<ContactGetResponse>(
+      `/crm/v3/objects/contacts/${contactId}?properties=${CONTACT_PROPS.join(",")}`,
+    );
+    const p = contact.properties ?? {};
+    const ownerId = p.hubspot_owner_id || null;
+    let ownerName: string | null = null;
+    if (ownerId) {
+      try {
+        const owners = await hubspotFetch<OwnersResponse>("/crm/v3/owners?limit=200");
+        const owner = (owners.results ?? []).find((o) => o.id === ownerId);
+        if (owner) {
+          ownerName =
+            `${owner.firstName ?? ""} ${owner.lastName ?? ""}`.trim() || owner.email || null;
+        }
+      } catch {
+        // owner name resolution failure is non-fatal
+      }
+    }
+    const fullName = `${p.firstname ?? ""} ${p.lastname ?? ""}`.trim();
+    return {
+      email: p.email || null,
+      name: fullName || null,
+      lifecyclestage: p.lifecyclestage || null,
+      hs_lead_status: p.hs_lead_status || null,
+      owner_id: ownerId,
+      owner_name: ownerName,
+    };
+  } catch {
+    return EMPTY_CONTACT_SNAPSHOT;
+  }
+}
+
+function contactSnapshotPatch(snapshot: ContactSnapshot) {
+  return {
+    contact_email: snapshot.email,
+    contact_name: snapshot.name,
+    contact_lifecyclestage: snapshot.lifecyclestage,
+    contact_hs_lead_status: snapshot.hs_lead_status,
+    contact_owner_id: snapshot.owner_id,
+    contact_owner_name: snapshot.owner_name,
+  };
+}
+
+// ─── HubSpot Lead object (object type 0-136) ────────────────────────────────
+//
+// Distinct from a Contact: a Lead is a CRM record sitting between Contact and
+// Deal, with its own pipeline (e.g. "Lead pipeline") and stages (New →
+// Connected → Qualifying → ...). We look it up via Contact → Lead association.
+
+interface LeadObjectSnapshot {
+  id: string | null;
+  name: string | null;
+  pipeline_id: string | null;
+  stage_id: string | null;
+  stage_label: string | null;
+  owner_id: string | null;
+  owner_name: string | null;
+}
+
+const EMPTY_LEAD_OBJECT_SNAPSHOT: LeadObjectSnapshot = {
+  id: null,
+  name: null,
+  pipeline_id: null,
+  stage_id: null,
+  stage_label: null,
+  owner_id: null,
+  owner_name: null,
+};
+
+const LEAD_OBJECT_PROPS = [
+  "hs_lead_name",
+  "hs_pipeline",
+  "hs_pipeline_stage",
+  "hubspot_owner_id",
+  "hs_createdate",
+  "hs_lastmodifieddate",
+];
+
+type LeadObjectGetResponse = { id?: string; properties?: Record<string, string> };
+type LeadAssocResponse = {
+  results?: Array<{ toObjectId?: string; id?: string }>;
+};
+type PipelineStage = { id: string; label: string };
+type LeadPipelinesResponse = { results?: Array<{ id?: string; stages?: PipelineStage[] }> };
+
+let leadStageLabelCache: { ts: number; map: Map<string, string> } | null = null;
+const LEAD_STAGE_CACHE_TTL = 5 * 60 * 1000;
+
+async function getLeadStageLabelMap(): Promise<Map<string, string>> {
+  if (leadStageLabelCache && Date.now() - leadStageLabelCache.ts < LEAD_STAGE_CACHE_TTL) {
+    return leadStageLabelCache.map;
+  }
+  const map = new Map<string, string>();
+  // The Lead object in HubSpot has the type id "0-136". Its pipelines live
+  // under /crm/v3/pipelines/0-136.
+  try {
+    const res = await hubspotFetch<LeadPipelinesResponse>("/crm/v3/pipelines/0-136");
+    for (const pl of res.results ?? []) {
+      for (const st of pl.stages ?? []) {
+        if (st.id && st.label) map.set(st.id, st.label);
+      }
+    }
+  } catch {
+    // pipeline lookup failed — labels will fall back to stage_id strings
+  }
+  leadStageLabelCache = { ts: Date.now(), map };
+  return map;
+}
+
+async function fetchLeadObjectSnapshot(contactId: string): Promise<LeadObjectSnapshot> {
+  if (!process.env.HUBSPOT_ACCESS_TOKEN) return EMPTY_LEAD_OBJECT_SNAPSHOT;
+  try {
+    // 1) Get Lead-object ids associated to this contact.
+    const assoc = await hubspotFetch<LeadAssocResponse>(
+      `/crm/v4/objects/contacts/${contactId}/associations/leads`,
+    );
+    const leadIds = (assoc.results ?? [])
+      .map((r) => String(r.toObjectId ?? r.id ?? ""))
+      .filter((s) => s.length > 0);
+    if (leadIds.length === 0) return EMPTY_LEAD_OBJECT_SNAPSHOT;
+
+    // 2) Fetch each Lead's properties; pick the most recently modified.
+    const details = await Promise.allSettled(
+      leadIds.map((id) =>
+        hubspotFetch<LeadObjectGetResponse>(
+          `/crm/v3/objects/leads/${id}?properties=${LEAD_OBJECT_PROPS.join(",")}`,
+        ),
+      ),
+    );
+    const candidates = details
+      .filter((d): d is PromiseFulfilledResult<LeadObjectGetResponse> => d.status === "fulfilled")
+      .map((d) => d.value)
+      .filter((v) => !!v.id);
+    if (candidates.length === 0) return EMPTY_LEAD_OBJECT_SNAPSHOT;
+    candidates.sort((a, b) => {
+      const am = a.properties?.hs_lastmodifieddate ?? "";
+      const bm = b.properties?.hs_lastmodifieddate ?? "";
+      return bm.localeCompare(am);
+    });
+    const picked = candidates[0];
+    const p = picked.properties ?? {};
+    const stageId = p.hs_pipeline_stage || null;
+    const stageMap = stageId ? await getLeadStageLabelMap() : null;
+    const stageLabel = stageId
+      ? stageMap?.get(stageId) ?? stageId
+      : null;
+
+    let ownerName: string | null = null;
+    const ownerId = p.hubspot_owner_id || null;
+    if (ownerId) {
+      try {
+        const owners = await hubspotFetch<{
+          results?: Array<{ id: string; firstName?: string; lastName?: string; email?: string }>;
+        }>("/crm/v3/owners?limit=200");
+        const owner = (owners.results ?? []).find((o) => o.id === ownerId);
+        if (owner) {
+          ownerName =
+            `${owner.firstName ?? ""} ${owner.lastName ?? ""}`.trim() || owner.email || null;
+        }
+      } catch {
+        // non-fatal
+      }
+    }
+
+    return {
+      id: picked.id ?? null,
+      name: p.hs_lead_name || null,
+      pipeline_id: p.hs_pipeline || null,
+      stage_id: stageId,
+      stage_label: stageLabel,
+      owner_id: ownerId,
+      owner_name: ownerName,
+    };
+  } catch {
+    return EMPTY_LEAD_OBJECT_SNAPSHOT;
+  }
+}
+
+function leadObjectSnapshotPatch(snapshot: LeadObjectSnapshot) {
+  return {
+    hubspot_lead_id: snapshot.id,
+    hubspot_lead_name: snapshot.name,
+    hubspot_lead_pipeline_id: snapshot.pipeline_id,
+    hubspot_lead_stage_id: snapshot.stage_id,
+    hubspot_lead_stage_label: snapshot.stage_label,
+    hubspot_lead_owner_id: snapshot.owner_id,
+    hubspot_lead_owner_name: snapshot.owner_name,
+  };
+}
+
 function snapshotPatch(snapshot: DealSnapshot | null) {
   if (!snapshot) {
     return {
@@ -444,7 +670,11 @@ export async function runLeadAnalysis(
   try {
     const { extraction, usage, raw } = await extractLeadInfo(lead);
     const match = await matchHubspotForExtraction(extraction);
-    const snapshot = match.dealId ? await fetchDealContext(match.dealId) : null;
+    const [snapshot, contactSnapshot, leadObjectSnapshot] = await Promise.all([
+      match.dealId ? fetchDealContext(match.dealId) : Promise.resolve(null),
+      match.contactId ? fetchContactSnapshot(match.contactId) : Promise.resolve(EMPTY_CONTACT_SNAPSHOT),
+      match.contactId ? fetchLeadObjectSnapshot(match.contactId) : Promise.resolve(EMPTY_LEAD_OBJECT_SNAPSHOT),
+    ]);
     const timings = computeTimings(lead.validated_at, snapshot);
     const finalStatus: "done" | "no_match" = match.dealId ? "done" : "no_match";
 
@@ -462,6 +692,8 @@ export async function runLeadAnalysis(
         hubspot_deal_id: match.dealId,
         match_strategy: match.strategy,
         ...snapshotPatch(snapshot),
+        ...contactSnapshotPatch(contactSnapshot),
+        ...leadObjectSnapshotPatch(leadObjectSnapshot),
         ...timings,
         model: usage.model,
         input_tokens: usage.input,
@@ -531,7 +763,11 @@ export async function rematchHubspotForLead(leadId: string): Promise<LeadAnalysi
 
   try {
     const match = await matchHubspotForExtraction(extraction);
-    const snapshot = match.dealId ? await fetchDealContext(match.dealId) : null;
+    const [snapshot, contactSnapshot, leadObjectSnapshot] = await Promise.all([
+      match.dealId ? fetchDealContext(match.dealId) : Promise.resolve(null),
+      match.contactId ? fetchContactSnapshot(match.contactId) : Promise.resolve(EMPTY_CONTACT_SNAPSHOT),
+      match.contactId ? fetchLeadObjectSnapshot(match.contactId) : Promise.resolve(EMPTY_LEAD_OBJECT_SNAPSHOT),
+    ]);
     const timings = computeTimings(lead.validated_at, snapshot);
     const finalStatus: "done" | "no_match" = match.dealId ? "done" : "no_match";
 
@@ -544,6 +780,8 @@ export async function rematchHubspotForLead(leadId: string): Promise<LeadAnalysi
         hubspot_deal_id: match.dealId,
         match_strategy: match.strategy,
         ...snapshotPatch(snapshot),
+        ...contactSnapshotPatch(contactSnapshot),
+        ...leadObjectSnapshotPatch(leadObjectSnapshot),
         ...timings,
         error_message: null,
         updated_at: nowIso,

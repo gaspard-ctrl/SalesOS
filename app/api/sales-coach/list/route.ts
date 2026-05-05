@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: false })
     .limit(200);
 
-  if (!(ownerParam === "all" && isAdmin)) {
+  if (ownerParam !== "all") {
     query = query.eq("user_id", user.id);
   }
 

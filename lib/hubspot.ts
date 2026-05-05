@@ -1,4 +1,4 @@
-export type HubspotObjectType = "contacts" | "deals" | "companies";
+export type HubspotObjectType = "contacts" | "deals" | "companies" | "leads";
 
 export async function hubspotFetch<T = unknown>(path: string, method = "GET", body?: unknown): Promise<T> {
   const res = await fetch(`https://api.hubapi.com${path}`, {

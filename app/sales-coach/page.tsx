@@ -171,7 +171,6 @@ function SalesCoachInner() {
               onSelect={setSelectedId}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
-              isAdmin={isAdmin}
               ownerFilter={ownerFilter}
               onOwnerFilterChange={setOwnerFilter}
               dateFrom={dateFrom}

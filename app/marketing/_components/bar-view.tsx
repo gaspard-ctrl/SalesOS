@@ -21,7 +21,8 @@ interface MonthBucket {
   leads: number;
   articles: number;
   salons: number;
-  linkedinPosts: number;
+  linkedinPostsPro: number;
+  linkedinPostsPerso: number;
   nurturingCampaigns: number;
 }
 
@@ -54,7 +55,8 @@ function buildBuckets(): MonthBucket[] {
       leads: 0,
       articles: 0,
       salons: 0,
-      linkedinPosts: 0,
+      linkedinPostsPro: 0,
+      linkedinPostsPerso: 0,
       nurturingCampaigns: 0,
     });
   }
@@ -103,7 +105,8 @@ export function BarView({
       if (!b) continue;
       if (e.event_type === "salon") b.salons += 1;
       else if (e.event_type === "nurturing_campaign") b.nurturingCampaigns += 1;
-      else b.linkedinPosts += 1; // linkedin_pro + linkedin_perso grouped
+      else if (e.event_type === "linkedin_pro") b.linkedinPostsPro += 1;
+      else if (e.event_type === "linkedin_perso") b.linkedinPostsPerso += 1;
     }
 
     return buckets;
@@ -147,8 +150,11 @@ export function BarView({
         {filters.salon && (
           <Bar yAxisId="counts" dataKey="salons" name="Salons" fill="#16a34a" radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleBarClick} />
         )}
-        {(filters.linkedin_pro || filters.linkedin_perso) && (
-          <Bar yAxisId="counts" dataKey="linkedinPosts" name="LinkedIn posts" fill="#8b5cf6" radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleBarClick} />
+        {filters.linkedin_pro && (
+          <Bar yAxisId="counts" dataKey="linkedinPostsPro" name="LinkedIn Pro" fill="#3b82f6" radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleBarClick} />
+        )}
+        {filters.linkedin_perso && (
+          <Bar yAxisId="counts" dataKey="linkedinPostsPerso" name="LinkedIn Perso" fill="#8b5cf6" radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleBarClick} />
         )}
         {filters.nurturing_campaign && (
           <Bar yAxisId="counts" dataKey="nurturingCampaigns" name="Nurturing" fill="#14b8a6" radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleBarClick} />

@@ -16,17 +16,13 @@ const SidebarCtx = React.createContext<Ctx | null>(null);
 
 const KEY_PREF = "salesos.sidebar.collapsed";
 const KEY_OVERRIDE = "salesos.sidebar.userOverride";
-const WIDE_PAGES = [
-  "/deals",
-  "/sales-coach",
-  "/briefing",
-  "/prospecting",
-  "/mass-prospection",
-];
+// Pages where the sidebar stays expanded by default. Everywhere else, it
+// auto-collapses (CoachelloGPT homepage is the only "expand-by-default" page).
+const EXPANDED_PAGES = ["/"];
 
-function isWidePath(p: string | null): boolean {
+function isExpandedPath(p: string | null): boolean {
   if (!p) return false;
-  return WIDE_PAGES.some((w) => p === w || p.startsWith(w + "/"));
+  return EXPANDED_PAGES.includes(p);
 }
 
 type Override = { path: string; collapsed: boolean } | null;
@@ -47,16 +43,9 @@ function readOverride(): Override {
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  // Initial state: prefer global pref; fallback false (expanded).
-  const [collapsed, setCollapsedRaw] = React.useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      const v = window.localStorage.getItem(KEY_PREF);
-      if (v === "1") return true;
-      if (v === "0") return false;
-    } catch {}
-    return false;
-  });
+  // Always start expanded so SSR and client first render match.
+  // The effect below resolves the real value (override / EXPANDED_PAGES / pref) at mount.
+  const [collapsed, setCollapsedRaw] = React.useState<boolean>(false);
 
   const [autoCollapsed, setAutoCollapsed] = React.useState(false);
 
@@ -81,33 +70,27 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     [pathname]
   );
 
-  // Auto-collapse on wide pages, unless the user overrode this exact path.
+  // Default behavior: sidebar is collapsed everywhere except on EXPANDED_PAGES
+  // (CoachelloGPT homepage). User overrides via the toggle are remembered per path.
   React.useEffect(() => {
     if (typeof window === "undefined") return;
     const override = readOverride();
     const overrideMatchesPath =
       override && pathname && (override.path === pathname || pathname.startsWith(override.path + "/"));
 
-    if (isWidePath(pathname)) {
-      if (overrideMatchesPath) {
-        // Respect user choice for this path
-        setCollapsedRaw(override!.collapsed);
-        setAutoCollapsed(false);
-      } else {
-        setCollapsedRaw(true);
-        setAutoCollapsed(true);
-      }
-    } else {
-      // Outside wide pages: restore global pref
-      try {
-        const v = window.localStorage.getItem(KEY_PREF);
-        setCollapsedRaw(v === "1");
-      } catch {
-        setCollapsedRaw(false);
-      }
+    if (overrideMatchesPath) {
+      setCollapsedRaw(override!.collapsed);
       setAutoCollapsed(false);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    if (isExpandedPath(pathname)) {
+      setCollapsedRaw(false);
+      setAutoCollapsed(false);
+    } else {
+      setCollapsedRaw(true);
+      setAutoCollapsed(true);
+    }
   }, [pathname]);
 
   const toggle = React.useCallback(() => {

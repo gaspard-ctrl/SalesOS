@@ -6,7 +6,8 @@ import { Card } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/section-header";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { MarkdownBlock } from "./markdown";
-import type { BriefingResult, DealQualification } from "../_helpers";
+import type { BriefingResult, DealQualification, GatheredData } from "../_helpers";
+import { isExistingClient } from "../_helpers";
 
 const QUAL_FIELDS: { key: keyof DealQualification; label: string }[] = [
   { key: "budget", label: "Budget" },
@@ -19,7 +20,8 @@ const QUAL_FIELDS: { key: keyof DealQualification; label: string }[] = [
   { key: "strategicFit", label: "Fit stratégique" },
 ];
 
-export function BriefingContext({ briefing }: { briefing: BriefingResult }) {
+export function BriefingContext({ briefing, rawData }: { briefing: BriefingResult; rawData: GatheredData | null }) {
+  const isClient = isExistingClient(rawData);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {briefing.contextSummary && (
@@ -29,7 +31,7 @@ export function BriefingContext({ briefing }: { briefing: BriefingResult }) {
         </Card>
       )}
 
-      {briefing.isSalesMeeting !== false && briefing.dealQualification && (() => {
+      {briefing.isSalesMeeting !== false && briefing.dealQualification && !isClient && (() => {
         const known = QUAL_FIELDS.filter((f) => !!briefing.dealQualification![f.key]);
         const missing = QUAL_FIELDS.filter((f) => !briefing.dealQualification![f.key]);
         return (

@@ -159,11 +159,21 @@ export default function DealsPage() {
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [details, setDetails] = useState<DealDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [lastGlobalScoringAt, setLastGlobalScoringAt] = useState<string | null>(null);
 
   const { isAdmin, slackName } = useUserMe();
 
   useEffect(() => {
     fetch("/api/hubspot/auto-link-owner").catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/deals/score-all")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.lastRunAt) setLastGlobalScoringAt(data.lastRunAt);
+      })
+      .catch(() => {});
   }, []);
 
   const scoreAll = useCallback(async () => {
@@ -178,6 +188,7 @@ export default function DealsPage() {
       const data = await r.json();
       if (r.ok) {
         setScoreResult({ scored: data.scored, total: data.total });
+        if (data.lastRunAt) setLastGlobalScoringAt(data.lastRunAt);
         await reload();
       }
     } catch {
@@ -441,6 +452,14 @@ export default function DealsPage() {
         )}
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          {lastGlobalScoringAt && (
+            <span
+              title={new Date(lastGlobalScoringAt).toLocaleString("fr-FR")}
+              style={{ fontSize: 11, color: COLORS.ink3 }}
+            >
+              Dernier scoring : {timeAgo(lastGlobalScoringAt)}
+            </span>
+          )}
           <StatPill label="Pipeline" value={`${(pipelineTotal / 1000).toFixed(0)}k€`} />
           <StatPill label="Pondéré" value={`${(weightedTotal / 1000).toFixed(0)}k€`} />
           <StatPill label="Deals" value={metricsDeals.length} />
@@ -555,6 +574,7 @@ export default function DealsPage() {
             stageLabel={selectedStage?.label ?? ""}
             stageColor={stageColor(stageIdx)}
             slackName={slackName}
+            lastGlobalScoringAt={lastGlobalScoringAt}
           />
         )}
       </div>

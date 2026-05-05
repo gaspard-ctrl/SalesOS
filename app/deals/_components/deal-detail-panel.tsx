@@ -45,6 +45,7 @@ interface Props {
   stageLabel: string;
   stageColor: string;
   slackName: string | null;
+  lastGlobalScoringAt?: string | null;
 }
 
 const BANT_FIELDS: { key: string; label: string }[] = [
@@ -69,6 +70,7 @@ export function DealDetailPanel({
   stageLabel,
   stageColor: color,
   slackName,
+  lastGlobalScoringAt,
 }: Props) {
   const [analysis, setAnalysis] = React.useState<Analysis | null>(null);
   const [analyzing, setAnalyzing] = React.useState(false);
@@ -517,8 +519,19 @@ export function DealDetailPanel({
                       </div>
                     )}
                     {activeScoredAt && (
-                      <span style={{ fontSize: 10, color: COLORS.ink4 }}>
-                        Recalculé {timeAgo(activeScoredAt)}
+                      <span
+                        style={{ fontSize: 10, color: COLORS.ink4 }}
+                        title={new Date(activeScoredAt).toLocaleString("fr-FR")}
+                      >
+                        Ce deal : {timeAgo(activeScoredAt).toLowerCase()}
+                      </span>
+                    )}
+                    {lastGlobalScoringAt && (
+                      <span
+                        style={{ fontSize: 10, color: COLORS.ink4 }}
+                        title={new Date(lastGlobalScoringAt).toLocaleString("fr-FR")}
+                      >
+                        Scoring général : {timeAgo(lastGlobalScoringAt).toLowerCase()}
                       </span>
                     )}
                   </div>

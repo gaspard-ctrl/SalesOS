@@ -359,7 +359,7 @@ export default function BriefingPage() {
                   }}
                 >
                   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    <BriefingContext briefing={briefing!} />
+                    <BriefingContext briefing={briefing!} rawData={rawData} />
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                     {briefing!.meetingTakeaways && briefing!.meetingTakeaways.length > 0 && (
