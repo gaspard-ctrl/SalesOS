@@ -86,11 +86,9 @@ export async function generateMeetingSummary(args: {
 }
 
 /**
- * Format the qualification object returned by scoreOneDeal as a single-line
- * dense BANT+ paragraph, e.g.:
- *   "*Budget:* 50k€  ·  *Authority:* CEO + CFO  ·  *Need:* …"
- *
- * Only includes fields that are non-null/non-empty.
+ * Format the qualification object returned by scoreOneDeal as a multi-line
+ * BANT+ paragraph (one field per line). Fields that are null/empty render
+ * with a ⚠️ "Non renseigné" marker so missing data is visible at a glance.
  */
 export function formatBantParagraph(q: Record<string, string | null>): string {
   const order: Array<[string, string]> = [
@@ -101,12 +99,14 @@ export function formatBantParagraph(q: Record<string, string | null>): string {
     ["champion", "Champion"],
     ["strategicFit", "Fit"],
   ];
-  const parts: string[] = [];
+  const lines: string[] = [];
   for (const [key, label] of order) {
     const v = q[key];
     if (v && v !== "null" && v.trim().length > 0) {
-      parts.push(`*${label}:* ${v.trim()}`);
+      lines.push(`*${label}:* ${v.trim()}`);
+    } else {
+      lines.push(`*${label}:* ⚠️ _Non renseigné_`);
     }
   }
-  return parts.join("  ·  ");
+  return lines.join("\n");
 }
