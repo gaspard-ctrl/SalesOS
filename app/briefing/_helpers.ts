@@ -111,6 +111,19 @@ export function isToday(start: string): boolean {
   return new Date(start).toDateString() === new Date().toDateString();
 }
 
+export function isExistingClient(rawData: GatheredData | null): boolean {
+  if (!rawData) return false;
+  if (rawData.contacts.some((c) => (c.lifecyclestage ?? "").toLowerCase() === "customer")) {
+    return true;
+  }
+  const primaryDeal = rawData.deals[0];
+  if (primaryDeal) {
+    const s = primaryDeal.stage.toLowerCase();
+    if (/closed\s*won/.test(s) || s === "closedwon" || /gagn[ée]/.test(s)) return true;
+  }
+  return false;
+}
+
 export function formatMeetingPillLabel(event: CalendarEvent, ext: ReturnType<typeof externalAttendees>): string {
   const time = eventTime(event.start);
   const company = ext[0] ? companyFromEmail(ext[0].email) : event.title;

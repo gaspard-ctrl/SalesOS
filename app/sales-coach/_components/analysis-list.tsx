@@ -40,7 +40,6 @@ interface Props {
   onSelect: (id: string) => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
-  isAdmin: boolean;
   ownerFilter: "mine" | "all";
   onOwnerFilterChange: (v: "mine" | "all") => void;
   dateFrom: string;
@@ -76,7 +75,6 @@ export default function AnalysisList({
   onSelect,
   searchQuery,
   onSearchChange,
-  isAdmin,
   ownerFilter,
   onOwnerFilterChange,
   dateFrom,
@@ -139,29 +137,27 @@ export default function AnalysisList({
             }}
           />
         </div>
-        {isAdmin && (
-          <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
-            {(["mine", "all"] as const).map((v) => (
-              <button
-                key={v}
-                onClick={() => onOwnerFilterChange(v)}
-                style={{
-                  fontSize: 11,
-                  fontWeight: 500,
-                  padding: "4px 10px",
-                  borderRadius: 6,
-                  background: ownerFilter === v ? COLORS.brand : "transparent",
-                  color: ownerFilter === v ? "#fff" : COLORS.ink2,
-                  border: `1px solid ${ownerFilter === v ? COLORS.brand : COLORS.lineStrong}`,
-                  cursor: "pointer",
-                  transition: "all 0.15s",
-                }}
-              >
-                {v === "mine" ? "Mes meetings" : "Tous"}
-              </button>
-            ))}
-          </div>
-        )}
+        <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+          {(["mine", "all"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => onOwnerFilterChange(v)}
+              style={{
+                fontSize: 11,
+                fontWeight: 500,
+                padding: "4px 10px",
+                borderRadius: 6,
+                background: ownerFilter === v ? COLORS.brand : "transparent",
+                color: ownerFilter === v ? "#fff" : COLORS.ink2,
+                border: `1px solid ${ownerFilter === v ? COLORS.brand : COLORS.lineStrong}`,
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+            >
+              {v === "mine" ? "Mes meetings" : "Tous"}
+            </button>
+          ))}
+        </div>
 
         {/* Date range filter */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

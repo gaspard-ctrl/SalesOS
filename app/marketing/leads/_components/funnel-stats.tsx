@@ -6,12 +6,7 @@ import { useLeadsFunnel } from "@/lib/hooks/use-marketing";
 const ACCENT = "#f01563";
 const GREEN = "#10b981";
 const BLUE = "#3b82f6";
-const PURPLE = "#8b5cf6";
 const RED = "#ef4444";
-
-function formatAmount(n: number): string {
-  return n.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + "€";
-}
 
 function pct(num: number, denom: number): string {
   if (!denom) return "—";
@@ -40,7 +35,7 @@ export default function FunnelStats() {
     );
   }
 
-  const { funnel: f, openPipelineAmount, closedLostAmount } = funnel;
+  const { funnel: f } = funnel;
   const steps = [
     { label: "Leads totaux", count: f.totalLeads, color: "#9ca3af", base: f.totalLeads },
     { label: "Validés", count: f.validated, color: ACCENT, base: f.totalLeads },
@@ -61,7 +56,7 @@ export default function FunnelStats() {
         gap: 20,
       }}
     >
-      <div style={{ fontSize: 14, fontWeight: 600, color: "#111" }}>Funnel des leads</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: "#111" }}>Funnel leads → deals</div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {steps.map((s, i) => {
@@ -95,65 +90,6 @@ export default function FunnelStats() {
           );
         })}
       </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-        <KpiCard
-          label="% leads → disco"
-          value={pct(f.disco, f.validated)}
-          subtitle={`${f.disco} / ${f.validated} validés`}
-          color={BLUE}
-        />
-        <KpiCard
-          label="% leads → won"
-          value={pct(f.closedWon, f.validated)}
-          subtitle={`${f.closedWon} / ${f.validated} validés`}
-          color={GREEN}
-        />
-        <KpiCard
-          label="Pipeline ouvert"
-          value={formatAmount(openPipelineAmount)}
-          subtitle="Deals en cours (closed lost exclus)"
-          color={PURPLE}
-        />
-        <KpiCard
-          label="Closed lost"
-          value={formatAmount(closedLostAmount)}
-          subtitle={`${f.closedLost} deal${f.closedLost > 1 ? "s" : ""} perdu${f.closedLost > 1 ? "s" : ""}`}
-          color={RED}
-        />
-      </div>
-    </div>
-  );
-}
-
-function KpiCard({
-  label,
-  value,
-  subtitle,
-  color,
-}: {
-  label: string;
-  value: string;
-  subtitle?: string;
-  color: string;
-}) {
-  return (
-    <div
-      style={{
-        background: "#fafafa",
-        border: "1px solid #eee",
-        borderRadius: 6,
-        padding: 12,
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
-      }}
-    >
-      <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: 0.5 }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 22, fontWeight: 700, color }}>{value}</div>
-      {subtitle && <div style={{ fontSize: 11, color: "#888" }}>{subtitle}</div>}
     </div>
   );
 }

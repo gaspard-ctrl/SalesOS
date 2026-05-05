@@ -162,12 +162,22 @@ export default function MassProspectionPage() {
   // ── UI state ─────────────────────────────────────────────────────────
   const [generating, setGenerating] = useState(false);
   const [genProgress, setGenProgress] = useState({ done: 0, total: 0 });
-  const [sourceTab, setSourceTab] = useState<"hubspot" | "csv" | "manual">("hubspot");
+  const [sourceTab, setSourceTab] = useState<"hubspot" | "csv" | "manual" | "netrows">("hubspot");
 
   // ── HubSpot search ───────────────────────────────────────────────────
   const [hsQuery, setHsQuery] = useState("");
   const [hsResults, setHsResults] = useState<HubSpotResult[]>([]);
   const [hsLoading, setHsLoading] = useState(false);
+
+  // ── Netrows search (multi companies + jobTitles + count) ──────────────
+  const [nrCompanies, setNrCompanies] = useState<string[]>([]);
+  const [nrCompanyInput, setNrCompanyInput] = useState("");
+  const [nrJobTitles, setNrJobTitles] = useState<string[]>([]);
+  const [nrJobInput, setNrJobInput] = useState("");
+  const [nrCount, setNrCount] = useState(30);
+  const [nrLoading, setNrLoading] = useState(false);
+  const [nrResults, setNrResults] = useState<HubSpotResult[]>([]);
+  const [nrError, setNrError] = useState<string | null>(null);
 
   // ── CSV modal ────────────────────────────────────────────────────────
   const [csvModalOpen, setCsvModalOpen] = useState(false);
@@ -323,6 +333,57 @@ export default function MassProspectionPage() {
       }
     } catch { /* ignore */ }
     setHsLoading(false);
+  }
+
+  // ── Netrows search (multi-companies × multi-jobTitles × count) ─────────
+  async function searchNetrows() {
+    if (nrCompanies.length === 0 && nrJobTitles.length === 0) return;
+    setNrLoading(true);
+    setNrError(null);
+    setNrResults([]);
+    try {
+      const res = await fetch("/api/prospection/netrows-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companies: nrCompanies,
+          jobTitles: nrJobTitles,
+          count: nrCount,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erreur Netrows");
+      // Map Netrows search results to HubSpotResult shape pour réutiliser le UI
+      const mapped: HubSpotResult[] = (data.results ?? []).map((r: { id: string; firstName: string; lastName: string; email: string; jobTitle: string; company: string; linkedinUrl: string | null }) => ({
+        id: r.id,
+        firstName: r.firstName,
+        lastName: r.lastName,
+        email: r.email ?? "",
+        jobTitle: r.jobTitle ?? "",
+        company: r.company ?? "",
+        industry: "",
+        lifecyclestage: "",
+        linkedinUrl: r.linkedinUrl,
+      }));
+      setNrResults(mapped);
+      if (mapped.length === 0) setNrError("Aucun profil Netrows trouvé.");
+    } catch (e) {
+      setNrError(e instanceof Error ? e.message : "Erreur Netrows");
+    } finally {
+      setNrLoading(false);
+    }
+  }
+
+  function addNrChip(value: string, kind: "company" | "job") {
+    const trimmed = value.trim().replace(/,$/, "");
+    if (!trimmed) return;
+    if (kind === "company") {
+      if (!nrCompanies.includes(trimmed)) setNrCompanies([...nrCompanies, trimmed]);
+      setNrCompanyInput("");
+    } else {
+      if (!nrJobTitles.includes(trimmed)) setNrJobTitles([...nrJobTitles, trimmed]);
+      setNrJobInput("");
+    }
   }
 
   function addProspect(p: Prospect) {
@@ -755,19 +816,24 @@ export default function MassProspectionPage() {
           <div className="w-1/2 flex flex-col border-r overflow-hidden" style={{ borderColor: "#eee" }}>
             {/* Source tabs */}
             <div className="flex items-center gap-1 px-4 py-3 border-b" style={{ borderColor: "#eee", background: "#fff" }}>
-              {(["hubspot", "csv", "manual"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setSourceTab(tab)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                  style={{
-                    background: sourceTab === tab ? "#f01563" : "transparent",
-                    color: sourceTab === tab ? "#fff" : "#666",
-                  }}
-                >
-                  {tab === "hubspot" ? "HubSpot" : tab === "csv" ? "CSV" : "Manuel"}
-                </button>
-              ))}
+              {(["hubspot", "csv", "manual", "netrows"] as const).map((tab) => {
+                const isNetrows = tab === "netrows";
+                const active = sourceTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setSourceTab(tab)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5"
+                    style={{
+                      background: active ? (isNetrows ? "#0a66c2" : "#f01563") : "transparent",
+                      color: active ? "#fff" : "#666",
+                    }}
+                  >
+                    {isNetrows && <Linkedin size={11} />}
+                    {tab === "hubspot" ? "HubSpot" : tab === "csv" ? "CSV" : tab === "manual" ? "Manuel" : "LinkedIn"}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Source content */}
@@ -965,6 +1031,207 @@ export default function MassProspectionPage() {
                   >
                     <Plus size={14} /> Ajouter
                   </button>
+                </div>
+              )}
+
+              {/* Netrows tab */}
+              {sourceTab === "netrows" && (
+                <div className="p-4 flex flex-col gap-3">
+                  <div className="flex items-start gap-2 p-3 rounded-xl border" style={{ borderColor: "#dbeafe", background: "#f0f7ff" }}>
+                    <Linkedin size={14} style={{ color: "#0a66c2", marginTop: 2 }} />
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold" style={{ color: "#1e40af" }}>Recherche LinkedIn (Netrows)</p>
+                      <p className="text-[10px]" style={{ color: "#3b82f6" }}>Combine plusieurs entreprises × plusieurs postes pour générer une liste cible.</p>
+                    </div>
+                  </div>
+
+                  {/* Companies chips */}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-medium" style={{ color: "#888" }}>Entreprises (chips)</span>
+                    <div className="flex flex-wrap gap-1.5 p-2 rounded-lg border" style={{ borderColor: "#e5e5e5", background: "#fff", minHeight: 38 }}>
+                      {nrCompanies.map((c) => (
+                        <span key={c} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ background: "#dbeafe", color: "#1e40af" }}>
+                          {c}
+                          <button type="button" onClick={() => setNrCompanies(nrCompanies.filter((x) => x !== c))} style={{ border: "none", background: "transparent", color: "#1e40af", cursor: "pointer", padding: 0, display: "inline-flex" }}>
+                            <X size={10} />
+                          </button>
+                        </span>
+                      ))}
+                      <input
+                        value={nrCompanyInput}
+                        onChange={(e) => setNrCompanyInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === ",") {
+                            e.preventDefault();
+                            addNrChip(nrCompanyInput, "company");
+                          } else if (e.key === "Backspace" && !nrCompanyInput && nrCompanies.length > 0) {
+                            setNrCompanies(nrCompanies.slice(0, -1));
+                          }
+                        }}
+                        onBlur={() => addNrChip(nrCompanyInput, "company")}
+                        placeholder={nrCompanies.length === 0 ? "Danone, Sanofi, L'Oréal…" : ""}
+                        className="flex-1 min-w-[120px] text-xs outline-none"
+                        style={{ border: "none", background: "transparent" }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Job titles chips */}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-medium" style={{ color: "#888" }}>Postes (chips)</span>
+                    <div className="flex flex-wrap gap-1.5 p-2 rounded-lg border" style={{ borderColor: "#e5e5e5", background: "#fff", minHeight: 38 }}>
+                      {nrJobTitles.map((t) => (
+                        <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium" style={{ background: "#dbeafe", color: "#1e40af" }}>
+                          {t}
+                          <button type="button" onClick={() => setNrJobTitles(nrJobTitles.filter((x) => x !== t))} style={{ border: "none", background: "transparent", color: "#1e40af", cursor: "pointer", padding: 0, display: "inline-flex" }}>
+                            <X size={10} />
+                          </button>
+                        </span>
+                      ))}
+                      <input
+                        value={nrJobInput}
+                        onChange={(e) => setNrJobInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === ",") {
+                            e.preventDefault();
+                            addNrChip(nrJobInput, "job");
+                          } else if (e.key === "Backspace" && !nrJobInput && nrJobTitles.length > 0) {
+                            setNrJobTitles(nrJobTitles.slice(0, -1));
+                          }
+                        }}
+                        onBlur={() => addNrChip(nrJobInput, "job")}
+                        placeholder={nrJobTitles.length === 0 ? "DRH, Head of L&D, VP People…" : ""}
+                        className="flex-1 min-w-[120px] text-xs outline-none"
+                        style={{ border: "none", background: "transparent" }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Count */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-medium" style={{ color: "#888" }}>Nombre de contacts</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={200}
+                      step={5}
+                      value={nrCount}
+                      onChange={(e) => setNrCount(Math.max(1, Math.min(200, parseInt(e.target.value, 10) || 30)))}
+                      className="rounded-lg border px-2 py-1 text-xs outline-none"
+                      style={{ borderColor: "#e5e5e5", width: 70 }}
+                    />
+                    <span className="text-[10px]" style={{ color: "#aaa" }}>
+                      {nrCompanies.length > 0 && nrJobTitles.length > 0
+                        ? `${nrCompanies.length} × ${nrJobTitles.length} = ${nrCompanies.length * nrJobTitles.length} combinaisons · max ${nrCount} contacts au total`
+                        : `max ${nrCount} contacts`}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={searchNetrows}
+                    disabled={nrLoading || (nrCompanies.length === 0 && nrJobTitles.length === 0)}
+                    className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all"
+                    style={{
+                      background: (nrCompanies.length > 0 || nrJobTitles.length > 0) && !nrLoading ? "#0a66c2" : "#f5f5f5",
+                      color: (nrCompanies.length > 0 || nrJobTitles.length > 0) && !nrLoading ? "#fff" : "#aaa",
+                    }}
+                  >
+                    {nrLoading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                    {nrLoading ? "Recherche LinkedIn…" : "Chercher sur LinkedIn"}
+                  </button>
+
+                  {nrError && (
+                    <p className="text-[11px] p-2 rounded-lg" style={{ background: "#fef2f2", color: "#dc2626" }}>
+                      {nrError}
+                    </p>
+                  )}
+
+                  {nrResults.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-medium" style={{ color: "#888" }}>
+                          {nrResults.length} contact{nrResults.length > 1 ? "s" : ""} trouvé{nrResults.length > 1 ? "s" : ""}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            for (const r of nrResults) {
+                              if (r.email && !prospects.some((p) => p.email.toLowerCase() === r.email.toLowerCase())) {
+                                addProspect({
+                                  hubspot_id: undefined,
+                                  firstName: r.firstName,
+                                  lastName: r.lastName,
+                                  email: r.email,
+                                  jobTitle: r.jobTitle ?? "",
+                                  company: r.company ?? "",
+                                });
+                              }
+                            }
+                          }}
+                          className="text-[10px] font-medium px-2 py-1 rounded-md"
+                          style={{ background: "#dbeafe", color: "#1e40af", cursor: "pointer", border: "none" }}
+                        >
+                          Tout ajouter (avec email)
+                        </button>
+                      </div>
+                      {nrResults.map((r) => {
+                        const added = prospects.some((p) => p.email.toLowerCase() === (r.email ?? "").toLowerCase());
+                        const hasEmail = !!r.email;
+                        return (
+                          <div
+                            key={r.id}
+                            className="flex items-center gap-2.5 p-2.5 rounded-lg border transition-all"
+                            style={{ borderColor: added ? "#0a66c2" : "#f0f0f0", background: added ? "#f0f7ff" : "#fff" }}
+                          >
+                            <Avatar firstName={r.firstName} lastName={r.lastName} size={28} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-medium truncate" style={{ color: "#111" }}>{r.firstName} {r.lastName}</span>
+                                {r.linkedinUrl && (
+                                  <a href={r.linkedinUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: "#0a66c2" }}>
+                                    <Linkedin size={10} />
+                                  </a>
+                                )}
+                              </div>
+                              <span className="text-[10px] truncate block" style={{ color: "#888" }}>
+                                {r.jobTitle ? `${r.jobTitle} · ` : ""}{r.company ?? "—"}
+                              </span>
+                              {!hasEmail && (
+                                <span className="text-[10px]" style={{ color: "#dc2626" }}>Pas d&apos;email — ne peut être prospecté.</span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => {
+                                if (!hasEmail) return;
+                                if (!added) {
+                                  addProspect({
+                                    hubspot_id: undefined,
+                                    firstName: r.firstName,
+                                    lastName: r.lastName,
+                                    email: r.email,
+                                    jobTitle: r.jobTitle ?? "",
+                                    company: r.company ?? "",
+                                  });
+                                } else {
+                                  removeProspect(r.email);
+                                }
+                              }}
+                              disabled={!hasEmail}
+                              className="text-[11px] font-medium px-2 py-1 rounded-md"
+                              style={{
+                                background: !hasEmail ? "#f5f5f5" : added ? "#fff8fb" : "#0a66c2",
+                                color: !hasEmail ? "#aaa" : added ? "#dc2626" : "#fff",
+                                border: "none",
+                                cursor: hasEmail ? "pointer" : "not-allowed",
+                              }}
+                            >
+                              {!hasEmail ? "—" : added ? "Retirer" : "Ajouter"}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

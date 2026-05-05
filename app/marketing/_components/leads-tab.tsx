@@ -17,7 +17,10 @@ import type { LeadFile, LeadWithAnalysis } from "@/lib/marketing-types";
 import { SlackText } from "@/lib/slack-mrkdwn";
 import LeadAnalysisBadge from "../leads/_components/lead-analysis-badge";
 import LeadDealSide from "../leads/_components/lead-deal-side";
+import LeadHubspotLeadSide from "../leads/_components/lead-hubspot-side";
 import FunnelStats from "../leads/_components/funnel-stats";
+import LeadStageFunnel from "../leads/_components/lead-stage-funnel";
+import LeadsKpiRow from "../leads/_components/leads-kpi-row";
 
 const ACCENT = "#f01563";
 
@@ -84,6 +87,7 @@ function LeadCard({
   const analyzing = lead.analysis_status === "pending";
   const a = lead.analysis;
   const hasDeal = !!(a && a.hubspot_deal_id);
+  const hasLeadOnly = !!(a && a.hubspot_lead_id && !a.hubspot_deal_id);
 
   return (
     <div
@@ -120,7 +124,7 @@ function LeadCard({
               <ExternalLink size={12} /> Slack
             </a>
           )}
-          {!hasDeal && (
+          {!hasDeal && !hasLeadOnly && (
             <div style={{ marginLeft: "auto" }}>
               <LeadAnalysisBadge analysis={a} analysisStatus={lead.analysis_status} />
             </div>
@@ -218,6 +222,7 @@ function LeadCard({
       </div>
 
       {hasDeal && a && <LeadDealSide analysis={a} />}
+      {!hasDeal && hasLeadOnly && a && <LeadHubspotLeadSide analysis={a} />}
     </div>
   );
 }
@@ -245,32 +250,56 @@ export default function LeadsTab() {
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {errorMsg && <div style={{ fontSize: 12, color: "#ef4444" }}>{errorMsg}</div>}
 
-      <FunnelStats />
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 16,
+        }}
+      >
+        <FunnelStats />
+        <LeadStageFunnel />
+      </div>
+
+      <LeadsKpiRow />
 
       {/* Filters on validated leads + management button on the right */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <FilterButton
           active={analysisFilter === "all"}
           onClick={() => setAnalysisFilter("all")}
-          label="Tous validés"
+          label="Tous"
           count={counts.validated}
         />
         <FilterButton
-          active={analysisFilter === "done"}
-          onClick={() => setAnalysisFilter("done")}
+          active={analysisFilter === "with_deal"}
+          onClick={() => setAnalysisFilter("with_deal")}
           label="Avec deal"
           count={counts.validatedWithDeal}
         />
         <FilterButton
-          active={analysisFilter === "no_match"}
-          onClick={() => setAnalysisFilter("no_match")}
+          active={analysisFilter === "without_deal"}
+          onClick={() => setAnalysisFilter("without_deal")}
           label="Sans deal"
-          count={counts.validatedNoDeal}
+          count={counts.validatedWithoutDeal}
         />
         <FilterButton
-          active={analysisFilter === "error"}
-          onClick={() => setAnalysisFilter("error")}
-          label="Erreurs"
+          active={analysisFilter === "with_lead"}
+          onClick={() => setAnalysisFilter("with_lead")}
+          label="Avec lead"
+          count={counts.validatedWithLead}
+        />
+        <FilterButton
+          active={analysisFilter === "without_lead"}
+          onClick={() => setAnalysisFilter("without_lead")}
+          label="Sans lead"
+          count={counts.validatedWithoutLead}
+        />
+        <FilterButton
+          active={analysisFilter === "with_contact"}
+          onClick={() => setAnalysisFilter("with_contact")}
+          label="Avec contact"
+          count={counts.validatedWithContact}
         />
 
         <Link

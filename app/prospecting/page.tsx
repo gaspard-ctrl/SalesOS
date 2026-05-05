@@ -362,6 +362,9 @@ export default function ProspectingPage() {
   // Agent state
   const [agentStep, setAgentStep] = useState<1 | 2 | 3>(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [netrowsCompany, setNetrowsCompany] = useState("");
+  const [netrowsJobTitle, setNetrowsJobTitle] = useState("");
+  const [isNetrowsSearch, setIsNetrowsSearch] = useState(false);
   const [simpleQuery, setSimpleQuery] = useState("");
   const [filterLifecycle, setFilterLifecycle] = useState("");
   const [filterIndustry, setFilterIndustry] = useState("");
@@ -603,6 +606,38 @@ export default function ProspectingPage() {
     return searchSimple();
   };
 
+  const searchNetrows = async () => {
+    if (!netrowsCompany.trim() && !netrowsJobTitle.trim()) return;
+    setSearching(true);
+    setIsAiSearch(false);
+    setIsNetrowsSearch(true);
+    setSearchError(null);
+    setSearchResults([]);
+    setNextCursor(null);
+    setTotalResults(null);
+    setAiExplanation(null);
+    try {
+      const r = await fetch("/api/prospection/netrows-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companies: netrowsCompany.trim() ? [netrowsCompany.trim()] : [],
+          jobTitles: netrowsJobTitle.trim() ? [netrowsJobTitle.trim()] : [],
+          count: 30,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error);
+      setSearchResults(data.results ?? []);
+      setTotalResults(data.total ?? null);
+      if ((data.results ?? []).length === 0) setSearchError("Aucun profil Netrows trouvé.");
+    } catch (e) {
+      setSearchError(e instanceof Error ? e.message : "Erreur Netrows");
+    } finally {
+      setSearching(false);
+    }
+  };
+
   const loadMore = async () => {
     if (!nextCursor) return;
     setLoadingMore(true);
@@ -631,6 +666,20 @@ export default function ProspectingPage() {
     setCompanyContext("");
     setCoachingNeed("");
     setAngle("");
+
+    // Contacts Netrows : pas de fetch HubSpot details, on construit un détail minimal
+    if (result.source === "netrows" || result.id.startsWith("netrows-")) {
+      setContactIndustry(result.industry ?? "");
+      setSelectedContact({
+        ...result,
+        leadStatus: "",
+        crmSummary: "Contact issu de Netrows (LinkedIn) — pas d'historique CRM.",
+        crmDetails: [],
+      });
+      setLoadingDetails(false);
+      return;
+    }
+
     try {
       const r = await fetch(`/api/prospection/details?id=${result.id}`);
       const data = await r.json();
@@ -1107,6 +1156,54 @@ export default function ProspectingPage() {
                     L&apos;IA analyse ta demande et cherche dans HubSpot…
                   </p>
                 )}
+
+                {/* Netrows search (LinkedIn) */}
+                <div className="flex flex-col gap-2 p-3 rounded-xl border" style={{ borderColor: "#dbeafe", background: "#f0f7ff" }}>
+                  <div className="flex items-center gap-2">
+                    <Linkedin size={13} style={{ color: "#0a66c2" }} />
+                    <span className="text-xs font-semibold" style={{ color: "#1e40af" }}>Recherche LinkedIn (Netrows)</span>
+                    <span className="text-[10px]" style={{ color: "#3b82f6" }}>Trouve un contact par poste + entreprise</span>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <input
+                      type="text"
+                      value={netrowsJobTitle}
+                      onChange={(e) => setNetrowsJobTitle(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && searchNetrows()}
+                      placeholder="Poste (ex: DRH, Head of L&D)"
+                      className="flex-1 min-w-[180px] rounded-lg border px-3 py-2 text-xs outline-none transition-all"
+                      style={{ borderColor: "#bfdbfe", color: "#111", background: "#fff" }}
+                      onFocus={(e) => (e.currentTarget.style.borderColor = "#0a66c2")}
+                      onBlur={(e) => (e.currentTarget.style.borderColor = "#bfdbfe")}
+                    />
+                    <input
+                      type="text"
+                      value={netrowsCompany}
+                      onChange={(e) => setNetrowsCompany(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && searchNetrows()}
+                      placeholder="Entreprise (ex: Danone)"
+                      className="flex-1 min-w-[180px] rounded-lg border px-3 py-2 text-xs outline-none transition-all"
+                      style={{ borderColor: "#bfdbfe", color: "#111", background: "#fff" }}
+                      onFocus={(e) => (e.currentTarget.style.borderColor = "#0a66c2")}
+                      onBlur={(e) => (e.currentTarget.style.borderColor = "#bfdbfe")}
+                    />
+                    <button
+                      onClick={searchNetrows}
+                      disabled={searching || (!netrowsCompany.trim() && !netrowsJobTitle.trim())}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-opacity whitespace-nowrap"
+                      style={{ background: "#0a66c2", color: "#fff", opacity: searching && isNetrowsSearch ? 0.7 : (!netrowsCompany.trim() && !netrowsJobTitle.trim()) ? 0.5 : 1 }}
+                    >
+                      {searching && isNetrowsSearch ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
+                      Chercher
+                    </button>
+                  </div>
+                  {searching && isNetrowsSearch && (
+                    <p className="text-[11px] flex items-center gap-1.5" style={{ color: "#0a66c2" }}>
+                      <Loader2 size={10} className="animate-spin" />
+                      Recherche dans LinkedIn via Netrows…
+                    </p>
+                  )}
+                </div>
 
                 {/* Owner toggle */}
                 <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "#e5e5e5", width: "fit-content" }}>

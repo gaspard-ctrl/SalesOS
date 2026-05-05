@@ -237,8 +237,11 @@ export interface LeadsCounts {
   pending: number;
   validated: number;
   rejected: number;
-  validatedNoDeal: number;
   validatedWithDeal: number;
+  validatedWithoutDeal: number;
+  validatedWithLead: number;
+  validatedWithoutLead: number;
+  validatedWithContact: number;
 }
 
 export type LeadAnalysisStatus = "pending" | "done" | "no_match" | "error";
@@ -264,6 +267,22 @@ export interface LeadAnalysis {
   hubspot_contact_id: string | null;
   hubspot_deal_id: string | null;
   match_strategy: LeadMatchStrategy | null;
+  // Contact snapshot (object type "contacts")
+  contact_email: string | null;
+  contact_name: string | null;
+  contact_lifecyclestage: string | null;
+  contact_hs_lead_status: string | null;
+  contact_owner_id: string | null;
+  contact_owner_name: string | null;
+  // HubSpot Lead-object snapshot (CRM object type 0-136 — distinct from Contact)
+  hubspot_lead_id: string | null;
+  hubspot_lead_name: string | null;
+  hubspot_lead_pipeline_id: string | null;
+  hubspot_lead_stage_id: string | null;
+  hubspot_lead_stage_label: string | null;
+  hubspot_lead_owner_id: string | null;
+  hubspot_lead_owner_name: string | null;
+  // Deal snapshot
   deal_name: string | null;
   deal_stage: string | null;
   deal_stage_label: string | null;
@@ -285,15 +304,26 @@ export interface LeadWithAnalysis extends Lead {
   analysis: LeadAnalysis | null;
 }
 
+// One bucket per HubSpot Lead pipeline stage. Order is preserved as returned
+// by the API (which mirrors the pipeline order from HubSpot).
+export interface LeadStageBucket {
+  stage_id: string | null;
+  stage_label: string;
+  count: number;
+}
+
 export interface LeadsFunnel {
   period: { from: string; to: string };
   funnel: {
     totalLeads: number;
     validated: number;
     withDeal: number;
+    withLead: number;       // validated leads matched to a HubSpot Lead object
+    withoutLead: number;    // validated leads NOT matched to any Lead object
     disco: number;
     closedWon: number;
     closedLost: number;
+    byLeadStage: LeadStageBucket[];
   };
   openPipelineAmount: number;
   closedLostAmount: number;

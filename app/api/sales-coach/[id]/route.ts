@@ -10,9 +10,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
 
-  const { data: userRow } = await db.from("users").select("is_admin").eq("id", user.id).single();
-  const isAdmin = !!userRow?.is_admin;
-
   const { data, error } = await db
     .from("sales_coach_analyses")
     .select("*")
@@ -20,9 +17,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .single();
 
   if (error || !data) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (!isAdmin && data.user_id !== user.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
   return NextResponse.json({ analysis: data });
 }
