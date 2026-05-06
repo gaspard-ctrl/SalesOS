@@ -209,12 +209,13 @@ function buildBlocks(args: {
   parsed: ParsedClaapNote;
   summary: MeetingSummary;
   score: ScoreSummary;
+  dealId: string | null;
   dealName: string;
   ownerName: string | null;
   companyName: string | null;
   testPrefix: boolean;
 }): Array<Record<string, unknown>> {
-  const { parsed, summary, score, dealName, ownerName, companyName, testPrefix } = args;
+  const { parsed, summary, score, dealId, dealName, ownerName, companyName, testPrefix } = args;
   const dateStr = parsed.meetingDate ?? "—";
   const headerText = `${testPrefix ? "[TEST] " : ""}Rencontre ${dealName} — ${dateStr}`;
 
@@ -268,6 +269,18 @@ function buildBlocks(args: {
       text: `*⏭️ Next Steps*\n${nextSteps ? truncate(nextSteps, SECTION_MAX_LEN) : "_Aucune action_"}`,
     },
   });
+
+  // Lien vers la fiche deal dans SalesOS
+  if (dealId) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://coachello-sales.netlify.app";
+    const dealUrl = `${appUrl}/deals?dealId=${encodeURIComponent(dealId)}`;
+    blocks.push({
+      type: "context",
+      elements: [
+        { type: "mrkdwn", text: `🔗 <${dealUrl}|Ouvrir le deal dans SalesOS>` },
+      ],
+    });
+  }
 
   return blocks;
 }
@@ -455,6 +468,7 @@ async function processNote(noteId: string): Promise<ProcessResult> {
     parsed,
     summary,
     score,
+    dealId,
     dealName,
     ownerName,
     companyName,
