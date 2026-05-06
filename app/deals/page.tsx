@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
+import { Suspense, useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { useUserMe } from "@/lib/hooks/use-user-me";
 import { useDeals } from "@/lib/hooks/use-deals";
 import { Zap, Search, RefreshCw, ArrowLeft } from "lucide-react";
@@ -147,7 +148,7 @@ const KanbanColumn = memo(function KanbanColumn({
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
-export default function DealsPage() {
+function DealsPageInner() {
   const [searchQuery, setSearchQuery] = useState("");
   const [scoring, setScoring] = useState(false);
   const [scoreResult, setScoreResult] = useState<{ scored: number; total: number } | null>(null);
@@ -218,6 +219,21 @@ export default function DealsPage() {
     setSelectedDeal(null);
     setDetails(null);
   }, []);
+
+  // Deeplink: open the deal panel automatically when arriving with ?dealId=<id>
+  // (e.g. from the Slack message posted after a Claap meeting). Runs once per
+  // mount to avoid fighting the user if they close the panel manually.
+  const searchParams = useSearchParams();
+  const deepLinkDealId = searchParams.get("dealId");
+  const deepLinkOpenedRef = useRef(false);
+  useEffect(() => {
+    if (!deepLinkDealId || deepLinkOpenedRef.current || loading) return;
+    const target = deals.find((d) => d.id === deepLinkDealId);
+    if (target) {
+      deepLinkOpenedRef.current = true;
+      openDeal(target);
+    }
+  }, [deepLinkDealId, deals, loading, openDeal]);
 
   const filteredDeals = useMemo(() => {
     const bySearch = searchQuery
@@ -579,5 +595,22 @@ export default function DealsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function DealsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          className="flex items-center justify-center h-full"
+          style={{ fontSize: 13, color: COLORS.ink3 }}
+        >
+          Chargement…
+        </div>
+      }
+    >
+      <DealsPageInner />
+    </Suspense>
   );
 }
