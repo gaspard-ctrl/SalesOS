@@ -28,6 +28,19 @@ function getApiKey(): string {
   return key;
 }
 
+/**
+ * Netrows renvoie un 404 avec `{code: "NOT_FOUND"}` quand une recherche
+ * ne ramène aucun résultat — c'est une réponse normale, pas une erreur.
+ * On l'attrape via cette classe pour que les wrappers de listes la
+ * convertissent en `[]` au lieu de propager une exception.
+ */
+export class NetrowsNotFoundError extends Error {
+  constructor(public readonly path: string) {
+    super(`Netrows 404 ${path}: no results`);
+    this.name = "NetrowsNotFoundError";
+  }
+}
+
 async function netrows<T>(path: string, params?: Record<string, string>): Promise<T> {
   const url = new URL(`${BASE}${path}`);
   if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
@@ -35,6 +48,12 @@ async function netrows<T>(path: string, params?: Record<string, string>): Promis
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${getApiKey()}` },
   });
+
+  if (res.status === 404) {
+    // Drain the body so the connection can be reused.
+    await res.text().catch(() => "");
+    throw new NetrowsNotFoundError(path);
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -126,7 +145,7 @@ export async function getProfileByUrl(url: string): Promise<LinkedInProfile> {
   return netrows<LinkedInProfile>("/people/profile-by-url", { url });
 }
 
-/** Search people by company + title (1 credit per page) */
+/** Search people by company + title (1 credit per page). Returns `{ total: 0, items: [] }` if no match. */
 export async function searchPeople(params: {
   company?: string;
   keywordTitle?: string;
@@ -142,16 +161,28 @@ export async function searchPeople(params: {
   if (params.firstName) query.firstName = params.firstName;
   if (params.lastName) query.lastName = params.lastName;
   if (params.start !== undefined) query.start = String(params.start);
-  return netrows("/people/search", query);
+  try {
+    return await netrows("/people/search", query);
+  } catch (e) {
+    if (e instanceof NetrowsNotFoundError) return { data: { total: 0, items: [] } };
+    throw e;
+  }
 }
 
-/** Reverse email lookup — find LinkedIn profile from work email (1 credit) */
+/** Reverse email lookup — find LinkedIn profile from work email (1 credit). Renvoie `found:false` si introuvable. */
 export async function reverseLookup(email: string): Promise<{
   found: boolean;
   linkedinUrl: string;
   profile: { fullName: string; headline: string; username: string; profileURL: string };
 }> {
-  return netrows("/people/reverse-lookup", { email });
+  try {
+    return await netrows("/people/reverse-lookup", { email });
+  } catch (e) {
+    if (e instanceof NetrowsNotFoundError) {
+      return { found: false, linkedinUrl: "", profile: { fullName: "", headline: "", username: "", profileURL: "" } };
+    }
+    throw e;
+  }
 }
 
 // ── Companies ────────────────────────────────────────────────────────────────
@@ -165,7 +196,7 @@ export async function getCompanyDetails(username: string): Promise<{
   return netrows("/companies/details", { username });
 }
 
-/** Get company posts (1 credit). Accepts either a LinkedIn username or full URL. */
+/** Get company posts (1 credit). Accepts either a LinkedIn username or full URL. Returns `[]` if none. */
 export async function getCompanyPosts(usernameOrUrl: string, start = 0): Promise<{
   success: boolean;
   data: CompanyPost[];
@@ -173,34 +204,54 @@ export async function getCompanyPosts(usernameOrUrl: string, start = 0): Promise
   const url = usernameOrUrl.startsWith("http")
     ? usernameOrUrl
     : `https://www.linkedin.com/company/${usernameOrUrl}/`;
-  return netrows("/companies/posts", { url, start: String(start) });
+  try {
+    return await netrows("/companies/posts", { url, start: String(start) });
+  } catch (e) {
+    if (e instanceof NetrowsNotFoundError) return { success: true, data: [] };
+    throw e;
+  }
 }
 
-/** Get company job listings (1 credit) */
+/** Get company job listings (1 credit). Returns `[]` if no openings. */
 export async function getCompanyJobs(companyId: string, page = 1): Promise<{
   success: boolean;
   data: { title: string; location: string; postedAt: string; url: string }[];
 }> {
-  return netrows("/companies/jobs", { companyIds: companyId, page: String(page) });
+  try {
+    return await netrows("/companies/jobs", { companyIds: companyId, page: String(page) });
+  } catch (e) {
+    if (e instanceof NetrowsNotFoundError) return { success: true, data: [] };
+    throw e;
+  }
 }
 
 // ── Posts search ─────────────────────────────────────────────────────────────
 
-/** Search LinkedIn posts by keyword (1 credit) */
+/** Search LinkedIn posts by keyword (1 credit). Returns `[]` if no match. */
 export async function searchPosts(keyword: string, sortBy = "date_posted", datePosted = ""): Promise<{
   success: boolean;
   data: LinkedInPost[];
 }> {
   const params: Record<string, string> = { keyword, sortBy };
   if (datePosted) params.datePosted = datePosted;
-  return netrows("/posts/search", params);
+  try {
+    return await netrows("/posts/search", params);
+  } catch (e) {
+    if (e instanceof NetrowsNotFoundError) return { success: true, data: [] };
+    throw e;
+  }
 }
 
 // ── Radar ────────────────────────────────────────────────────────────────────
 
-/** List monitored companies (free) */
+/** List monitored companies (free). Renvoie `[]` si rien n'est encore monitoré. */
 export async function listRadarCompanies(): Promise<{ data: { id: string; username: string; is_active: boolean }[] }> {
-  return netrows("/radar/companies");
+  try {
+    return await netrows("/radar/companies");
+  } catch (e) {
+    if (e instanceof NetrowsNotFoundError) return { data: [] };
+    throw e;
+  }
 }
 
 /** Add company to Radar (1 credit one-time, monitoring free forever) */
@@ -208,9 +259,14 @@ export async function addCompanyToRadar(username: string): Promise<{ success: bo
   return netrowsPost("/radar/companies", { username });
 }
 
-/** List monitored profiles (free) */
+/** List monitored profiles (free). Renvoie `[]` si rien n'est encore monitoré. */
 export async function listRadarProfiles(): Promise<{ data: { id: string; username: string; is_active: boolean }[] }> {
-  return netrows("/radar/profiles");
+  try {
+    return await netrows("/radar/profiles");
+  } catch (e) {
+    if (e instanceof NetrowsNotFoundError) return { data: [] };
+    throw e;
+  }
 }
 
 /** Add profile to Radar (1 credit one-time) */
@@ -257,31 +313,46 @@ export const COACHING_KEYWORDS = [
 
 // ── Wrappers additionnels (Market Intel v2) ─────────────────────────────────
 
-/** Posts likés par un profil (1 crédit) */
+/** Posts likés par un profil (1 crédit). Renvoie `[]` si pas de likes. */
 export async function getPeopleLikes(username: string, start = 0): Promise<{
   success: boolean;
   data: { postUrl: string; text: string; author: { name: string; username: string }; postedAt: string; likes: number }[];
 }> {
-  return netrows("/people/likes", { username, start: String(start) });
+  try {
+    return await netrows("/people/likes", { username, start: String(start) });
+  } catch (e) {
+    if (e instanceof NetrowsNotFoundError) return { success: true, data: [] };
+    throw e;
+  }
 }
 
-/** Dernière activité d'un profil (1 crédit) */
+/** Dernière activité d'un profil (1 crédit). Renvoie `[]` si pas d'activité. */
 export async function getPeopleActivity(username: string): Promise<{
   success: boolean;
   data: { type: string; timestamp: string; postUrl?: string }[];
 }> {
-  return netrows("/people/activity-time", { username });
+  try {
+    return await netrows("/people/activity-time", { username });
+  } catch (e) {
+    if (e instanceof NetrowsNotFoundError) return { success: true, data: [] };
+    throw e;
+  }
 }
 
-/** Profils similaires (1 crédit) */
+/** Profils similaires (1 crédit). Renvoie `[]` si aucun. */
 export async function getSimilarProfiles(username: string): Promise<{
   success: boolean;
   data: { fullName: string; headline: string; username: string; profileURL: string }[];
 }> {
-  return netrows("/people/similar-profiles", { username });
+  try {
+    return await netrows("/people/similar-profiles", { username });
+  } catch (e) {
+    if (e instanceof NetrowsNotFoundError) return { success: true, data: [] };
+    throw e;
+  }
 }
 
-/** Recherche entreprises (1 crédit) */
+/** Recherche entreprises (1 crédit). Renvoie `[]` si pas de match. */
 export async function searchCompanies(params: {
   keyword: string;
   industry?: string;
@@ -294,7 +365,12 @@ export async function searchCompanies(params: {
   if (params.industry) query.industry = params.industry;
   if (params.size) query.size = params.size;
   if (params.start !== undefined) query.start = String(params.start);
-  return netrows("/companies/search", query);
+  try {
+    return await netrows("/companies/search", query);
+  } catch (e) {
+    if (e instanceof NetrowsNotFoundError) return { data: { items: [] } };
+    throw e;
+  }
 }
 
 /** Insights premium d'une entreprise (10 crédits) */
@@ -305,28 +381,43 @@ export async function getCompanyInsights(username: string): Promise<{
   return netrows("/companies/insights", { username });
 }
 
-/** Pubs LinkedIn actives d'une entreprise (1 crédit) */
+/** Pubs LinkedIn actives d'une entreprise (1 crédit). Renvoie `[]` si pas de pub active. */
 export async function getCompanyAds(username: string): Promise<{
   success: boolean;
   data: { adUrl: string; text: string; mediaUrl?: string; postedAt: string }[];
 }> {
-  return netrows("/ads/company", { username });
+  try {
+    return await netrows("/ads/company", { username });
+  } catch (e) {
+    if (e instanceof NetrowsNotFoundError) return { success: true, data: [] };
+    throw e;
+  }
 }
 
-/** Réactions à un post (1 crédit) */
+/** Réactions à un post (1 crédit). Renvoie `[]` si aucune. */
 export async function getPostReactions(postUrl: string, start = 0): Promise<{
   success: boolean;
   data: { fullName: string; headline: string; username: string; reaction: string }[];
 }> {
-  return netrows("/posts/reactions", { postUrl, start: String(start) });
+  try {
+    return await netrows("/posts/reactions", { postUrl, start: String(start) });
+  } catch (e) {
+    if (e instanceof NetrowsNotFoundError) return { success: true, data: [] };
+    throw e;
+  }
 }
 
-/** Email pro à partir d'un profil LinkedIn (5 crédits) — sans cache. */
+/** Email pro à partir d'un profil LinkedIn (5 crédits) — sans cache. Renvoie `null` si pas d'email. */
 export async function findEmailByLinkedIn(username: string): Promise<{
   success: boolean;
   data: { email: string | null; confidence: "high" | "medium" | "low" | null };
 }> {
-  return netrows("/email-finder/by-linkedin", { username });
+  try {
+    return await netrows("/email-finder/by-linkedin", { username });
+  } catch (e) {
+    if (e instanceof NetrowsNotFoundError) return { success: false, data: { email: null, confidence: null } };
+    throw e;
+  }
 }
 
 /**
@@ -372,7 +463,7 @@ export async function findEmailByLinkedInCached(username: string): Promise<{
   return { email, confidence, cached: false };
 }
 
-/** Email du décideur RH/L&D d'une entreprise (10 crédits) */
+/** Email du décideur RH/L&D d'une entreprise (10 crédits). Renvoie `null` si pas de décideur trouvé. */
 export async function findDecisionMakerEmail(params: {
   company: string;
   title: string;
@@ -380,10 +471,17 @@ export async function findDecisionMakerEmail(params: {
   success: boolean;
   data: { email: string | null; fullName: string | null; profileUrl: string | null };
 }> {
-  return netrows("/email-finder/decision-maker", {
-    company: params.company,
-    title: params.title,
-  });
+  try {
+    return await netrows("/email-finder/decision-maker", {
+      company: params.company,
+      title: params.title,
+    });
+  } catch (e) {
+    if (e instanceof NetrowsNotFoundError) {
+      return { success: false, data: { email: null, fullName: null, profileUrl: null } };
+    }
+    throw e;
+  }
 }
 
 // ── Username resolution (fallback nom/prénom + cache DB) ────────────────────
