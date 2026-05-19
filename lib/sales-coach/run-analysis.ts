@@ -14,9 +14,15 @@ import { computeTalkRatio } from "./talk-ratio";
 import {
   SALES_COACH_SYSTEM_PROMPT,
   salesCoachTool,
+  CLIENT_SALES_COACH_SYSTEM_PROMPT,
+  clientSalesCoachTool,
   computeGlobalScore,
+  isClientAnalysisShapeValid,
+  isProspectAnalysisShapeValid,
   repairAnalysis,
   type SalesCoachAnalysis,
+  type ClientSalesCoachAnalysis,
+  type AnySalesCoachAnalysis,
 } from "../guides/sales-coach";
 import {
   generateMeetingRecap,
@@ -260,7 +266,7 @@ export async function runSalesCoachAnalysis(id: string, transcriptUrl: string): 
       };
     }
 
-    let analysis: SalesCoachAnalysis | null = null;
+    let analysis: AnySalesCoachAnalysis | null = null;
     let scoreGlobal: number | null = null;
     let recap: MeetingRecap | null = null;
 
@@ -286,14 +292,32 @@ export async function runSalesCoachAnalysis(id: string, transcriptUrl: string): 
       // Streaming keeps the TCP connection active during generation — see
       // earlier note. Same rationale for both calls below.
       const client = new Anthropic({ timeout: 600_000 });
-      const coachingStreamP = client.messages.stream({
-        model: analyzeModel,
-        max_tokens: 8000,
-        system: SALES_COACH_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: coachingPrompt }],
-        tools: [salesCoachTool],
-        tool_choice: { type: "tool" as const, name: "sales_coach_analysis" },
-      }).finalMessage();
+      // Haiku 4.5 occasionally returns axes/meddic/bosche as a JSON string
+      // spread char-by-char into a numeric-keyed object — unrecoverable client-
+      // side. Validate shape and retry once before giving up.
+      const coachingStreamP = (async () => {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          const msg = await client.messages.stream({
+            model: analyzeModel,
+            max_tokens: 8000,
+            system: SALES_COACH_SYSTEM_PROMPT,
+            messages: [{ role: "user", content: coachingPrompt }],
+            tools: [salesCoachTool],
+            tool_choice: { type: "tool" as const, name: "sales_coach_analysis" },
+          }).finalMessage();
+          logUsage(row.user_id, analyzeModel, msg.usage.input_tokens, msg.usage.output_tokens, "sales_coach_analyze");
+          const tb = msg.content.find((b) => b.type === "tool_use");
+          if (!tb || !("input" in tb)) throw new Error("No tool_use block in coaching response");
+          const repaired = repairAnalysis(tb.input as SalesCoachAnalysis);
+          if (isProspectAnalysisShapeValid(repaired)) return { message: msg, analysis: repaired };
+          console.warn(
+            `[sales-coach/analyze/${id}] malformed prospect shape from ${analyzeModel} (attempt ${attempt}/2) — retrying`,
+          );
+        }
+        throw new Error(
+          `Sales coach output malformed after retry (axes/meddic stringified by ${analyzeModel}). Re-run the analysis.`,
+        );
+      })();
 
       // Re-score the deal so the recap reflects the just-arrived meeting.
       // Runs in parallel with the coaching analysis; the recap is chained off
@@ -330,18 +354,52 @@ export async function runSalesCoachAnalysis(id: string, transcriptUrl: string): 
         }),
       );
 
-      const [coachingMessage, recapResult] = await Promise.all([coachingStreamP, recapP]);
-
-      logUsage(row.user_id, analyzeModel, coachingMessage.usage.input_tokens, coachingMessage.usage.output_tokens, "sales_coach_analyze");
-
-      const toolBlock = coachingMessage.content.find((b) => b.type === "tool_use");
-      if (!toolBlock || !("input" in toolBlock)) throw new Error("No tool_use block in coaching response");
-      analysis = repairAnalysis(toolBlock.input as SalesCoachAnalysis);
+      const [coachingResult, recapResult] = await Promise.all([coachingStreamP, recapP]);
+      analysis = coachingResult.analysis;
       scoreGlobal = computeGlobalScore(analysis);
       recap = recapResult.recap;
     } else {
-      // Client — skip coaching, only generate the meeting recap.
-      const recapResult = await generateMeetingRecap({
+      // Client — coaching CS + recap meeting en parallèle. Pas de re-score du
+      // deal (un closed-won n'a pas besoin d'être re-scoré) et pas d'historique
+      // d'analyses prospect injecté (les analyses passées sont prospect, sans
+      // rapport avec le contexte CS du meeting client).
+      const clientPrompt = [
+        `## Meeting client à analyser`,
+        `- Titre : ${row.meeting_title ?? "?"}`,
+        `- Date : ${row.meeting_started_at ?? "?"}`,
+        ``,
+        renderDealContextForPrompt(snapshot),
+        ``,
+        `## Transcription`,
+        transcriptForClaude,
+      ].filter(Boolean).join("\n");
+
+      const client = new Anthropic({ timeout: 600_000 });
+      const coachingStreamP = (async () => {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          const msg = await client.messages.stream({
+            model: analyzeModel,
+            max_tokens: 8000,
+            system: CLIENT_SALES_COACH_SYSTEM_PROMPT,
+            messages: [{ role: "user", content: clientPrompt }],
+            tools: [clientSalesCoachTool],
+            tool_choice: { type: "tool" as const, name: "sales_coach_client_analysis" },
+          }).finalMessage();
+          logUsage(row.user_id, analyzeModel, msg.usage.input_tokens, msg.usage.output_tokens, "sales_coach_analyze_client");
+          const tb = msg.content.find((b) => b.type === "tool_use");
+          if (!tb || !("input" in tb)) throw new Error("No tool_use block in client coaching response");
+          const repaired = repairAnalysis(tb.input as ClientSalesCoachAnalysis);
+          if (isClientAnalysisShapeValid(repaired)) return { message: msg, analysis: repaired };
+          console.warn(
+            `[sales-coach/analyze/${id}] malformed client shape from ${analyzeModel} (attempt ${attempt}/2) — retrying`,
+          );
+        }
+        throw new Error(
+          `Sales coach client output malformed after retry (axes stringified by ${analyzeModel}). Re-run the analysis.`,
+        );
+      })();
+
+      const recapP = generateMeetingRecap({
         transcript: transcriptForClaude,
         audience: "client",
         dealSnapshot: snapshot,
@@ -352,6 +410,10 @@ export async function runSalesCoachAnalysis(id: string, transcriptUrl: string): 
         userId: row.user_id,
         model: recapModel,
       });
+
+      const [coachingResult, recapResult] = await Promise.all([coachingStreamP, recapP]);
+      analysis = coachingResult.analysis;
+      scoreGlobal = computeGlobalScore(analysis);
       recap = recapResult.recap;
     }
 
@@ -374,8 +436,12 @@ export async function runSalesCoachAnalysis(id: string, transcriptUrl: string): 
 
     const slackEnabled = process.env.SALES_COACH_SLACK_ENABLED === "true";
 
-    // Sales-coach Slack (DM to owner) — prospects only, only if coaching ran.
-    if (audience === "prospect" && slackEnabled && row.user_id && dealId) {
+    // Sales-coach Slack (DM coaching) - tire pour prospect ET client si
+    // l'analyse a tourné. Le routing (mode dm -> Arthur, mode channels -> deal
+    // owner + participants) est géré dans sendSalesCoachSlack lui-même. On
+    // n'envoie pas tant qu'aucun deal n'est attaché (rare côté client mais
+    // possible côté prospect avant résolution manuelle).
+    if (analysis && slackEnabled && dealId) {
       const slackRes = await sendSalesCoachSlack(db, id).catch((e) => ({
         ok: false,
         error: e instanceof Error ? e.message : String(e),
@@ -383,9 +449,9 @@ export async function runSalesCoachAnalysis(id: string, transcriptUrl: string): 
       if (!slackRes.ok) {
         console.warn(`[sales-coach/analyze/${id}] coaching Slack send skipped:`, slackRes.error);
       }
-    } else if (audience === "prospect" && !slackEnabled) {
+    } else if (analysis && !slackEnabled) {
       console.log(`[sales-coach/analyze/${id}] coaching Slack disabled globally (SALES_COACH_SLACK_ENABLED)`);
-    } else if (audience === "prospect" && !dealId) {
+    } else if (analysis && !dealId) {
       console.log(`[sales-coach/analyze/${id}] coaching Slack send deferred — no deal yet`);
     }
 

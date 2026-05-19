@@ -1,36 +1,45 @@
 "use client";
 
-import { CheckCircle2, Mail, MessageSquare, AlertTriangle, Target, ChevronRight } from "lucide-react";
-import type { KeyMoment, KeyMomentKind, SalesCoachAnalysis } from "@/lib/guides/sales-coach";
+import { CheckCircle2, Mail, MessageSquare, AlertTriangle, Target, ChevronRight, TrendingUp } from "lucide-react";
+import type {
+  AnySalesCoachAnalysis,
+  ClientSalesCoachAnalysis,
+  KeyMoment,
+  KeyMomentKind,
+  SalesCoachAnalysis,
+} from "@/lib/guides/sales-coach";
+import { isClientAnalysis } from "@/lib/guides/sales-coach";
 import type { TalkRatio } from "@/lib/sales-coach/talk-ratio";
 import { COLORS, scoreToColor } from "@/lib/design/tokens";
 import { Card } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/section-header";
-import { MeddicBadge } from "@/components/ui/meddic-badge";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { KeyMoments } from "./key-moments";
 
 function toStringArray(v: unknown): string[] {
-  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
+  if (Array.isArray(v)) return v.flatMap((x) => (typeof x === "string" ? parseMaybeJsonArray(x) : []));
   if (v && typeof v === "object") {
     return Object.values(v as Record<string, unknown>).filter((x): x is string => typeof x === "string");
   }
-  if (typeof v === "string") {
-    // Haiku occasionally returns the whole array as a JSON-encoded string
-    // (e.g. `'[ "a", "b", "c" ]'`) instead of a real array — try to parse it
-    // before falling back to a single-item list.
-    const trimmed = v.trim();
-    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (Array.isArray(parsed)) {
-          return parsed.filter((x): x is string => typeof x === "string");
-        }
-      } catch { /* not valid JSON — keep as single string */ }
-    }
-    return [v];
-  }
+  if (typeof v === "string") return parseMaybeJsonArray(v);
   return [];
+}
+
+// Haiku occasionally returns the whole array as a JSON-encoded string
+// (e.g. `'[ "a", "b", "c" ]'`, sometimes with smart quotes or a trailing `;`)
+// instead of a real array. Try to recover the items before treating it as one.
+function parseMaybeJsonArray(s: string): string[] {
+  const trimmed = s.trim().replace(/[;,]+\s*$/, "");
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return [s];
+  const normalized = trimmed.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+  try {
+    const parsed = JSON.parse(normalized);
+    if (Array.isArray(parsed)) return parsed.filter((x): x is string => typeof x === "string");
+  } catch { /* fall through to regex */ }
+  const items = [...normalized.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) =>
+    m[1].replace(/\\"/g, '"').replace(/\\\\/g, "\\"),
+  );
+  return items.length > 0 ? items : [s];
 }
 
 const KEY_MOMENT_KINDS = new Set<KeyMomentKind>([
@@ -77,12 +86,30 @@ const AXES_LABELS = [
   { key: "next_steps", label: "Next steps" },
 ] as const;
 
+const CLIENT_AXES_LABELS = [
+  { key: "opening", label: "Opening & rapport" },
+  { key: "discovery", label: "Discovery (évolution)" },
+  { key: "active_listening", label: "Écoute active" },
+  { key: "value_reinforcement", label: "Value reinforcement" },
+  { key: "expansion_discovery", label: "Expansion discovery" },
+  { key: "next_steps", label: "Next steps" },
+] as const;
+
+const CUSTOMER_HEALTH_LABELS = [
+  { key: "relationship", label: "Relation" },
+  { key: "adoption", label: "Adoption" },
+  { key: "sentiment", label: "Sentiment" },
+  { key: "expansion_signals", label: "Signaux expansion" },
+  { key: "risk_flags", label: "Risk flags" },
+] as const;
+
 interface Props {
-  analysis: SalesCoachAnalysis;
+  analysis: AnySalesCoachAnalysis;
   talkRatio: TalkRatio | null;
   onOpenEmailDraft: () => void;
   onGoToAxes: () => void;
   onGoToMeddic: () => void;
+  onGoToCustomerHealth?: () => void;
 }
 
 function isMeddicNA(score: number, notes: string): boolean {
@@ -95,7 +122,9 @@ export function SynthesisTab({
   onOpenEmailDraft,
   onGoToAxes,
   onGoToMeddic,
+  onGoToCustomerHealth,
 }: Props) {
+  const isClient = isClientAnalysis(analysis);
   const strengths = toStringArray(analysis.strengths);
   const weaknesses = toStringArray(analysis.weaknesses);
   const priorities = toStringArray(analysis.coaching_priorities);
@@ -259,36 +288,120 @@ export function SynthesisTab({
           }
         />
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {AXES_LABELS.map(({ key, label }) => {
-            const axis = analysis.axes?.[key];
-            const score = axis?.score ?? 0;
-            const sc = scoreToColor(score, 10);
-            return (
-              <div key={key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 160, fontSize: 12, color: COLORS.ink1 }}>{label}</div>
-                <div style={{ flex: 1 }}>
-                  <ProgressBar value={score * 10} max={100} height={6} variant="auto" scale={100} />
-                </div>
-                <div
-                  style={{
-                    width: 44,
-                    textAlign: "right",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: sc.fg,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {score.toFixed(1)}
-                </div>
-              </div>
-            );
-          })}
+          {isClient
+            ? CLIENT_AXES_LABELS.map(({ key, label }) => {
+                const axes = (analysis as ClientSalesCoachAnalysis).axes;
+                const axis = axes?.[key];
+                const score = axis?.score ?? 0;
+                const sc = scoreToColor(score, 10);
+                return (
+                  <div key={key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 200, fontSize: 12, color: COLORS.ink1 }}>{label}</div>
+                    <div style={{ flex: 1 }}>
+                      <ProgressBar value={score * 10} max={100} height={6} variant="auto" scale={100} />
+                    </div>
+                    <div
+                      style={{
+                        width: 44,
+                        textAlign: "right",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: sc.fg,
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {score.toFixed(1)}
+                    </div>
+                  </div>
+                );
+              })
+            : AXES_LABELS.map(({ key, label }) => {
+                const axes = (analysis as SalesCoachAnalysis).axes;
+                const axis = axes?.[key];
+                const score = axis?.score ?? 0;
+                const sc = scoreToColor(score, 10);
+                return (
+                  <div key={key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 160, fontSize: 12, color: COLORS.ink1 }}>{label}</div>
+                    <div style={{ flex: 1 }}>
+                      <ProgressBar value={score * 10} max={100} height={6} variant="auto" scale={100} />
+                    </div>
+                    <div
+                      style={{
+                        width: 44,
+                        textAlign: "right",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: sc.fg,
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {score.toFixed(1)}
+                    </div>
+                  </div>
+                );
+              })}
         </div>
       </Card>
 
-      {/* Score MEDDIC compact */}
-      {analysis.meddic && (
+      {/* Customer Health (client) ou Score MEDDIC (prospect) */}
+      {isClient && (analysis as ClientSalesCoachAnalysis).customer_health && (
+        <Card padding={16}>
+          <SectionHeader
+            title={
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <TrendingUp size={14} style={{ color: "#059669" }} />
+                Customer Health
+              </span>
+            }
+            right={onGoToCustomerHealth ? (
+              <button
+                onClick={onGoToCustomerHealth}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 2,
+                  fontSize: 11,
+                  fontWeight: 500,
+                  color: COLORS.brand,
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                Voir le détail
+                <ChevronRight size={12} />
+              </button>
+            ) : null}
+          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {CUSTOMER_HEALTH_LABELS.map(({ key, label }) => {
+              const ch = (analysis as ClientSalesCoachAnalysis).customer_health;
+              const value = (ch?.[key] ?? "").trim();
+              const isEmpty = !value || /pas observable/i.test(value);
+              return (
+                <div key={key} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                  <div style={{ width: 140, fontSize: 12, color: COLORS.ink1, paddingTop: 1 }}>{label}</div>
+                  <div
+                    style={{
+                      flex: 1,
+                      fontSize: 12,
+                      color: isEmpty ? COLORS.ink3 : COLORS.ink0,
+                      fontStyle: isEmpty ? "italic" : "normal",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {value || "Pas observable dans ce meeting"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {!isClient && (analysis as SalesCoachAnalysis).meddic && (
         <Card padding={16}>
           <SectionHeader
             title="Score MEDDIC"
@@ -315,7 +428,8 @@ export function SynthesisTab({
           />
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {MEDDIC_LABELS.map(({ key, label }) => {
-              const dim = analysis.meddic[key];
+              const meddic = (analysis as SalesCoachAnalysis).meddic;
+              const dim = meddic[key];
               if (!dim) return null;
               const score = typeof dim.score === "number" ? dim.score : 0;
               const notes = typeof dim.notes === "string" ? dim.notes : "";

@@ -375,15 +375,36 @@ function safeScore(x: { score?: number } | undefined | null): number {
 }
 
 /**
- * Weighted global score (0-10) :
- * - 6 axes coaching : 50%
- * - MEDDIC (moyenne des 6 dimensions, en ignorant les 0 marqués N/A) : 30%
- * - BOSCHE : 20% (si discovery ET exit_criteria_met, sinon redistribué 60/40 sur axes + MEDDIC)
+ * Weighted global score (0-10).
  *
- * Defensive against partial outputs from the model (missing meddic/bosche/axis).
+ * - Prospect (shape avec `meddic` + `bosche`) : 50% axes + 30% MEDDIC + 20%
+ *   BOSCHE (si discovery ET exit_criteria_met, sinon redistribué 60/40 sur
+ *   axes + MEDDIC).
+ * - Client (shape avec `customer_health`) : 100% axes (moyenne des 6 axes
+ *   CS). Pas de grille de qualif à pondérer.
+ *
+ * Defensive contre les outputs partiels du modèle.
  */
-export function computeGlobalScore(analysis: Partial<SalesCoachAnalysis>): number {
-  const axes = analysis.axes ?? null;
+export function computeGlobalScore(analysis: Partial<AnySalesCoachAnalysis>): number {
+  if (isClientAnalysis(analysis)) {
+    const ax = analysis.axes;
+    const scores = ax
+      ? [
+          safeScore(ax.opening),
+          safeScore(ax.discovery),
+          safeScore(ax.active_listening),
+          safeScore(ax.value_reinforcement),
+          safeScore(ax.expansion_discovery),
+          safeScore(ax.next_steps),
+        ]
+      : [];
+    if (scores.length === 0) return 0;
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    return Math.round(avg * 10) / 10;
+  }
+
+  const prospect = analysis as Partial<SalesCoachAnalysis>;
+  const axes = prospect.axes ?? null;
   const axesScores = axes
     ? [
         safeScore(axes.opening),
@@ -396,7 +417,7 @@ export function computeGlobalScore(analysis: Partial<SalesCoachAnalysis>): numbe
     : [];
   const axesAvg = axesScores.length > 0 ? axesScores.reduce((a, b) => a + b, 0) / axesScores.length : 0;
 
-  const m = analysis.meddic ?? null;
+  const m = prospect.meddic ?? null;
   const meddicRaw = m
     ? [
         safeScore(m.metrics),
@@ -410,7 +431,7 @@ export function computeGlobalScore(analysis: Partial<SalesCoachAnalysis>): numbe
   const meddicVals = meddicRaw.filter((s) => s > 0);
   const meddicAvg = meddicVals.length > 0 ? meddicVals.reduce((a, b) => a + b, 0) / meddicVals.length : 0;
 
-  const b = analysis.bosche ?? null;
+  const b = prospect.bosche ?? null;
   const boscheScores = b
     ? [
         safeScore(b.business),
@@ -422,7 +443,7 @@ export function computeGlobalScore(analysis: Partial<SalesCoachAnalysis>): numbe
     : [];
   const boscheAvg = boscheScores.length > 0 ? boscheScores.reduce((a, b) => a + b, 0) / boscheScores.length : 0;
 
-  const isDisco = isDiscoveryKind(analysis.meeting_kind ?? null);
+  const isDisco = isDiscoveryKind(prospect.meeting_kind ?? null);
   const useBosche = isDisco && !!b?.exit_criteria_met;
 
   // If a grid is empty, weight redistributes across the remaining ones.
@@ -448,7 +469,7 @@ export function computeGlobalScore(analysis: Partial<SalesCoachAnalysis>): numbe
  * sometimes with a trailing `}` (variant observed in prod). We try several
  * wrap strategies because the exact corruption tail varies between calls.
  */
-export function repairAnalysis<T extends Partial<SalesCoachAnalysis>>(analysis: T): T {
+export function repairAnalysis<T extends Partial<AnySalesCoachAnalysis>>(analysis: T): T {
   const cp = analysis.coaching_priorities;
   if (!Array.isArray(cp) || cp.length !== 1) return analysis;
   const blob = cp[0];
@@ -475,6 +496,70 @@ export function repairAnalysis<T extends Partial<SalesCoachAnalysis>>(analysis: 
   return analysis;
 }
 
+export const PROSPECT_AXES_KEYS = [
+  "opening",
+  "discovery",
+  "active_listening",
+  "value_articulation",
+  "objection_handling",
+  "next_steps",
+] as const;
+
+export const CLIENT_AXES_KEYS = [
+  "opening",
+  "discovery",
+  "active_listening",
+  "value_reinforcement",
+  "expansion_discovery",
+  "next_steps",
+] as const;
+
+export const MEDDIC_KEYS = [
+  "metrics",
+  "economic_buyer",
+  "decision_criteria",
+  "decision_process",
+  "identify_pain",
+  "champion",
+] as const;
+
+export const BOSCHE_DIMENSION_KEYS = [
+  "business",
+  "organization",
+  "skills",
+  "consequences",
+  "human_economic",
+] as const;
+
+/**
+ * Haiku 4.5 occasionally stuffs a sub-object as a JSON string spread char-by-char
+ * into a numeric-keyed object (e.g. `axes = {"0":"{", "1":"\n", "2":" ", ...}`),
+ * leaving the expected named keys absent. We can't reliably re-parse that (the
+ * stringified content usually has unescaped quotes) — detect it so the caller
+ * can retry the model call.
+ */
+function hasNamedShape(obj: unknown, expectedKeys: readonly string[]): boolean {
+  if (!obj || typeof obj !== "object") return false;
+  return expectedKeys.every((k) => {
+    const v = (obj as Record<string, unknown>)[k];
+    if (!v || typeof v !== "object") return false;
+    return typeof (v as { score?: unknown }).score === "number";
+  });
+}
+
+export function isProspectAnalysisShapeValid(analysis: Partial<SalesCoachAnalysis>): boolean {
+  if (!hasNamedShape(analysis.axes, PROSPECT_AXES_KEYS)) return false;
+  if (!hasNamedShape(analysis.meddic, MEDDIC_KEYS)) return false;
+  if (isDiscoveryKind(analysis.meeting_kind ?? null)) {
+    if (!hasNamedShape(analysis.bosche, BOSCHE_DIMENSION_KEYS)) return false;
+  }
+  return true;
+}
+
+export function isClientAnalysisShapeValid(analysis: Partial<ClientSalesCoachAnalysis>): boolean {
+  return hasNamedShape(analysis.axes, CLIENT_AXES_KEYS);
+}
+
 export const MEETING_KIND_LABELS: Record<MeetingKind, string> = {
   discovery_r1: "Discovery R1",
   discovery_deeper: "Discovery approfondie",
@@ -485,3 +570,256 @@ export const MEETING_KIND_LABELS: Record<MeetingKind, string> = {
   kickoff: "Kickoff",
   other: "Autre",
 };
+
+/* ─────────────────────────────────────────────────────────────────────── */
+/*  Client coaching (Customer Success)                                      */
+/* ─────────────────────────────────────────────────────────────────────── */
+
+export const CLIENT_MEETING_KINDS = [
+  "onboarding",
+  "health_check",
+  "qbr",
+  "expansion_call",
+  "escalation",
+  "renewal_prep",
+  "training",
+  "other",
+] as const;
+
+export type ClientMeetingKind = (typeof CLIENT_MEETING_KINDS)[number];
+
+export const CLIENT_MEETING_KIND_LABELS: Record<ClientMeetingKind, string> = {
+  onboarding: "Onboarding",
+  health_check: "Health check",
+  qbr: "QBR",
+  expansion_call: "Expansion call",
+  escalation: "Escalation",
+  renewal_prep: "Pré-renouvellement",
+  training: "Formation",
+  other: "Autre",
+};
+
+export type AnyMeetingKind = MeetingKind | ClientMeetingKind;
+
+/**
+ * Label humain d'un meeting_kind, prospect ou client. `MeetingKind` et
+ * `ClientMeetingKind` partagent la valeur "other" mais sont disjoints sur le
+ * reste, donc on cherche d'abord côté prospect puis côté client.
+ */
+export function getMeetingKindLabel(
+  kind: AnyMeetingKind | string | null | undefined,
+): string | null {
+  if (!kind) return null;
+  if (kind in MEETING_KIND_LABELS) return MEETING_KIND_LABELS[kind as MeetingKind];
+  if (kind in CLIENT_MEETING_KIND_LABELS) return CLIENT_MEETING_KIND_LABELS[kind as ClientMeetingKind];
+  return null;
+}
+
+export const CLIENT_SALES_COACH_SYSTEM_PROMPT = `Tu es un coach senior pour les équipes Customer Success de Coachello (plateforme d'AI + human coaching pour leadership, mobilité interne, management).
+Tu analyses la transcription d'un meeting CLIENT (compte gagné, en passation Customer Success, ou en accompagnement post-signature) entre un AE/CSM Coachello et un compte client existant.
+Ton objectif : produire un debrief CS structuré, actionnable, honnête et factuel, basé uniquement sur ce qui est réellement dit dans la transcription, enrichi du contexte du deal HubSpot quand il est fourni.
+
+IMPORTANT : ce n'est PAS un meeting de qualification prospect. Ne cherche pas à faire émerger un budget, un decision process ou un champion comme on le ferait avec un prospect en cycle de vente. Le client a déjà acheté ; le coaching se concentre sur la valeur livrée, l'évolution des besoins, la santé de la relation et les signaux d'expansion.
+
+Règles absolues :
+- Ne jamais inventer. Si une information n'est pas dans la transcription ou dans le contexte deal, ne la cite pas.
+- Pour chaque axe noté, cite dans "evidence" un extrait court (≤ 15 mots) ou une paraphrase précise tirée du transcript.
+- Dans "explanation" : 3-5 phrases qui expliquent POURQUOI cette note, précisément.
+- Dans "recommendation" : 1 action CS concrète et spécifique à mener au prochain touchpoint sur CET axe. Pas des banalités.
+- Sois juste, pas dur. Un meeting solide et professionnel mérite 7 ou 8.
+- "notes" : 1-2 phrases qualitatives synthétiques.
+- "score" : 0 à 10.
+
+## Échelle de notation calibrée (appliquer à tous les axes)
+
+- **0-2** : absent ou raté - la dimension n'a pas été abordée, ou de façon contre-productive.
+- **3-4** : effleuré - survolé sans profondeur, opportunité manquée.
+- **5-6** : fait mais incomplet - couvert correctement, manque de profondeur ou de rigueur.
+- **7-8** : solide - bien exécuté, attendu d'un CSM/AE expérimenté. Zone par défaut d'un meeting CS standard sans grosse faute.
+- **9-10** : exemplaire - exécution remarquable, à montrer en exemple.
+
+Point d'ancrage : un meeting CS "normal et propre" sans erreur majeure se note **6-7**, pas 4-5. Ne descends sous 5 que s'il y a un vrai problème factuel.
+
+## 0. Classification du meeting (meeting_kind)
+
+Détermine le type de meeting en combinant titre, contenu du transcript, stage HubSpot et historique. Valeurs possibles :
+
+- "onboarding" : kickoff post-signature, mise en place du programme, premier touchpoint après signature.
+- "health_check" : check-in régulier (mensuel ou trimestriel sans format formel QBR).
+- "qbr" : Quarterly Business Review, revue formelle de valeur livrée avec stakeholders.
+- "expansion_call" : discussion d'upsell, cross-sell, extension de périmètre ou de licences.
+- "escalation" : résolution d'un blocage, plainte, insatisfaction, point de tension.
+- "renewal_prep" : préparation au renouvellement, validation de la reconduction.
+- "training" : formation produit, enablement utilisateur, accompagnement à l'usage.
+- "other" : ne rentre dans aucune catégorie.
+
+Dans "meeting_kind_reasoning" : 1 phrase qui justifie.
+
+## 1. Grille 6 axes coaching (TOUJOURS remplie)
+
+1. **Opening & rapport relationnel** : ouverture chaleureuse, vérification du moral du compte, contrat de meeting (objectif, durée, agenda), énergie, présence.
+2. **Discovery (évolution des objectifs)** : profondeur du questionnement sur ce qui a changé depuis la dernière fois (priorités business, KPIs, équipe, contexte interne). Pas de discovery prospect classique - on creuse l'évolution.
+3. **Écoute active** : reformulations, silences productifs, rebonds sur ce que dit le client, absence de monologue côté Coachello.
+4. **Value reinforcement** : capacité à rappeler la valeur livrée (ROI, données d'usage, témoignages internes), à connecter le programme aux résultats observés, à matérialiser le retour sur investissement.
+5. **Expansion discovery** : détection des signaux d'expansion (autres équipes intéressées, nouveaux use cases, montée en grade dans l'organisation), questions ouvertes sur les besoins adjacents. Pas d'objection handling - on cherche les ouvertures.
+6. **Next steps & follow-through** : prochaine étape précise (date, participants, livrable), validation explicite côté client, engagement mutuel.
+
+## 2. Customer Health (TOUJOURS rempli, qualitatif uniquement)
+
+Pour chaque dimension, 1 à 3 phrases factuelles basées sur ce qui est observable dans le meeting. Pas de score. Pas de note chiffrée. Une lecture qualitative qui sert à comprendre l'état réel du compte. Si une dimension n'a aucune donnée observable, mets exactement "Pas observable dans ce meeting" - n'invente rien.
+
+- **relationship** : santé de la relation. Champion en place ? Multi-threading sur plusieurs stakeholders ? Confiance / chaleur dans les échanges ? Tensions ou distance ?
+- **adoption** : usage produit, engagement avec le programme. Le client utilise-t-il activement la plateforme ? Sessions coaching mentionnées ? Adhésion équipe ?
+- **sentiment** : satisfaction implicite. Le client est-il positif, neutre, préoccupé ? Mentionne-t-il valeur, plaisir, friction, frustration ?
+- **expansion_signals** : ouvertures concrètes pour upsell / cross-sell. Autres équipes mentionnées ? Nouveaux features souhaités ? Recommandations internes ? Volonté d'élargir le périmètre ?
+- **risk_flags** : signaux de churn ou de désengagement. Blocages, plaintes, changement de stakeholder, baisse d'usage, frustration, sponsor qui s'éloigne, budget remis en question.
+
+## 3. coaching_priorities
+
+Top 3 actions ultra-concrètes pour le prochain touchpoint CS. Pas des banalités, des choses précises tirées de ce qui a manqué ici.
+
+## 4. summary
+
+2-3 phrases : ce qui a été bien fait + le principal point à travailler côté CS.
+
+## 5. strengths / weaknesses (récap exécutif)
+
+- **strengths** : 3 points où le CSM/AE a été bon - formulés courts (ex : "Rappel ROI chiffré en 30s d'ouverture").
+- **weaknesses** : 3 points à travailler - courts et précis (pas "value reinforcement faible" mais "Pas de chiffres d'usage cités sur les 3 derniers mois").
+
+## 6. key_moments (frise temporelle)
+
+4 à 6 moments-pivots du meeting, chacun avec :
+- **timestamp_seconds** : seconde dans le meeting (0 si inconnu).
+- **kind** : engagement / objection / pivot / doubt / next_step / concession.
+- **label** : 1 phrase courte qui résume le moment.
+- **quote** : citation ≤15 mots du transcript.
+
+Utilise l'outil sales_coach_client_analysis pour retourner ton analyse.`;
+
+const customerHealthSchema = {
+  type: "object" as const,
+  properties: {
+    relationship: { type: "string", description: "1-3 phrases sur la santé de la relation (champion, multi-threading, confiance). 'Pas observable dans ce meeting' si aucun signal." },
+    adoption: { type: "string", description: "1-3 phrases sur l'usage produit / engagement avec le programme." },
+    sentiment: { type: "string", description: "1-3 phrases sur la satisfaction implicite (positif/neutre/préoccupé)." },
+    expansion_signals: { type: "string", description: "1-3 phrases sur les ouvertures d'expansion (autres équipes, nouveaux use cases)." },
+    risk_flags: { type: "string", description: "1-3 phrases sur les signaux de churn / désengagement." },
+  },
+  required: ["relationship", "adoption", "sentiment", "expansion_signals", "risk_flags"],
+};
+
+export const clientSalesCoachTool: Anthropic.Tool = {
+  name: "sales_coach_client_analysis",
+  description: "Retourne l'analyse coaching CS structurée du meeting client",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      meeting_kind: {
+        type: "string",
+        enum: [...CLIENT_MEETING_KINDS],
+        description: "Type de meeting client inféré",
+      },
+      meeting_kind_reasoning: {
+        type: "string",
+        description: "1 phrase qui justifie la classification",
+      },
+      summary: {
+        type: "string",
+        description: "2-3 phrases : bien fait + principal point à travailler côté CS",
+      },
+      axes: {
+        type: "object",
+        properties: {
+          opening: axisSchema,
+          discovery: axisSchema,
+          active_listening: axisSchema,
+          value_reinforcement: axisSchema,
+          expansion_discovery: axisSchema,
+          next_steps: axisSchema,
+        },
+        required: ["opening", "discovery", "active_listening", "value_reinforcement", "expansion_discovery", "next_steps"],
+      },
+      customer_health: customerHealthSchema,
+      coaching_priorities: {
+        type: "array",
+        description: "Top 3 actions concrètes pour le prochain touchpoint CS",
+        items: { type: "string" },
+      },
+      risks: {
+        type: "array",
+        description: "Risques compte / churn identifiés depuis la transcription",
+        items: { type: "string" },
+      },
+      strengths: {
+        type: "array",
+        description: "3 points où le CSM/AE a été bon (formulés courts)",
+        items: { type: "string" },
+      },
+      weaknesses: {
+        type: "array",
+        description: "3 points à travailler (courts et précis)",
+        items: { type: "string" },
+      },
+      key_moments: {
+        type: "array",
+        description: "4-6 moments-pivots du meeting avec timestamp",
+        items: {
+          type: "object",
+          properties: {
+            timestamp_seconds: { type: "number", description: "Seconde dans le meeting (0 si inconnu)" },
+            kind: {
+              type: "string",
+              enum: ["engagement", "objection", "pivot", "doubt", "next_step", "concession"],
+            },
+            label: { type: "string" },
+            quote: { type: "string", description: "Citation ≤15 mots" },
+          },
+          required: ["timestamp_seconds", "kind", "label", "quote"],
+        },
+      },
+    },
+    required: ["meeting_kind", "meeting_kind_reasoning", "summary", "axes", "customer_health", "coaching_priorities", "risks", "strengths", "weaknesses", "key_moments"],
+  },
+};
+
+export type CustomerHealth = {
+  relationship: string;
+  adoption: string;
+  sentiment: string;
+  expansion_signals: string;
+  risk_flags: string;
+};
+
+export type ClientSalesCoachAnalysis = {
+  meeting_kind: ClientMeetingKind;
+  meeting_kind_reasoning: string;
+  summary: string;
+  axes: {
+    opening: AxisScore;
+    discovery: AxisScore;
+    active_listening: AxisScore;
+    value_reinforcement: AxisScore;
+    expansion_discovery: AxisScore;
+    next_steps: AxisScore;
+  };
+  customer_health: CustomerHealth;
+  coaching_priorities: string[];
+  risks: string[];
+  strengths?: string[];
+  weaknesses?: string[];
+  key_moments?: KeyMoment[];
+};
+
+export type AnySalesCoachAnalysis = SalesCoachAnalysis | ClientSalesCoachAnalysis;
+
+/**
+ * Discrimine prospect vs client sur la shape JSONB stockée en DB. Plus fiable
+ * que de se baser sur `audience` côté row : l'analyse elle-même porte sa propre
+ * structure.
+ */
+export function isClientAnalysis(
+  a: Partial<AnySalesCoachAnalysis> | null | undefined,
+): a is ClientSalesCoachAnalysis {
+  return !!a && typeof a === "object" && "customer_health" in a;
+}

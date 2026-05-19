@@ -3,8 +3,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { logUsage } from "../log-usage";
 import type { DealSnapshot } from "../hubspot";
 import { renderDealContextForPrompt } from "../hubspot";
-import { findChannelId } from "../slack-leads";
 import { extractTitleSearchHint } from "../claap";
+import {
+  dmRecipient,
+  findArthurFallbackRecipient,
+  formatForwardChannelHeader,
+  formatTestModeHeader,
+  resolveMeetingParticipantRecipients,
+  type MeetingRecipient,
+} from "./slack-recipients";
 
 const DEFAULT_RECAP_MODEL = "claude-haiku-4-5-20251001";
 
@@ -264,39 +271,6 @@ export async function generateMeetingRecap(args: {
 /*  Slack rendering                                                         */
 /* ─────────────────────────────────────────────────────────────────────── */
 
-async function slackPost(path: string, body: Record<string, unknown>) {
-  const res = await fetch(`https://slack.com/api${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!data.ok) throw new Error(`Slack ${path} → ${data.error}`);
-  return data;
-}
-
-async function findSlackUserDmChannel(displayName: string): Promise<string | null> {
-  const res = await fetch(`https://slack.com/api/users.list?limit=200`, {
-    headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` },
-  });
-  const data = await res.json();
-  if (!data.ok) return null;
-  type Member = { id: string; deleted?: boolean; is_bot?: boolean; profile?: { real_name?: string; display_name?: string } };
-  const needle = displayName.toLowerCase().trim();
-  const member = (data.members ?? []).find((m: Member) => {
-    if (m.deleted || m.is_bot) return false;
-    const realName = (m.profile?.real_name ?? "").toLowerCase();
-    const dn = (m.profile?.display_name ?? "").toLowerCase();
-    return realName.includes(needle) || dn.includes(needle);
-  });
-  if (!member) return null;
-  const dm = await slackPost("/conversations.open", { users: member.id });
-  return (dm as { channel: { id: string } }).channel.id ?? null;
-}
-
 function formatRecapMessage(args: {
   audience: Audience;
   companyName: string;
@@ -387,7 +361,7 @@ export async function sendMeetingRecapSlack(
   const { data: row } = await db
     .from("sales_coach_analyses")
     .select(
-      "id, hubspot_deal_id, recorder_email, meeting_title, meeting_started_at, deal_snapshot, meeting_recap, audience, participants, meeting_recap_slack_sent_at",
+      "id, hubspot_deal_id, claap_recording_id, recorder_email, meeting_title, meeting_started_at, deal_snapshot, meeting_recap, audience, participants, meeting_recap_slack_sent_at",
     )
     .eq("id", analysisId)
     .single();
@@ -426,7 +400,7 @@ export async function sendMeetingRecapSlack(
 
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || process.env.URL || "").replace(/\/$/, "");
 
-  const text = formatRecapMessage({
+  const body = formatRecapMessage({
     audience,
     companyName,
     stageDisplay,
@@ -439,52 +413,97 @@ export async function sendMeetingRecapSlack(
     appUrl,
   });
 
-  // Resolve destination: same env-driven routing as the legacy HubSpot webhook.
-  const mode = process.env.CLAAP_NOTE_SLACK_MODE === "channels" ? "channels" : "dm";
-  let channelId: string | null = null;
-  let destinationLabel = "";
+  // Header "modifie et envoie dans #X" — toujours présent dans le corps du
+  // recap (mode dm + mode channels), audience-conditional. Le commercial copie
+  // le message, le retouche, et le forward dans le channel cible lui-même.
+  // Pas de post automatique dans les channels.
+  const forwardHeader = formatForwardChannelHeader(audience);
+  const titledBody = forwardHeader
+    ? `:clipboard: *RECAP MEETING*\n${forwardHeader}\n\n${body}`
+    : `:clipboard: *RECAP MEETING*\n\n${body}`;
 
-  if (mode === "channels") {
-    const channelName = audience === "client" ? "12-everything-clients" : "11-everything-prospects";
-    channelId = await findChannelId(channelName);
-    destinationLabel = `#${channelName}`;
-    if (!channelId) {
-      return { ok: false, error: `Slack channel "${channelName}" not found` };
+  // Résout les participants Coachello du meeting Claap (= cibles en mode
+  // channels, et liste affichée dans le header test en mode dm).
+  const meetingParticipants: MeetingRecipient[] = row.claap_recording_id
+    ? await resolveMeetingParticipantRecipients(
+        row.claap_recording_id,
+        row.recorder_email,
+      ).catch((e) => {
+        console.warn(`[meeting-recap/${analysisId}] participant resolution failed:`, e);
+        return [] as MeetingRecipient[];
+      })
+    : [];
+
+  const mode = process.env.CLAAP_NOTE_SLACK_MODE === "channels" ? "channels" : "dm";
+
+  let recipients: MeetingRecipient[];
+  let isFallback = false;
+
+  if (mode === "dm") {
+    const arthur = await findArthurFallbackRecipient();
+    if (!arthur) {
+      return { ok: false, error: `Slack user "${process.env.CLAAP_NOTE_SLACK_TEST_USER ?? "Arthur Czernichow"}" not found (mode=dm)` };
     }
+    recipients = [arthur];
+  } else if (meetingParticipants.length > 0) {
+    recipients = meetingParticipants;
   } else {
-    const targetUser = process.env.CLAAP_NOTE_SLACK_TEST_USER || "Arthur Czernichow";
-    channelId = await findSlackUserDmChannel(targetUser);
-    destinationLabel = `DM(${targetUser})`;
-    if (!channelId) {
-      return { ok: false, error: `Slack user "${targetUser}" not found` };
+    const arthur = await findArthurFallbackRecipient();
+    if (!arthur) {
+      return { ok: false, error: "No Coachello participants in meeting and fallback user not found" };
+    }
+    recipients = [arthur];
+    isFallback = true;
+    console.warn(`[meeting-recap/${analysisId}] no Coachello participant detected — falling back to Arthur`);
+  }
+
+  // En mode dm uniquement : préfixe le message avec le header de test qui
+  // explicite à qui le DM serait parti en mode channels (et dans quel
+  // channel le commercial devrait forwarder).
+  const text = mode === "dm"
+    ? `${formatTestModeHeader({
+        theoreticalRecipientEmails: isFallback ? [] : meetingParticipants.map((r) => r.email),
+        audience,
+        kind: "recap",
+      })}\n\n${titledBody}`
+    : titledBody;
+
+  let firstChannelId: string | null = null;
+  let firstTs: string | null = null;
+  let firstPermalink: string | null = null;
+  let sentCount = 0;
+  const failures: string[] = [];
+
+  for (const r of recipients) {
+    try {
+      const { channelId, ts } = await dmRecipient(r.memberId, text);
+      sentCount++;
+      console.log(`[meeting-recap/${analysisId}] recap sent to ${r.email} (${r.memberId}, audience=${audience})`);
+      if (!firstChannelId) {
+        firstChannelId = channelId;
+        firstTs = ts;
+        if (ts) {
+          // Best-effort permalink pour la vue Recaps. Sur le premier envoi
+          // suffit — c'est juste un deep-link de référence.
+          try {
+            const linkRes = await fetch(
+              `https://slack.com/api/chat.getPermalink?channel=${encodeURIComponent(channelId)}&message_ts=${encodeURIComponent(ts)}`,
+              { headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` } },
+            );
+            const linkData = (await linkRes.json()) as { ok?: boolean; permalink?: string };
+            if (linkData.ok && linkData.permalink) firstPermalink = linkData.permalink;
+          } catch { /* permalink optional */ }
+        }
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      failures.push(`${r.email}: ${msg}`);
+      console.warn(`[meeting-recap/${analysisId}] recap send failed for ${r.email}:`, msg);
     }
   }
 
-  let postedTs: string | null = null;
-  let permalink: string | null = null;
-  try {
-    const posted = (await slackPost("/chat.postMessage", {
-      channel: channelId,
-      text,
-      unfurl_links: false,
-      unfurl_media: false,
-    })) as { ts?: string; channel?: string };
-    postedTs = posted.ts ?? null;
-    if (postedTs && channelId) {
-      // Best-effort: fetch the permalink so the Recaps view can link back to
-      // the Slack thread. A failure here doesn't break the recap flow.
-      try {
-        const linkRes = await fetch(
-          `https://slack.com/api/chat.getPermalink?channel=${encodeURIComponent(channelId)}&message_ts=${encodeURIComponent(postedTs)}`,
-          { headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` } },
-        );
-        const linkData = (await linkRes.json()) as { ok?: boolean; permalink?: string };
-        if (linkData.ok && linkData.permalink) permalink = linkData.permalink;
-      } catch { /* permalink optional */ }
-    }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: msg };
+  if (sentCount === 0) {
+    return { ok: false, error: `All recipients failed: ${failures.join("; ")}` };
   }
 
   await db
@@ -492,12 +511,13 @@ export async function sendMeetingRecapSlack(
     .update({
       meeting_recap_slack_sent_at: new Date().toISOString(),
       meeting_recap_slack_text: text,
-      meeting_recap_slack_ts: postedTs,
-      meeting_recap_slack_channel: channelId,
-      meeting_recap_slack_permalink: permalink,
+      meeting_recap_slack_ts: firstTs,
+      meeting_recap_slack_channel: firstChannelId,
+      meeting_recap_slack_permalink: firstPermalink,
     })
     .eq("id", analysisId);
 
-  console.log(`[meeting-recap/${analysisId}] sent to ${destinationLabel} (audience=${audience})`);
+  const destinationLabel = `DM(${recipients.map((r) => r.email).join(", ")})${isFallback ? " [fallback]" : ""}`;
+  console.log(`[meeting-recap/${analysisId}] sent (${sentCount} recipients, audience=${audience}, mode=${mode})`);
   return { ok: true, destination: destinationLabel };
 }

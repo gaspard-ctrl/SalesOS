@@ -1,76 +1,45 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { SalesCoachAnalysis, MeetingKind } from "@/lib/guides/sales-coach";
-import { MEETING_KIND_LABELS, isDiscoveryKind } from "@/lib/guides/sales-coach";
+import type {
+  AnySalesCoachAnalysis,
+  ClientMeetingKind,
+  ClientSalesCoachAnalysis,
+  MeetingKind,
+  SalesCoachAnalysis,
+} from "@/lib/guides/sales-coach";
+import {
+  CLIENT_MEETING_KIND_LABELS,
+  MEETING_KIND_LABELS,
+  isClientAnalysis,
+  isDiscoveryKind,
+} from "@/lib/guides/sales-coach";
 import type { DealSnapshot } from "@/lib/hubspot";
-import { getClaapRecording } from "@/lib/claap";
-
-async function slackPost(path: string, body: Record<string, unknown>) {
-  const res = await fetch(`https://slack.com/api${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!data.ok) throw new Error(`Slack ${path} → ${data.error}`);
-  return data;
-}
-
-async function findSlackMemberId(displayName: string): Promise<string | null> {
-  const res = await fetch(`https://slack.com/api/users.list?limit=200`, {
-    headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` },
-  });
-  const data = await res.json();
-  if (!data.ok) return null;
-
-  const needle = displayName.toLowerCase().trim();
-  type SlackMember = {
-    id: string;
-    deleted?: boolean;
-    is_bot?: boolean;
-    profile?: { real_name?: string; display_name?: string };
-  };
-  const member = (data.members ?? []).find((m: SlackMember) => {
-    if (m.deleted || m.is_bot) return false;
-    const realName = (m.profile?.real_name ?? "").toLowerCase();
-    const displayNameSlack = (m.profile?.display_name ?? "").toLowerCase();
-    return realName.includes(needle) || displayNameSlack.includes(needle);
-  });
-  return member?.id ?? null;
-}
-
-async function findSlackMemberByEmail(email: string): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://slack.com/api/users.lookupByEmail?email=${encodeURIComponent(email)}`,
-      { headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` } },
-    );
-    const data = await res.json();
-    if (!data.ok) return null;
-    return data.user?.id ?? null;
-  } catch {
-    return null;
-  }
-}
+import type { Audience } from "./meeting-recap";
+import {
+  dmRecipient,
+  findArthurFallbackRecipient,
+  formatTestModeHeader,
+  resolveMeetingParticipantRecipients,
+  type MeetingRecipient,
+} from "./slack-recipients";
 
 function formatAxisLine(emoji: string, label: string, axis: { score: number; notes: string }): string {
   return `${emoji} *${label} :* ${axis.score}/10 — ${axis.notes}`;
 }
 
-function formatAnalysisMessage(args: {
-  dealName: string;
-  dealStage: string | null;
-  meetingTitle: string;
-  meetingStartedAt: string | null;
-  meetingKind: MeetingKind | null;
-  scoreGlobal: number;
-  analysis: SalesCoachAnalysis;
-  appUrl: string;
-  analysisId: string;
-  salesName: string | null;
-}): string {
+function formatProspectAnalysis(
+  args: {
+    dealName: string;
+    dealStage: string | null;
+    meetingTitle: string;
+    meetingStartedAt: string | null;
+    meetingKind: MeetingKind | null;
+    scoreGlobal: number;
+    analysis: SalesCoachAnalysis;
+    appUrl: string;
+    analysisId: string;
+    salesName: string | null;
+  },
+): string {
   const { dealName, dealStage, meetingTitle, meetingStartedAt, meetingKind, scoreGlobal, analysis, appUrl, analysisId, salesName } = args;
   const a = analysis.axes;
   const m = analysis.meddic;
@@ -81,7 +50,7 @@ function formatAnalysisMessage(args: {
 
   const hasDealLabel = !!dealName && dealName !== "—";
   const lines: string[] = [
-    `:dart: *Debrief de ton meeting${hasDealLabel ? ` — ${dealName}` : ""}*${dealStage ? ` · _${dealStage}_` : ""}`,
+    `:dart: *DEBRIEF COACHING${hasDealLabel ? ` — ${dealName}` : ""}*${dealStage ? ` · _${dealStage}_` : ""}`,
     `${meetingTitle}${date ? ` · ${date}` : ""}${salesName ? ` · ${salesName}` : ""}${kindLabel ? ` · _${kindLabel}_` : ""}`,
     ``,
     `*Note globale :* ${scoreGlobal}/10`,
@@ -140,46 +109,85 @@ function formatAnalysisMessage(args: {
   return lines.join("\n");
 }
 
-type Recipient = { memberId: string; via: "owner" | "participant"; label: string };
+function formatClientAnalysis(
+  args: {
+    dealName: string;
+    dealStage: string | null;
+    meetingTitle: string;
+    meetingStartedAt: string | null;
+    meetingKind: ClientMeetingKind | null;
+    scoreGlobal: number;
+    analysis: ClientSalesCoachAnalysis;
+    appUrl: string;
+    analysisId: string;
+    salesName: string | null;
+  },
+): string {
+  const { dealName, dealStage, meetingTitle, meetingStartedAt, meetingKind, scoreGlobal, analysis, appUrl, analysisId, salesName } = args;
+  const a = analysis.axes;
+  const ch = analysis.customer_health;
 
-/**
- * Resolve internal Coachello participants (same email domain as the recorder)
- * to Slack member IDs via `users.lookupByEmail`. Returns deduplicated list.
- */
-async function resolveInternalParticipantRecipients(
-  claapRecordingId: string,
-  recorderEmailFallback: string | null,
-): Promise<Recipient[]> {
-  if (!process.env.CLAAP_API_TOKEN) return [];
-  const rec = await getClaapRecording(claapRecordingId).catch(() => null);
-  if (!rec) return [];
+  const date = meetingStartedAt ? new Date(meetingStartedAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "";
+  const kindLabel = meetingKind ? CLIENT_MEETING_KIND_LABELS[meetingKind] : null;
 
-  const recorderEmail = (rec.recorder?.email ?? recorderEmailFallback ?? "").toLowerCase();
-  const recorderDomain = recorderEmail.split("@")[1];
-  if (!recorderDomain) return [];
-
-  const internalEmails = Array.from(
-    new Set(
-      (rec.meeting?.participants ?? [])
-        .map((p) => p.email?.toLowerCase().trim())
-        .filter((e): e is string => !!e && e.includes("@") && e.split("@")[1] === recorderDomain),
-    ),
-  );
-
-  const recipients: Recipient[] = [];
-  for (const email of internalEmails) {
-    const memberId = await findSlackMemberByEmail(email);
-    if (memberId) recipients.push({ memberId, via: "participant", label: email });
+  const hasDealLabel = !!dealName && dealName !== "—";
+  const lines: string[] = [
+    `:handshake: *DEBRIEF CS COACHING — ${hasDealLabel ? dealName : "client"}*${dealStage ? ` · _${dealStage}_` : ""}`,
+    `${meetingTitle}${date ? ` · ${date}` : ""}${salesName ? ` · ${salesName}` : ""}${kindLabel ? ` · _${kindLabel}_` : ""}`,
+    ``,
+    `*Note globale :* ${scoreGlobal}/10`,
+  ];
+  if (analysis.summary) {
+    lines.push(``, `*Synthèse :*`, analysis.summary);
   }
-  return recipients;
+  if (a) {
+    lines.push(
+      ``,
+      `*6 axes coaching CS :*`,
+      formatAxisLine("•", "Opening & rapport", a.opening),
+      formatAxisLine("•", "Discovery (évolution)", a.discovery),
+      formatAxisLine("•", "Écoute active", a.active_listening),
+      formatAxisLine("•", "Value reinforcement", a.value_reinforcement),
+      formatAxisLine("•", "Expansion discovery", a.expansion_discovery),
+      formatAxisLine("•", "Next steps", a.next_steps),
+    );
+  }
+  if (ch) {
+    lines.push(
+      ``,
+      `*Customer Health :*`,
+      `• *Relation :* ${ch.relationship}`,
+      `• *Adoption :* ${ch.adoption}`,
+      `• *Sentiment :* ${ch.sentiment}`,
+      `• *Signaux expansion :* ${ch.expansion_signals}`,
+      `• *Risk flags :* ${ch.risk_flags}`,
+    );
+  }
+
+  if ((analysis.coaching_priorities?.length ?? 0) > 0) {
+    lines.push(``, `:rocket: *Top priorités pour ton prochain touchpoint :*`);
+    (analysis.coaching_priorities ?? []).forEach((p, i) => lines.push(`${i + 1}. ${p}`));
+  }
+
+  if (appUrl) {
+    lines.push(``, `<${appUrl}/sales-coach?id=${analysisId}|Voir l'analyse complète →>`);
+  }
+
+  return lines.join("\n");
 }
 
 /**
- * Send the sales coach debrief as a Slack DM to the analysis owner (= deal owner
- * reattributed in run-analysis) AND every internal Claap participant (same email
- * domain as the recorder), deduplicated by Slack member ID.
+ * Envoie le debrief coaching en DM Slack.
  *
- * Gated globally by `SALES_COACH_SLACK_ENABLED` at the call sites.
+ * - Mode `dm` (test) : DM à Arthur uniquement, préfixé d'un header `🧪 *Test*`
+ *   qui montre à qui le DM partirait en mode channels (pour valider le
+ *   routing avant la bascule prod).
+ * - Mode `channels` (prod) : DM à chaque participant Coachello présent dans
+ *   le meeting Claap (même domaine que le recorder). Pas de fallback sur le
+ *   deal owner — si la personne n'était pas dans le meeting, elle ne reçoit
+ *   pas. Si aucun participant détecté : fallback Arthur.
+ *
+ * Gated globalement par `SALES_COACH_SLACK_ENABLED` côté run-analysis.
  */
 export async function sendSalesCoachSlack(
   db: SupabaseClient,
@@ -187,48 +195,48 @@ export async function sendSalesCoachSlack(
 ): Promise<{ ok: boolean; error?: string }> {
   const { data: row } = await db
     .from("sales_coach_analyses")
-    .select("id, user_id, hubspot_deal_id, meeting_title, meeting_started_at, meeting_kind, analysis, score_global, deal_snapshot, claap_recording_id, recorder_email")
+    .select("id, user_id, hubspot_deal_id, meeting_title, meeting_started_at, meeting_kind, audience, analysis, score_global, deal_snapshot, claap_recording_id, recorder_email")
     .eq("id", analysisId)
     .single();
 
   if (!row) return { ok: false, error: "Analysis not found" };
-  if (!row.user_id) return { ok: false, error: "No user linked to analysis" };
   if (!row.analysis) return { ok: false, error: "Analysis data missing" };
 
-  const { data: userRow } = await db
-    .from("users")
-    .select("slack_display_name, name, email")
-    .eq("id", row.user_id)
-    .single();
+  const mode = process.env.CLAAP_NOTE_SLACK_MODE === "channels" ? "channels" : "dm";
+  const audience = (row.audience as Audience | null) ?? null;
 
-  const slackDisplayName = userRow?.slack_display_name?.trim();
-  const salesName = (userRow?.name?.trim() || userRow?.email?.trim()) ?? null;
-  if (!slackDisplayName) {
-    return { ok: false, error: "User has no slack_display_name configured" };
-  }
+  // Résout d'abord les participants Coachello du meeting. Utilisé :
+  //  - en mode channels : pour DM directement chacun
+  //  - en mode dm : juste pour afficher la liste dans le header test
+  const meetingParticipants: MeetingRecipient[] = row.claap_recording_id
+    ? await resolveMeetingParticipantRecipients(
+        row.claap_recording_id,
+        row.recorder_email,
+      ).catch((e) => {
+        console.warn(`[sales-coach/slack/${analysisId}] participant resolution failed:`, e);
+        return [] as MeetingRecipient[];
+      })
+    : [];
 
-  const ownerMemberId = await findSlackMemberId(slackDisplayName);
-  if (!ownerMemberId) {
-    return { ok: false, error: `Slack user "${slackDisplayName}" not found` };
-  }
+  let recipients: MeetingRecipient[];
+  let isFallback = false;
 
-  const recipients: Recipient[] = [{ memberId: ownerMemberId, via: "owner", label: slackDisplayName }];
-  const seen = new Set<string>([ownerMemberId]);
-
-  if (row.claap_recording_id) {
-    const extras = await resolveInternalParticipantRecipients(
-      row.claap_recording_id,
-      row.recorder_email,
-    ).catch((e) => {
-      console.warn(`[sales-coach/slack/${analysisId}] participant resolution failed:`, e);
-      return [] as Recipient[];
-    });
-    for (const r of extras) {
-      if (!seen.has(r.memberId)) {
-        recipients.push(r);
-        seen.add(r.memberId);
-      }
+  if (mode === "dm") {
+    const arthur = await findArthurFallbackRecipient();
+    if (!arthur) {
+      return { ok: false, error: `Slack user "${process.env.CLAAP_NOTE_SLACK_TEST_USER ?? "Arthur Czernichow"}" not found (mode=dm)` };
     }
+    recipients = [arthur];
+  } else if (meetingParticipants.length > 0) {
+    recipients = meetingParticipants;
+  } else {
+    const arthur = await findArthurFallbackRecipient();
+    if (!arthur) {
+      return { ok: false, error: "No Coachello participants in meeting and fallback user not found" };
+    }
+    recipients = [arthur];
+    isFallback = true;
+    console.warn(`[sales-coach/slack/${analysisId}] no Coachello participant detected — falling back to Arthur`);
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.URL || "";
@@ -236,31 +244,54 @@ export async function sendSalesCoachSlack(
   const dealName = snapshot?.name || (row.hubspot_deal_id ? `Deal ${row.hubspot_deal_id}` : "—");
   const dealStage = snapshot?.stage_label ?? null;
 
-  const text = formatAnalysisMessage({
-    dealName,
-    dealStage,
-    meetingTitle: row.meeting_title ?? "Meeting",
-    meetingStartedAt: row.meeting_started_at,
-    meetingKind: row.meeting_kind as MeetingKind | null,
-    scoreGlobal: Number(row.score_global ?? 0),
-    analysis: row.analysis as SalesCoachAnalysis,
-    appUrl,
-    analysisId: row.id,
-    salesName,
-  });
+  const rawAnalysis = row.analysis as AnySalesCoachAnalysis;
+  const body = isClientAnalysis(rawAnalysis)
+    ? formatClientAnalysis({
+        dealName,
+        dealStage,
+        meetingTitle: row.meeting_title ?? "Meeting",
+        meetingStartedAt: row.meeting_started_at,
+        meetingKind: row.meeting_kind as ClientMeetingKind | null,
+        scoreGlobal: Number(row.score_global ?? 0),
+        analysis: rawAnalysis,
+        appUrl,
+        analysisId: row.id,
+        salesName: null,
+      })
+    : formatProspectAnalysis({
+        dealName,
+        dealStage,
+        meetingTitle: row.meeting_title ?? "Meeting",
+        meetingStartedAt: row.meeting_started_at,
+        meetingKind: row.meeting_kind as MeetingKind | null,
+        scoreGlobal: Number(row.score_global ?? 0),
+        analysis: rawAnalysis as SalesCoachAnalysis,
+        appUrl,
+        analysisId: row.id,
+        salesName: null,
+      });
+
+  // Header test : uniquement en mode dm. En mode channels, on envoie le DM
+  // directement aux concernés, pas besoin d'expliquer.
+  const text = mode === "dm"
+    ? `${formatTestModeHeader({
+        theoreticalRecipientEmails: isFallback ? [] : meetingParticipants.map((r) => r.email),
+        audience,
+        kind: "coaching",
+      })}\n\n${body}`
+    : body;
 
   let sentCount = 0;
   const failures: string[] = [];
   for (const r of recipients) {
     try {
-      const dm = await slackPost("/conversations.open", { users: r.memberId });
-      await slackPost("/chat.postMessage", { channel: dm.channel.id, text });
+      await dmRecipient(r.memberId, text);
       sentCount++;
-      console.log(`[sales-coach/slack/${analysisId}] sent to ${r.via}=${r.label} (${r.memberId})`);
+      console.log(`[sales-coach/slack/${analysisId}] coaching sent to ${r.email} (${r.memberId})`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      failures.push(`${r.via}=${r.label}: ${msg}`);
-      console.warn(`[sales-coach/slack/${analysisId}] send failed for ${r.via}=${r.label}:`, msg);
+      failures.push(`${r.email}: ${msg}`);
+      console.warn(`[sales-coach/slack/${analysisId}] coaching send failed for ${r.email}:`, msg);
     }
   }
 

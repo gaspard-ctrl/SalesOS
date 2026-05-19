@@ -6,6 +6,7 @@ import {
   type CompanyMatchSnapshot,
 } from "@/lib/hubspot";
 import { extractExternalParticipants, extractTitleSearchHint } from "@/lib/claap";
+import { sendManualDealAlert } from "@/lib/sales-coach/admin-alert";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -201,6 +202,47 @@ export async function POST(req: NextRequest) {
       .select("id")
       .eq("email", recorderEmail)
       .maybeSingle();
+
+    // Court-circuit : meeting externe sans deal HubSpot résolu (4 étapes du
+    // resolver KO). On crée la ligne en `awaiting_manual_deal` sans lancer
+    // l'analyse, et on notifie Slack pour que l'utilisateur associe le deal
+    // manuellement depuis l'UI. Le bouton "Oui" de la fiche déclenchera ensuite
+    // l'analyse exactement comme ce webhook le ferait.
+    if (!dealId) {
+      const { data: awaitingRow, error: awaitingErr } = await db
+        .from("sales_coach_analyses")
+        .upsert(
+          {
+            ...baseRow,
+            user_id: userRow?.id ?? null,
+            status: "awaiting_manual_deal",
+            error_message: null,
+          },
+          { onConflict: "claap_recording_id" },
+        )
+        .select("id")
+        .single();
+
+      if (awaitingErr || !awaitingRow) {
+        console.error("[claap-webhook] awaiting upsert error:", awaitingErr);
+        return NextResponse.json({ error: "Storage error" }, { status: 500 });
+      }
+
+      const alertRes = await sendManualDealAlert({
+        analysisId: awaitingRow.id,
+        meetingTitle: rec.title ?? null,
+        meetingStartedAt: rec.meeting?.startingAt ?? null,
+        recorderEmail,
+        participantEmails: externalParticipants.map((p) => p.email),
+      }).catch((e) => ({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+      if (!alertRes.ok) {
+        console.warn(`[claap-webhook] manual-deal Slack alert failed for ${awaitingRow.id}:`, alertRes.error);
+      } else if ("destination" in alertRes && alertRes.destination) {
+        console.log(`[claap-webhook] manual-deal Slack alert sent to ${alertRes.destination} for ${awaitingRow.id}`);
+      }
+
+      return NextResponse.json({ ok: true, id: awaitingRow.id, awaiting: true });
+    }
 
     // Upsert — keyed on claap_recording_id for idempotency against Claap retries
     const { data: inserted, error: insertErr } = await db

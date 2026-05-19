@@ -20,13 +20,10 @@ export async function GET(req: NextRequest) {
   let query = db
     .from("sales_coach_analyses")
     .select(
-      "id, claap_recording_id, user_id, recorder_email, hubspot_deal_id, meeting_title, meeting_started_at, meeting_type, meeting_kind, status, score_global, slack_sent_at, created_at, error_message, participants, deal_snapshot",
+      "id, claap_recording_id, user_id, recorder_email, hubspot_deal_id, meeting_title, meeting_started_at, meeting_type, meeting_kind, audience, status, score_global, slack_sent_at, created_at, error_message, participants, deal_snapshot",
     )
     .neq("meeting_type", "internal")
     .neq("status", "skipped")
-    // Client recaps (closed-won / Customer Success deals) skip the coaching
-    // analysis — they live only in the Slack recap. Don't surface them here.
-    .or("audience.is.null,audience.eq.prospect")
     .order("meeting_started_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(200);

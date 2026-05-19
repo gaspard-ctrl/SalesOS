@@ -1,7 +1,12 @@
 import useSWR from "swr";
-import type { SalesCoachAnalysis, MeetingKind } from "@/lib/guides/sales-coach";
+import type {
+  AnyMeetingKind,
+  AnySalesCoachAnalysis,
+} from "@/lib/guides/sales-coach";
 import type { DealSnapshot, CompanyMatchSnapshot } from "@/lib/hubspot";
 import type { TalkRatio } from "@/lib/sales-coach/talk-ratio";
+
+export type Audience = "prospect" | "client";
 
 // Custom fetcher: SWR's default fetcher resolves with the JSON body even for
 // 4xx/5xx responses, which means errorRetryCount/Interval never kick in. By
@@ -24,7 +29,13 @@ const SWR_OPTS = {
   dedupingInterval: 15_000,
 } as const;
 
-export type SalesCoachStatus = "pending" | "analyzing" | "done" | "error" | "skipped";
+export type SalesCoachStatus =
+  | "pending"
+  | "analyzing"
+  | "done"
+  | "error"
+  | "skipped"
+  | "awaiting_manual_deal";
 
 export type MeetingParticipant = {
   name: string | null;
@@ -41,7 +52,8 @@ export interface SalesCoachListItem {
   meeting_title: string | null;
   meeting_started_at: string | null;
   meeting_type: string | null;
-  meeting_kind: MeetingKind | null;
+  meeting_kind: AnyMeetingKind | null;
+  audience: Audience | null;
   status: SalesCoachStatus;
   score_global: number | null;
   slack_sent_at: string | null;
@@ -53,7 +65,7 @@ export interface SalesCoachListItem {
 
 export interface SalesCoachDetail extends SalesCoachListItem {
   transcript_text: string | null;
-  analysis: SalesCoachAnalysis | null;
+  analysis: AnySalesCoachAnalysis | null;
   deal_snapshot: DealSnapshot | null;
   hubspot_company_id: string | null;
   company_snapshot: CompanyMatchSnapshot | null;

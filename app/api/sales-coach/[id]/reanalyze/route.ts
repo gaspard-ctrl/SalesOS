@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getClaapRecording, pickTranscriptUrl, extractExternalParticipants } from "@/lib/claap";
+import {
+  getClaapRecording,
+  pickTranscriptUrl,
+  extractExternalParticipants,
+  extractTitleSearchHint,
+} from "@/lib/claap";
+import { fetchDealContext, resolveDealFromParticipants } from "@/lib/hubspot";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -17,7 +23,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: row } = await db
     .from("sales_coach_analyses")
-    .select("user_id, claap_recording_id, recorder_email, participants")
+    .select(
+      "user_id, claap_recording_id, recorder_email, meeting_title, participants, hubspot_deal_id",
+    )
     .eq("id", id)
     .single();
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -47,10 +55,66 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     ? extractExternalParticipants(rec.meeting?.participants, row.recorder_email)
     : [];
 
+  // Si la ligne n'a pas de deal HubSpot rattaché, on retente le résolveur auto
+  // (4 étapes : email → domaine → titre → LLM) AVANT de relancer l'analyse.
+  // Si rien ne matche : on bascule en `awaiting_manual_deal` pour que l'UI
+  // affiche le bloc Oui/Non + autocomplete au lieu de relancer une analyse
+  // sans contexte HubSpot.
+  let resolvedDealId: string | null = row.hubspot_deal_id ?? null;
+  let resolvedSnapshotUpdate: Record<string, unknown> = {};
+  if (!resolvedDealId && row.recorder_email) {
+    const participantEmails = (rec.meeting?.participants ?? [])
+      .map((p) => p.email)
+      .filter((e): e is string => !!e);
+    const titleHint = extractTitleSearchHint(row.meeting_title, row.recorder_email);
+    const auto = await resolveDealFromParticipants(
+      participantEmails,
+      row.recorder_email,
+      titleHint,
+      row.meeting_title,
+    ).catch((e) => {
+      console.warn(`[reanalyze/${id}] auto-resolver failed:`, e instanceof Error ? e.message : e);
+      return null;
+    });
+    if (auto) {
+      resolvedDealId = auto;
+      const snapshot = await fetchDealContext(auto).catch(() => null);
+      resolvedSnapshotUpdate = { hubspot_deal_id: auto, deal_snapshot: snapshot };
+      console.log(`[reanalyze/${id}] auto-resolved deal ${auto}`);
+    }
+  }
+
+  // Aucun deal trouvé → bascule en awaiting_manual_deal, on ne lance PAS
+  // l'analyse. L'UI affichera le bloc Oui/Non pour résolution manuelle.
+  if (!resolvedDealId) {
+    const update: Record<string, unknown> = {
+      status: "awaiting_manual_deal",
+      error_message: null,
+      updated_at: new Date().toISOString(),
+    };
+    if (participants.length > 0) update.participants = participants;
+    await db.from("sales_coach_analyses").update(update).eq("id", id);
+    console.log(`[reanalyze/${id}] no deal resolvable — switched to awaiting_manual_deal`);
+    return NextResponse.json({ ok: true, awaiting_manual_deal: true });
+  }
+
   const resetPayload: Record<string, unknown> = {
     status: "pending",
     error_message: null,
     updated_at: new Date().toISOString(),
+    // Reset des timestamps Slack pour que les 2 DM (coaching + recap) soient
+    // ré-envoyés. sendMeetingRecapSlack court-circuite si
+    // meeting_recap_slack_sent_at est déjà set, donc sans ce reset le user
+    // ne reçoit pas le nouveau recap. Idem coaching (slack_sent_at). On clear
+    // aussi les artefacts Slack du recap précédent (ts, channel, permalink,
+    // text) qui pointent vers un message obsolète.
+    slack_sent_at: null,
+    meeting_recap_slack_sent_at: null,
+    meeting_recap_slack_text: null,
+    meeting_recap_slack_ts: null,
+    meeting_recap_slack_channel: null,
+    meeting_recap_slack_permalink: null,
+    ...resolvedSnapshotUpdate,
   };
   if (participants.length > 0) resetPayload.participants = participants;
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { Search, AlertCircle, CheckCircle2, Loader2, CircleDashed, CircleSlash } from "lucide-react";
+import { Search, AlertCircle, CheckCircle2, Loader2, CircleDashed, CircleSlash, HelpCircle } from "lucide-react";
 import type { MeetingParticipant, SalesCoachListItem, SalesCoachStatus } from "@/lib/hooks/use-sales-coach";
-import { MEETING_KIND_LABELS } from "@/lib/guides/sales-coach";
+import { getMeetingKindLabel } from "@/lib/guides/sales-coach";
 import { companyFromEmail } from "@/lib/claap";
 import { COLORS, scoreToColor } from "@/lib/design/tokens";
 import { CompanyAvatar } from "@/components/ui/company-avatar";
@@ -60,6 +60,8 @@ function StatusIcon({ status }: { status: SalesCoachStatus }) {
       return <AlertCircle size={12} style={{ color: COLORS.err }} />;
     case "skipped":
       return <CircleSlash size={12} style={{ color: COLORS.ink3 }} />;
+    case "awaiting_manual_deal":
+      return <HelpCircle size={12} style={{ color: "#d97706" }} />;
   }
 }
 
@@ -228,7 +230,7 @@ export default function AnalysisList({
           const sc = scoreToColor(score, 10);
           const primary = pickPrimaryParticipant(a.participants, a.primary_contact);
           const dateStr = formatDate(a.meeting_started_at ?? a.created_at);
-          const kindLabel = a.meeting_kind ? MEETING_KIND_LABELS[a.meeting_kind] : null;
+          const kindLabel = getMeetingKindLabel(a.meeting_kind);
 
           return (
             <ListItem
@@ -293,6 +295,34 @@ export default function AnalysisList({
                     flexWrap: "wrap",
                   }}
                 >
+                  {a.status === "awaiting_manual_deal" && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        padding: "1px 6px",
+                        borderRadius: 999,
+                        background: "#fef3c7",
+                        color: "#92400e",
+                      }}
+                    >
+                      Deal manquant
+                    </span>
+                  )}
+                  {a.audience === "client" && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        padding: "1px 6px",
+                        borderRadius: 999,
+                        background: "#dcfce7",
+                        color: "#166534",
+                      }}
+                    >
+                      Client
+                    </span>
+                  )}
                   {kindLabel && (
                     <span
                       style={{
