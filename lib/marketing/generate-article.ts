@@ -251,23 +251,45 @@ ${rec.justification}
 
 ${metricsSection}
 
-## Source of style reference
+## Reference articles (tonal context only — depth rules below take precedence)
 ${ga4Available
-  ? `The 3 articles below are Coachello's TOP-PERFORMING articles by GA4 sessions (last 30 days). Match their structure, tone, and voice precisely — this is what works with Coachello's audience.`
-  : `The 3 articles below are recent Coachello articles. Match their structure, tone, and voice.`}
+  ? `The 3 articles below are Coachello's TOP-PERFORMING articles by GA4 sessions (last 30 days). Use them to calibrate the overall tone of voice and the type of audience we address — NOT to copy their heading density or section count.`
+  : `The 3 articles below are recent Coachello articles. Use them to calibrate the overall tone of voice — NOT to copy their heading density or section count.`}
 
-## Reference articles with structure analysis
+For reference, those articles average ~${avgStructure.h2Count} H2 sections and ~${avgStructure.h3Count} H3 subsections, but the structural targets below override that.
 
 ${styleReferenceText}
 
-## Structural baseline (match the top articles' rhythm, but respect the HARD word/link constraints below)
-- Target word count: **between 1500 and 2000 words** (HARD constraint — do not go under 1500 or over 2000)
-- H2 sections: ~${avgStructure.h2Count}
-- H3 subsections: ~${avgStructure.h3Count}
-- Paragraphs: ~${avgStructure.paragraphCount}
-- Bullet lists: ~${avgStructure.bulletLists}
-- Tables: ~${avgStructure.tables}
-- Internal links: **between 6 and 8** (HARD constraint — do not go under 6 or over 8)
+## Editorial POV (non-negotiable)
+The article must take a position, not present a balanced overview.
+1. State a clear thesis within the first 200 words — what is the ONE thing this article argues?
+2. Defend that thesis through the rest of the article. Every H2 should advance it, contrast with it, or qualify it — never wander.
+3. Identify the common misconception or default approach that HR/L&D buyers fall into, and explain why it falls short.
+4. Then present the better approach the article argues for. Specifics, not principles.
+5. Do NOT write "here are the X things to consider" or "best practices for Y" — those are the formats we are explicitly avoiding.
+
+## Voice and authorship
+Write as a senior editor at HBR, First Round Review, or Lenny's Newsletter would:
+- Opinionated, not neutral. The article defends a point of view, not surveys the landscape.
+- Concrete over abstract. Name patterns, behaviors, situations. "Most L&D leaders fund coaching they can't measure" is better than "measurement matters".
+- Specific over generic. Banish hedge phrases ("can be", "might help", "is often considered"). State things.
+- Willing to say what doesn't work. Identify the common mistake or the half-solution before presenting the better approach.
+- Direct. Short sentences mixed with longer ones. No throat-clearing openers ("In today's fast-paced world...", "It's important to note that..."). No conclusion-style transitions ("In conclusion", "To sum up").
+
+## Structural targets (HARD constraints)
+- Word count: between 1500 and 2000 words
+- H2 sections: between 4 and 6 (NOT more — fewer, deeper sections)
+- H3 subsections: between 0 and 3 TOTAL across the article (use sparingly, only when an H2 genuinely needs a sub-division)
+- Bullet lists: 2 to 4 (good for actionable lists, decision criteria, contrasts)
+- Tables: 0 to 1 (only if a real comparison warrants it)
+- Internal links: between 6 and 8
+
+## Section depth rules (this is what makes the article worth reading)
+- Each H2 section must develop ONE argument from multiple angles. Aim for ~300-400 words per H2 section.
+- Each body paragraph: 80-150 words. No 1-2 sentence paragraphs except for deliberate emphasis (a punchy thesis statement, a transition).
+- Minimum 3 substantial paragraphs per H2 before any bullet list or table.
+- A bullet list or table can replace ONE paragraph in a section, never all of them. Lists are accents, not the spine.
+- If a section can be summarized in 2 sentences, it should not exist as its own section — merge it into a neighbor.
 
 ## All Coachello articles — pick 6-8 for internal links
 ${availableForLinking}
@@ -275,14 +297,12 @@ ${availableForLinking}
 ---
 
 STRICT RULES:
-1. Follow the structure pattern of the reference articles: same use of H2/H3 heading density, same paragraph rhythm, same presence of bullet lists and tables.
-2. Match the tone, voice, and opening style of the top references.
-3. Use ONLY real numbers. If you cite a statistic, source it from ICF, PwC/ICF study, Gartner, McKinsey, HBR, BCG, or Deloitte — never invent %. If you don't have a verifiable number, use a qualitative statement.
-4. Never mention "one in X companies", fake ROI figures, or fabricated study names.
-5. **Word count MUST be between 1500 and 2000 words.** Count carefully. This overrides any reference-article length signal.
-6. **Include between 6 and 8 internal links** picked from the "All Coachello articles" list above. Distribute them naturally across the article — do not cluster them.
-7. End with a CTA section pointing to Coachello.
-8. Output valid HTML only (use <h2>, <h3>, <p>, <ul><li>, <table>, <strong>, <a href="...">), no <html>/<body> wrappers.
+1. Use ONLY real numbers. If you cite a statistic, source it from ICF, PwC/ICF study, Gartner, McKinsey, HBR, BCG, or Deloitte — never invent %. If you don't have a verifiable number, use a qualitative statement.
+2. Never mention "one in X companies", fake ROI figures, or fabricated study names.
+3. **Word count MUST be between 1500 and 2000 words.** Count carefully.
+4. **Include between 6 and 8 internal links** picked from the "All Coachello articles" list above. Distribute them naturally across the article — do not cluster them.
+5. End with a CTA section pointing to Coachello.
+6. Output valid HTML only (use <h2>, <h3>, <p>, <ul><li>, <table>, <strong>, <a href="...">), no <html>/<body> wrappers.
 `;
 
     const writeLanguageTool: Anthropic.Tool = {
@@ -330,7 +350,9 @@ STRICT RULES:
         ? "Write this article in French, adapted to a French-speaking HR/L&D audience. Do not translate — write natively for this audience."
         : "Write this article in English, adapted to an English-speaking HR/L&D audience. Do not translate — write natively for this audience.";
 
-      const langPrompt = `You are Coachello's senior content writer. Write a NEW blog article in ${lang === "fr" ? "French" : "English"}.
+      const langPrompt = `You are a senior editor writing for Coachello — the kind of writer HBR or First Round Review would commission. You write opinionated, deeply-researched pieces for HR/L&D buyers. You do not present "best practices"; you argue for one approach over its alternatives.
+
+Write a NEW blog article in ${lang === "fr" ? "French" : "English"}.
 
 ${langInstruction}
 

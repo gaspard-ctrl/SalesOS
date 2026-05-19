@@ -82,6 +82,7 @@ export async function POST(req: NextRequest) {
       participantEmails,
       recorderEmail,
       titleHint,
+      rec.title ?? null,
     ).catch((e) => {
       console.warn("[backfill] deal auto-resolve failed:", e);
       return null;

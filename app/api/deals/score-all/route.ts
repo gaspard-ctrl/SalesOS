@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { scoreOneDeal } from "@/app/api/deals/score/route";
+import { scoreOneDeal } from "@/lib/deal-scoring";
 
 export const dynamic = "force-dynamic";
 // Batch scoring can take a while — increase timeout to 5 minutes

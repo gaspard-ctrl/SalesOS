@@ -1,6 +1,6 @@
 import useSWR from "swr";
 import type { SalesCoachAnalysis, MeetingKind } from "@/lib/guides/sales-coach";
-import type { DealSnapshot } from "@/lib/hubspot";
+import type { DealSnapshot, CompanyMatchSnapshot } from "@/lib/hubspot";
 import type { TalkRatio } from "@/lib/sales-coach/talk-ratio";
 
 // Custom fetcher: SWR's default fetcher resolves with the JSON body even for
@@ -55,6 +55,8 @@ export interface SalesCoachDetail extends SalesCoachListItem {
   transcript_text: string | null;
   analysis: SalesCoachAnalysis | null;
   deal_snapshot: DealSnapshot | null;
+  hubspot_company_id: string | null;
+  company_snapshot: CompanyMatchSnapshot | null;
   talk_ratio: TalkRatio | null;
   email_draft: { subject: string; body: string; generated_at: string } | null;
   claap_event_id: string | null;
@@ -159,6 +161,56 @@ export type TrendPoint = {
     champion: number;
   } | null;
 };
+
+export type MeetingRecapPayload = {
+  context: string;
+  need: string;
+  risks_competition: string;
+  opportunities: string;
+  next_steps: string;
+};
+
+export interface SalesCoachRecapItem {
+  id: string;
+  user_id: string | null;
+  hubspot_deal_id: string | null;
+  meeting_title: string | null;
+  meeting_started_at: string | null;
+  audience: "prospect" | "client" | null;
+  meeting_recap: MeetingRecapPayload | null;
+  meeting_recap_slack_text: string | null;
+  meeting_recap_slack_permalink: string | null;
+  meeting_recap_slack_sent_at: string | null;
+  created_at: string;
+  company: string | null;
+  primary_contact: { name: string; email: string } | null;
+  participants: MeetingParticipant[] | null;
+}
+
+interface RecapsListResponse {
+  recaps: SalesCoachRecapItem[];
+  isAdmin: boolean;
+}
+
+export function useSalesCoachRecaps(
+  audience: "all" | "prospect" | "client" = "all",
+  dateRange?: { from?: string; to?: string },
+) {
+  const params = new URLSearchParams();
+  if (audience !== "all") params.set("audience", audience);
+  if (dateRange?.from) params.set("from", dateRange.from);
+  if (dateRange?.to) params.set("to", dateRange.to);
+  const qs = params.toString();
+  const key = `/api/sales-coach/recaps/list${qs ? `?${qs}` : ""}`;
+  const { data, error, isLoading, mutate } = useSWR<RecapsListResponse>(key, SWR_OPTS);
+  return {
+    recaps: data?.recaps ?? [],
+    isAdmin: data?.isAdmin ?? false,
+    isLoading,
+    error: error ? (error instanceof Error ? error.message : "Erreur de chargement") : "",
+    reload: () => mutate(),
+  };
+}
 
 export function useSalesCoachTrends(args: { dealId?: string | null; excludeId?: string | null; limit?: number }) {
   const { dealId, excludeId, limit = 5 } = args;

@@ -7,12 +7,16 @@ import { useSalesCoachList } from "@/lib/hooks/use-sales-coach";
 import AnalysisList from "./_components/analysis-list";
 import AnalysisDetail from "./_components/analysis-detail";
 import { BackfillModal } from "./_components/backfill-modal";
+import { RecapsView } from "./_components/recaps-view";
 import { COLORS } from "@/lib/design/tokens";
+
+type View = "coaching" | "recaps";
 
 function SalesCoachInner() {
   const searchParams = useSearchParams();
   const initialId = searchParams.get("id");
 
+  const [view, setView] = useState<View>("coaching");
   const [ownerFilter, setOwnerFilter] = useState<"mine" | "all">("mine");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
@@ -56,8 +60,21 @@ function SalesCoachInner() {
     }
   }, [analyses, selectedId]);
 
+  if (view === "recaps") {
+    return (
+      <div className="flex flex-col h-full" style={{ background: COLORS.bgPage }}>
+        <ViewToggle view={view} onChange={setView} />
+        <div className="flex-1 min-h-0">
+          <RecapsView />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full" style={{ background: COLORS.bgPage }}>
+    <div className="flex flex-col h-full" style={{ background: COLORS.bgPage }}>
+      <ViewToggle view={view} onChange={setView} />
+      <div className="flex flex-1 min-h-0">
       {/* Left column — list */}
       <div className="w-[300px] flex-shrink-0 flex flex-col">
         <div
@@ -212,6 +229,44 @@ function SalesCoachInner() {
         }}
       />
 
+      </div>
+    </div>
+  );
+}
+
+function ViewToggle({ view, onChange }: { view: View; onChange: (v: View) => void }) {
+  const items: { value: View; label: string }[] = [
+    { value: "coaching", label: "Coaching" },
+    { value: "recaps", label: "Recaps Slack" },
+  ];
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 4,
+        padding: "10px 16px",
+        background: COLORS.bgCard,
+        borderBottom: `1px solid ${COLORS.line}`,
+      }}
+    >
+      {items.map((it) => (
+        <button
+          key={it.value}
+          onClick={() => onChange(it.value)}
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            padding: "5px 12px",
+            borderRadius: 6,
+            border: `1px solid ${view === it.value ? COLORS.brand : COLORS.line}`,
+            background: view === it.value ? COLORS.brandTint : "transparent",
+            color: view === it.value ? COLORS.brand : COLORS.ink2,
+            cursor: "pointer",
+          }}
+        >
+          {it.label}
+        </button>
+      ))}
     </div>
   );
 }

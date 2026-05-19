@@ -444,8 +444,9 @@ export function computeGlobalScore(analysis: Partial<SalesCoachAnalysis>): numbe
  * input (priorities + key_moments + risks + strengths + weaknesses) as one
  * giant string into coaching_priorities[0] instead of structuring it.
  *
- * The string looks like: `[ "a", "b", "c" ], "key_moments": [...], ...` —
- * which becomes valid JSON when wrapped in `{"coaching_priorities":<blob>}`.
+ * The blob looks like: `[ "a", "b", "c" ], "key_moments": [...], ...` —
+ * sometimes with a trailing `}` (variant observed in prod). We try several
+ * wrap strategies because the exact corruption tail varies between calls.
  */
 export function repairAnalysis<T extends Partial<SalesCoachAnalysis>>(analysis: T): T {
   const cp = analysis.coaching_priorities;
@@ -453,12 +454,24 @@ export function repairAnalysis<T extends Partial<SalesCoachAnalysis>>(analysis: 
   const blob = cp[0];
   if (typeof blob !== "string" || !blob.trimStart().startsWith("[")) return analysis;
   if (!/"(key_moments|strengths|weaknesses|risks)"\s*:/.test(blob)) return analysis;
-  try {
-    const parsed = JSON.parse(`{"coaching_priorities":${blob}}`) as Partial<SalesCoachAnalysis>;
-    if (Array.isArray(parsed.coaching_priorities)) {
-      return { ...analysis, ...parsed };
-    }
-  } catch { /* malformed beyond simple wrap — give up, leave as-is */ }
+
+  const candidates: string[] = [
+    blob,
+    blob.replace(/\s*\}+\s*$/, ""),
+    blob.replace(/[^\]]*$/, ""),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(`{"coaching_priorities":${candidate}}`) as Partial<SalesCoachAnalysis>;
+      if (Array.isArray(parsed.coaching_priorities)) {
+        console.log("[repairAnalysis] repaired Haiku tool-input corruption");
+        return { ...analysis, ...parsed };
+      }
+    } catch { /* try next candidate */ }
+  }
+
+  console.warn("[repairAnalysis] failed to repair, leaving raw blob:", blob.slice(0, 200));
   return analysis;
 }
 

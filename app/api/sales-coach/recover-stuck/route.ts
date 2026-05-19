@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthenticatedUser } from "@/lib/auth";
+import { authenticateCronOrUser } from "@/lib/cron-auth";
 import { db } from "@/lib/db";
 import { getClaapRecording, pickTranscriptUrl } from "@/lib/claap";
 
@@ -10,11 +10,14 @@ const PENDING_THRESHOLD_MIN = 5;
 const ANALYZING_THRESHOLD_MIN = 5;
 
 export async function POST(req: NextRequest) {
-  const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  const auth = await authenticateCronOrUser(req);
+  if (!auth) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const { data: userRow } = await db.from("users").select("is_admin").eq("id", user.id).single();
-  if (!userRow?.is_admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // UI callers must be admin. Cron bypasses this check.
+  if (!auth.isCron) {
+    const { data: userRow } = await db.from("users").select("is_admin").eq("id", auth.userId).single();
+    if (!userRow?.is_admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const internalSecret = process.env.INTERNAL_SECRET;
   if (!internalSecret) {
@@ -40,6 +43,7 @@ export async function POST(req: NextRequest) {
   });
 
   const siteUrl = req.nextUrl.origin;
+  const isNetlifyEnv = !!(process.env.NETLIFY || process.env.URL || process.env.DEPLOY_URL);
   const recovered: string[] = [];
   const failed: { id: string; error: string }[] = [];
 
@@ -61,14 +65,22 @@ export async function POST(req: NextRequest) {
         .update({ status: "pending", error_message: null, updated_at: new Date().toISOString() })
         .eq("id", row.id);
 
+      // Same trigger path as the Claap webhook: bg function directly on Netlify,
+      // sync route in dev. Avoids the fragile webhook→analyze→bg chain.
+      const triggerUrl = isNetlifyEnv
+        ? `${siteUrl}/.netlify/functions/sales-coach-analyze-background`
+        : `${siteUrl}/api/sales-coach/analyze/${row.id}`;
+      const body = isNetlifyEnv
+        ? JSON.stringify({ id: row.id, transcriptUrl })
+        : JSON.stringify({ transcriptUrl });
       try {
-        await fetch(`${siteUrl}/api/sales-coach/analyze/${row.id}`, {
+        await fetch(triggerUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "x-internal-secret": internalSecret,
           },
-          body: JSON.stringify({ transcriptUrl }),
+          body,
           signal: AbortSignal.timeout(8000),
         });
       } catch (e) {

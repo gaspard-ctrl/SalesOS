@@ -257,11 +257,13 @@ function CompactScoreCard({
 
 function DealTopo({
   snapshot,
+  companySnapshot,
   dealId,
   analysisId,
   onDealUpdated,
 }: {
   snapshot: import("@/lib/hubspot").DealSnapshot | null;
+  companySnapshot: import("@/lib/hubspot").CompanyMatchSnapshot | null;
   dealId: string | null;
   analysisId: string;
   onDealUpdated: () => void;
@@ -356,6 +358,34 @@ function DealTopo({
     }
   }
 
+  async function refreshSnapshot() {
+    setRefreshingSnapshot(true);
+    try {
+      const res = await fetch(`/api/sales-coach/${analysisId}/refresh-snapshot`, { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        audience?: string;
+        pipeline_label?: string | null;
+        stage_label?: string | null;
+        is_closed_won?: boolean | null;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Erreur");
+      onDealUpdated();
+      alert(
+        `Snapshot rafraîchi.\n\n` +
+          `Audience : ${data.audience ?? "?"}\n` +
+          `Pipeline : ${data.pipeline_label ?? "?"}\n` +
+          `Stage : ${data.stage_label ?? "?"}\n` +
+          `Closed won : ${data.is_closed_won === true ? "oui" : data.is_closed_won === false ? "non" : "?"}`,
+      );
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setRefreshingSnapshot(false);
+    }
+  }
+
   // No deal linked at all
   if (!dealId) {
     return (
@@ -430,6 +460,33 @@ function DealTopo({
         </div>
       );
     }
+    // Fallback : si on a une company matchée (via domaine ou title hint), on
+    // affiche son nom + lifecycle pour donner du contexte plutôt qu'un ID brut.
+    if (companySnapshot?.name) {
+      const lifecycle = companySnapshot.lifecyclestage;
+      return (
+        <div
+          className="rounded-lg p-3 flex items-center gap-2 text-xs flex-wrap"
+          style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e" }}
+        >
+          <Building2 size={14} />
+          <span>
+            Compte <strong>{companySnapshot.name}</strong>
+            {lifecycle ? ` (lifecyclestage : ${lifecycle})` : ""} — deal HubSpot introuvable
+            {dealId ? <> (id <code style={{ background: "#fde68a", padding: "0 4px", borderRadius: 3 }}>{dealId}</code>)</> : null}.
+          </span>
+          <button
+            onClick={() => reanalyze()}
+            disabled={reanalyzing}
+            className="ml-auto font-medium px-2 py-1 rounded disabled:opacity-50"
+            style={{ background: "#fff", color: "#92400e", border: "1px solid #fde68a" }}
+          >
+            <RefreshCw size={11} className={`inline mr-1 ${reanalyzing ? "animate-spin" : ""}`} />
+            {reanalyzing ? "Ré-analyse…" : "Ré-analyser"}
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="rounded-lg p-3 flex items-center gap-2 text-xs" style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e" }}>
         <Building2 size={14} />
@@ -494,6 +551,16 @@ function DealTopo({
         </span>
       )}
       <div className="ml-auto flex items-center gap-3">
+        <button
+          onClick={refreshSnapshot}
+          disabled={refreshingSnapshot}
+          className="flex items-center gap-1 text-[11px] font-medium disabled:opacity-50"
+          style={{ color: "#888" }}
+          title="Re-fetch HubSpot deal (sans relancer Claude) — recalcule prospect/client"
+        >
+          <RefreshCw size={10} className={refreshingSnapshot ? "animate-spin" : ""} />
+          {refreshingSnapshot ? "Rafraîchissement…" : "Rafraîchir deal"}
+        </button>
         <button
           onClick={() => reanalyze()}
           disabled={reanalyzing}
@@ -894,6 +961,7 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
       <div className="px-6 pt-2" style={{ background: "#f8f8f8" }}>
         <DealTopo
           snapshot={detail.deal_snapshot}
+          companySnapshot={detail.company_snapshot}
           dealId={detail.hubspot_deal_id}
           analysisId={analysisId}
           onDealUpdated={reload}

@@ -36,6 +36,27 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const cookie = req.headers.get("cookie") ?? "";
   const runEndpoint = def.runEndpoint;
 
+  // ── company-news : délègue à une Netlify Background Function ──────────
+  // Le scan prend 1-3 min (50 entreprises + 15 keywords + Claude). Sur Netlify
+  // les fonctions synchrones (et leur `after()`) sont coupées à ~26s — d'où le
+  // statut "running" figé. Les Background Functions tolèrent jusqu'à 15 min.
+  const siteUrl = process.env.URL ?? process.env.SITE_URL ?? baseUrl;
+  const cronSecret = process.env.CRON_SECRET;
+  if (id === "company-news" && process.env.NETLIFY === "true" && cronSecret) {
+    fetch(`${siteUrl}/.netlify/functions/intel-company-news-background`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${cronSecret}`, "content-type": "application/json" },
+      body: JSON.stringify({ userId, startedAt, triggeredBy: "manual" }),
+    }).catch((e) => {
+      console.error("[intel/agents/run] background invoke failed:", e);
+    });
+    return NextResponse.json({ ok: true, queued: true, background: true }, { status: 202 });
+  }
+
+  // Dev local (pas de Background Functions dispo) + autres agents : on garde
+  // le pattern `after()` historique. Note : les autres agents partagent le
+  // même risque de coupure 26s sur Netlify et devraient passer en background
+  // s'ils dépassent ce budget.
   after(async () => {
     let signalsCount = 0;
     let ok = true;
@@ -44,12 +65,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
     try {
       if (id === "company-news") {
-        // Appel direct in-process : évite le 2e hop HTTP et son Inactivity Timeout.
         const result = await runLinkedinScan({ callerUserId: userId });
         signalsCount = result.analysis.signals_created;
         payload = result;
       } else {
-        // Autres agents : on garde le saut HTTP en attendant leur extraction.
         const res = await fetch(`${baseUrl}${runEndpoint}`, {
           method: "POST",
           headers: { "Content-Type": "application/json", cookie },

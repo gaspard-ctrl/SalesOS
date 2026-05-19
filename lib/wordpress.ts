@@ -166,18 +166,15 @@ export async function fetchArticlesTimeline(
 }
 
 /**
- * Workaround: the WP REST API on coachello.ai returns content.rendered=""
- * because the theme stores the article body in a custom post-meta layer that
- * the REST controller doesn't expose. The public HTML page does render the
- * body inside <div class="blog-inner__main">, so when we need the actual prose
- * (Content Factory style matching) we scrape that wrapper.
+ * Defensive fallback: the canonical body source is `acf.post_builder` (handled
+ * by extractArticleContent above), and as of 2026-05 all 138 published posts
+ * have it populated. This scraper exists for posts that might be authored
+ * without the ACF builder (imports, legacy entries) so we still get prose.
  *
  * Keep this strictly opt-in: callers should only invoke fetchArticleBody for
- * the handful of articles they need (e.g. the 3 style references), never in a
- * loop over fetchAllArticles output — that would mean ~100 HTML requests per
- * analysis and bust the 120s route budget.
- *
- * Remove once the WP-side mu-plugin lands and content.rendered is populated.
+ * the handful of articles where contentText came back empty, never in a loop
+ * over fetchAllArticles output. ~100 HTML requests would bust the 120s route
+ * budget.
  */
 const articleBodyCache = new Map<
   string,
