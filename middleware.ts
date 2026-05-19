@@ -8,6 +8,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/webhooks/claap(.*)", // Claap webhook — authenticated via x-claap-webhook-secret in handler
   "/api/webhooks/netrows(.*)", // Netrows webhook — authenticated via HMAC SHA-256 (x-netrows-signature) in handler
   "/api/sales-coach/analyze(.*)", // Fire-and-forget internal trigger — authenticated via x-internal-secret in handler
+  "/api/sales-coach/recover-stuck(.*)", // Cron / UI — accepts Bearer CRON_SECRET OR Clerk session (admin)
   "/api/linkedin/weekly-scan(.*)", // Cron / UI — accepts Bearer CRON_SECRET OR Clerk session
   "/api/intel/agents/ads/run(.*)", // Cron / UI — accepts Bearer CRON_SECRET OR Clerk session
   "/api/intel/agents/hiring-spike/run(.*)", // Cron / UI — accepts Bearer CRON_SECRET OR Clerk session

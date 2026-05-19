@@ -2,8 +2,14 @@ import Anthropic from "@anthropic-ai/sdk";
 import { db } from "../db";
 import { logUsage } from "../log-usage";
 import { sendSalesCoachSlack } from "./slack";
-import { fetchDealContext, renderDealContextForPrompt, resolveDealFromParticipants } from "../hubspot";
-import { getClaapRecording, fetchTranscriptSegments, pickTranscriptJsonUrl } from "../claap";
+import {
+  fetchDealContext,
+  renderDealContextForPrompt,
+  resolveDealFromParticipants,
+  resolveCompanyFromParticipants,
+  type CompanyMatchSnapshot,
+} from "../hubspot";
+import { getClaapRecording, fetchTranscriptSegments, pickTranscriptJsonUrl, extractTitleSearchHint } from "../claap";
 import { computeTalkRatio } from "./talk-ratio";
 import {
   SALES_COACH_SYSTEM_PROMPT,
@@ -19,7 +25,7 @@ import {
   type Audience,
   type MeetingRecap,
 } from "./meeting-recap";
-import { scoreOneDeal } from "@/app/api/deals/score/route";
+import { scoreOneDeal } from "../deal-scoring";
 
 const DEFAULT_ANALYZE_MODEL = "claude-haiku-4-5-20251001";
 const MAX_TRANSCRIPT_CHARS_FOR_CLAUDE = 150_000;
@@ -54,13 +60,18 @@ export type RunAnalysisResult =
   | { ok: false; status: number; error: string };
 
 export async function runSalesCoachAnalysis(id: string, transcriptUrl: string): Promise<RunAnalysisResult> {
-  const { data: row } = await db
+  const { data: row, error: rowErr } = await db
     .from("sales_coach_analyses")
-    .select("id, status, updated_at, user_id, meeting_title, meeting_started_at, hubspot_deal_id, claap_recording_id, recorder_email")
+    .select(
+      "id, status, updated_at, user_id, meeting_title, meeting_started_at, hubspot_deal_id, hubspot_company_id, company_snapshot, claap_recording_id, recorder_email",
+    )
     .eq("id", id)
     .single();
 
-  if (!row) return { ok: false, status: 404, error: "Not found" };
+  if (rowErr || !row) {
+    if (rowErr) console.error(`[sales-coach/analyze/${id}] row select failed:`, rowErr.message);
+    return { ok: false, status: 404, error: rowErr?.message ?? "Not found" };
+  }
   if (row.status === "done") return { ok: true, already: "done" };
   if (row.status === "analyzing") {
     const ageMin = row.updated_at
@@ -102,6 +113,19 @@ export async function runSalesCoachAnalysis(id: string, transcriptUrl: string): 
     } catch { /* keep defaults */ }
 
     let dealId = row.hubspot_deal_id as string | null;
+    // Defensive guard: rows created before the webhook-side validation existed
+    // can carry a non-numeric Claap id (e.g. "SxUuwn5YGyOrBigi") in
+    // `hubspot_deal_id`. HubSpot will never return a snapshot for that, and the
+    // `if (!dealId)` re-resolver below skips because dealId is truthy. Wipe it
+    // here so the auto-resolver gets a fresh shot.
+    if (dealId && !/^\d+$/.test(dealId)) {
+      console.warn(
+        `[sales-coach/analyze/${id}] stored hubspot_deal_id "${dealId}" is not numeric — clearing and re-resolving`,
+      );
+      await db.from("sales_coach_analyses").update({ hubspot_deal_id: null }).eq("id", id);
+      dealId = null;
+    }
+    let companySnapshot = (row.company_snapshot as CompanyMatchSnapshot | null) ?? null;
     let talkRatio: ReturnType<typeof computeTalkRatio> | null = null;
 
     if (row.claap_recording_id && process.env.CLAAP_API_TOKEN) {
@@ -113,7 +137,13 @@ export async function runSalesCoachAnalysis(id: string, transcriptUrl: string): 
           const participantEmails = participants
             .map((p) => p.email)
             .filter((e): e is string => !!e);
-          const resolved = await resolveDealFromParticipants(participantEmails, row.recorder_email).catch((e) => {
+          const titleHint = extractTitleSearchHint(row.meeting_title, row.recorder_email);
+          const resolved = await resolveDealFromParticipants(
+            participantEmails,
+            row.recorder_email,
+            titleHint,
+            row.meeting_title,
+          ).catch((e) => {
             console.warn(`[sales-coach/analyze/${id}] deal auto-resolve failed:`, e instanceof Error ? e.message : e);
             return null;
           });
@@ -121,6 +151,36 @@ export async function runSalesCoachAnalysis(id: string, transcriptUrl: string): 
             dealId = resolved;
             await db.from("sales_coach_analyses").update({ hubspot_deal_id: resolved }).eq("id", id);
             console.log(`[sales-coach/analyze/${id}] auto-resolved deal ${resolved} from participants`);
+          }
+        }
+
+        // Backfill company snapshot for rows created before the webhook started
+        // persisting it, or whenever the webhook's lookup came up empty.
+        if (!companySnapshot && row.recorder_email) {
+          const participantEmails = participants
+            .map((p) => p.email)
+            .filter((e): e is string => !!e);
+          const titleHint = extractTitleSearchHint(row.meeting_title, row.recorder_email);
+          const resolvedCompany = await resolveCompanyFromParticipants(
+            participantEmails,
+            row.recorder_email,
+            titleHint,
+          ).catch((e) => {
+            console.warn(`[sales-coach/analyze/${id}] company auto-resolve failed:`, e instanceof Error ? e.message : e);
+            return null;
+          });
+          if (resolvedCompany) {
+            companySnapshot = resolvedCompany;
+            await db
+              .from("sales_coach_analyses")
+              .update({
+                hubspot_company_id: resolvedCompany.id,
+                company_snapshot: resolvedCompany,
+              })
+              .eq("id", id);
+            console.log(
+              `[sales-coach/analyze/${id}] auto-resolved company ${resolvedCompany.id} (${resolvedCompany.name ?? "?"}, lifecycle=${resolvedCompany.lifecyclestage ?? "?"})`,
+            );
           }
         }
 
@@ -186,7 +246,9 @@ export async function runSalesCoachAnalysis(id: string, transcriptUrl: string): 
     }
 
     const audience: Audience = resolveAudience(snapshot);
-    console.log(`[sales-coach/analyze/${id}] audience=${audience} (dealId=${dealId ?? "none"}, closed_won=${snapshot?.is_closed_won === true}, pipeline=${snapshot?.pipeline_label ?? "?"})`);
+    console.log(
+      `[sales-coach/analyze/${id}] audience=${audience} (dealId=${dealId ?? "none"}, closed_won=${snapshot?.is_closed_won === true}, pipeline="${snapshot?.pipeline_label ?? "?"}", stage="${snapshot?.stage_label ?? "?"}")`,
+    );
 
     let dealScoreSummary: { total: number | null; reasoning: string | null; next_action: string | null } | null = null;
     if (dealScore?.score) {

@@ -16,9 +16,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
 
-  const { data: userRow } = await db.from("users").select("is_admin").eq("id", user.id).single();
-  const isAdmin = !!userRow?.is_admin;
-
   const { data: row } = await db
     .from("sales_coach_analyses")
     .select("user_id, claap_recording_id, recorder_email, hubspot_deal_id, participants, status, slack_sent_at")
@@ -26,9 +23,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .single();
 
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (!isAdmin && row.user_id !== user.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
   if (row.hubspot_deal_id) {
     return NextResponse.json({ ok: true, already: row.hubspot_deal_id });
   }
@@ -66,6 +60,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     participantEmails,
     recorderEmail,
     titleHint,
+    rec.title ?? null,
   );
   if (!dealId) {
     return NextResponse.json({ ok: false, reason: "no_match" });

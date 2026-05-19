@@ -4,6 +4,7 @@ import { logUsage } from "../log-usage";
 import type { DealSnapshot } from "../hubspot";
 import { renderDealContextForPrompt } from "../hubspot";
 import { findChannelId } from "../slack-leads";
+import { extractTitleSearchHint } from "../claap";
 
 const DEFAULT_RECAP_MODEL = "claude-haiku-4-5-20251001";
 
@@ -11,7 +12,7 @@ export type Audience = "client" | "prospect";
 
 export type MeetingRecap = {
   context: string;
-  client_need: string;
+  need: string;
   risks_competition: string;
   opportunities: string;
   next_steps: string;
@@ -19,27 +20,73 @@ export type MeetingRecap = {
 
 const RECAP_FIELDS: (keyof MeetingRecap)[] = [
   "context",
-  "client_need",
+  "need",
   "risks_competition",
   "opportunities",
   "next_steps",
 ];
 
-export const MEETING_RECAP_SYSTEM_PROMPT = `Tu es un analyste sales senior chez Coachello. À partir d'un transcript de meeting (et éventuellement du contexte global du deal HubSpot), tu produis un recap structuré en 5 sections, dans le style des debriefs internes Coachello (cf. format Plusgrade).
+export const MEETING_RECAP_SYSTEM_PROMPT = `Tu es un analyste sales senior chez Coachello. À partir d'un transcript de meeting (et éventuellement du contexte global du deal HubSpot), tu produis un recap structuré en 5 sections, dans le style des debriefs internes Coachello.
 
 Règles dures :
 - Réponds UNIQUEMENT via l'outil \`meeting_recap\`.
-- Langue : suis la langue dominante du transcript. Ne traduis JAMAIS. Si le transcript est en français, rends les 5 sections en français. Idem anglais. Les labels (Context, Client Need, etc.) sont injectés côté client — ne les répète pas dans tes valeurs.
-- Chaque section = paragraphe multi-lignes. Une idée par ligne (saut de ligne). N'utilise pas de sous-bullets, pas de tirets, pas d'emojis.
-- N'invente JAMAIS de chiffres, montants, noms, dates qui ne sont pas dans les sources fournies.
-- Si une section n'a vraiment rien à dire d'utile, rends une seule ligne courte qui le dit explicitement (ex : "Aucun risque identifié sur ce meeting." / "No clear opportunity surfaced in this call."). Ne mets jamais vide.
+- Langue : suis la langue dominante du transcript. Ne traduis JAMAIS. Si le transcript est en français, rends les 5 sections en français. Idem anglais. Les labels (Context, Need, etc.) sont injectés côté client — ne les répète pas dans tes valeurs.
+- **Format STRICT de chaque section : 1 à 3 bullet points courts.** Un bullet = une ligne commençant par \`- \` (tiret + espace), MAX 15 mots, idéalement 8-12. Sépare chaque bullet par un VRAI saut de ligne (touche Entrée), JAMAIS par les caractères littéraux backslash-n. Aucune phrase composée, aucun paragraphe, aucun sous-bullet. Style télégraphique, dense, scannable en 5 secondes.
+- N'invente JAMAIS de chiffres, montants, noms, dates, industries, employés, localisations qui ne sont pas dans les sources fournies (transcript, deal HubSpot, société HubSpot, contacts HubSpot).
+- Si une section n'a vraiment rien d'utile à dire à partir des sources, **laisse-la complètement vide** (chaîne vide ""). Ne mets pas de phrase placeholder type "Aucun risque identifié" — préfère le vide. Mieux vaut un recap court et dense qu'un recap rempli de fluff.
+- Priorise impitoyablement : si tu hésites entre 2 et 3 bullets, garde 2. Le lecteur veut l'essentiel en 30 secondes max.
 
-Sections (5) :
-1. **context** — Qui était présent (rôles), quel était l'objectif du meeting, statut de la relation (current customer / prospect / nouveau contact). Pour un prospect avec historique : situer ce meeting dans la séquence du deal (Xe meeting, score IA, momentum si pertinent).
-2. **client_need** — Le besoin client/prospect : features demandées, contraintes (langues, intégrations, volumétrie), exigences clés, points de confusion qu'il faut clarifier.
-3. **risks_competition** — Risques (côté nous, côté eux), concurrents nommés, hésitations exprimées, signaux de blocage. Pour un prospect : inclure les signaux du deal global (stalled, momentum, BANT manquants si fourni).
-4. **opportunities** — Upsells, expansions, use cases adjacents (sales enablement, autres équipes), idées de packaging. Pour un prospect : reliquats du deal context si pertinent (Strategic Fit fort, etc.).
-5. **next_steps** — Actions concrètes pour le sales rep ("for me"). Une action par ligne, verbes d'action. Inclut le \`next_action\` du scorer IA si fourni et pertinent.`;
+---
+
+## Si audience = CLIENT (compte gagné / Customer Success / passation)
+
+Structure compacte, orientée Customer Success — pas de BANT, pas de concurrence.
+
+1. **context** — Qui + rôle, objectif du meeting, statut compte. Ex: \`- Jessie (DRH Messika) + Julie/Baptiste (Coachello) — réalignement post-congés\`
+2. **need** — Demandes du client (features, expansion, clarifications). Une demande = un bullet.
+3. **risks_competition** — Uniquement risques INTERNES (insatisfactions, churn, blocages). Pas de concurrence.
+4. **opportunities** — Upsells, use cases adjacents, expansion vers d'autres équipes.
+5. **next_steps** — Actions concrètes pour le CSM/AE. Verbes d'action.
+
+---
+
+## Si audience = PROSPECT (deal en cours)
+
+Structure orientée discovery / qualification — les signaux **BANT** et **BOSCHE** doivent transparaître dans les bullets pertinents (sans label explicite).
+
+1. **context** — 1-3 bullets max parmi : interlocuteur (nom + rôle + niveau d'autorité : DM / influencer / champion / end-user), objet du meeting, contexte organisationnel pertinent (industrie/taille si disco), trigger / pain. Ne liste PAS tout — sélectionne les 2-3 infos les plus utiles.
+2. **need** — Besoins prospect : features demandées, contraintes (langues, volumes), Budget si mentionné. Un besoin = un bullet.
+3. **risks_competition** — Risques + concurrents + signaux Timeline. Un risque = un bullet.
+4. **opportunities** — Upsells potentiels, expansion, packaging. Un par bullet.
+5. **next_steps** — Actions sales rep. Verbes d'action. Inclut \`next_action\` du scorer IA si fourni.
+
+---
+
+## Exemple de bonne sortie (audience client, FR)
+
+Pour la section \`context\` ci-dessous, la valeur passée à l'outil est une string où chaque bullet est séparé par un VRAI retour à la ligne (caractère newline réel, pas la séquence backslash-n) :
+
+context :
+- Jessie (PMO Messika) + Julie/Baptiste (Coachello) — réalignement post-congés
+- 3 meetings à caler : acculturation coachs, webinaire onboarding, RH pilotage
+
+need :
+- Webinaire onboarding coachés en anglais, entre fin mai et début juillet
+- Acculturation coachs animée par DRH Ségolène si possible
+- Doc intégration Teams pour IT
+
+risks_competition :
+- IT non finalisé, démarrage 25 mai serré
+- Coachés internationaux non identifiés (Maëlle/Solène en charge)
+
+opportunities :
+- Vidéo KPI 3 min pour éviter une réunion RH supplémentaire
+
+next_steps :
+- Jessie envoie doc Messika + planning international
+- Coachello prépare checklist paramétrage
+
+Note les bullets : courts, factuels, scannables. Pas de "qui revient de Thaïlande", pas de "responsable du projet (rôle exact non précisé)". Sec et utile.`;
 
 export const meetingRecapTool: Anthropic.Tool = {
   name: "meeting_recap",
@@ -47,27 +94,31 @@ export const meetingRecapTool: Anthropic.Tool = {
   input_schema: {
     type: "object" as const,
     properties: {
-      context: { type: "string", description: "Section Context (multi-lignes, langue du transcript)" },
-      client_need: { type: "string", description: "Section Client Need (multi-lignes, langue du transcript)" },
-      risks_competition: { type: "string", description: "Section Risks / Competition (multi-lignes, langue du transcript)" },
-      opportunities: { type: "string", description: "Section Opportunities (multi-lignes, langue du transcript)" },
-      next_steps: { type: "string", description: "Section Next Steps (for me) — actions concrètes, une par ligne" },
+      context: { type: "string", description: "Section Context — voir prompt système pour la structure exacte selon audience" },
+      need: { type: "string", description: "Section Need (besoin prospect / client). Vide autorisé." },
+      risks_competition: { type: "string", description: "Section Risks (clients) / Risks + Competition (prospects). Vide autorisé." },
+      opportunities: { type: "string", description: "Section Opportunities. Vide autorisé." },
+      next_steps: { type: "string", description: "Section Next Steps (for me) — actions concrètes, une par ligne. Vide autorisé." },
     },
-    required: ["context", "client_need", "risks_competition", "opportunities", "next_steps"],
+    required: ["context", "need", "risks_competition", "opportunities", "next_steps"],
   },
 };
 
-export function repairRecap(recap: Partial<MeetingRecap>): MeetingRecap {
+export function repairRecap(recap: Partial<MeetingRecap> & { client_need?: string }): MeetingRecap {
   const out: MeetingRecap = {
     context: "",
-    client_need: "",
+    need: "",
     risks_competition: "",
     opportunities: "",
     next_steps: "",
   };
+  // Backward-compat: tolerate legacy `client_need` field from older rows.
+  if (typeof recap.client_need === "string" && !recap.need) {
+    out.need = recap.client_need.trim();
+  }
   for (const k of RECAP_FIELDS) {
     const v = recap[k];
-    out[k] = typeof v === "string" ? v.trim() : "";
+    if (typeof v === "string") out[k] = v.trim();
   }
   return out;
 }
@@ -86,14 +137,37 @@ type DealScoreSummary = {
   next_action: string | null;
 };
 
+// Pipelines whose label (case-insensitive substring) marks the deal as a
+// client account — meetings on these deals skip the coaching analysis and
+// get only the Slack recap. Override via env var (CSV) to add new pipelines
+// (e.g. "Onboarding") without a code change.
+const NON_PROSPECT_PIPELINE_KEYWORDS = (
+  process.env.NON_PROSPECT_PIPELINE_LABELS ?? "customer success,passation"
+)
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+// Stage labels that mark a deal as won. HubSpot's `hs_is_closed_won` boolean
+// is the source of truth, but it can lag on custom pipelines or come back
+// missing — so we also check the human-readable stage label as a fallback.
+const CLOSED_WON_STAGE_KEYWORDS = ["closed won", "closedwon", "gagné", "gagne", "won"];
+
 /**
- * Decide whether a meeting belongs to a Client (closed-won OR Customer Success
+ * Decide whether a meeting belongs to a Client (closed-won OR a non-prospect
  * pipeline) or a Prospect. Defaults to "prospect" when no deal is attached.
  */
 export function resolveAudience(snapshot: DealSnapshot | null): Audience {
   if (!snapshot) return "prospect";
   if (snapshot.is_closed_won === true) return "client";
-  if ((snapshot.pipeline_label ?? "").trim().toLowerCase() === "customer success") return "client";
+  const stageLabel = (snapshot.stage_label ?? "").trim().toLowerCase();
+  if (stageLabel && CLOSED_WON_STAGE_KEYWORDS.some((kw) => stageLabel.includes(kw))) {
+    return "client";
+  }
+  const pipelineLabel = (snapshot.pipeline_label ?? "").trim().toLowerCase();
+  if (pipelineLabel && NON_PROSPECT_PIPELINE_KEYWORDS.some((kw) => pipelineLabel.includes(kw))) {
+    return "client";
+  }
   return "prospect";
 }
 
@@ -259,18 +333,23 @@ function formatRecapMessage(args: {
     lines.push(``, `Here's a quick rundown of my meeting with the team at ${companyName}.`);
   }
 
-  lines.push(
-    ``,
-    `• *Context:*\n${recap.context}`,
-    ``,
-    `• *Client Need:*\n${recap.client_need}`,
-    ``,
-    `• *Risks / Competition:*\n${recap.risks_competition}`,
-    ``,
-    `• *Opportunities:*\n${recap.opportunities}`,
-    ``,
-    `• *Next Steps (for me):*\n${recap.next_steps}`,
-  );
+  // Clients don't have "competition" — they're already customers. Only risks
+  // (churn signals, internal blockers).
+  const risksLabel = audience === "client" ? "Risks" : "Risks / Competition";
+  const needLabel = audience === "client" ? "Client Need" : "Prospect Need";
+
+  const bullets: Array<{ label: string; value: string }> = [
+    { label: "Context", value: recap.context },
+    { label: needLabel, value: recap.need },
+    { label: risksLabel, value: recap.risks_competition },
+    { label: "Opportunities", value: recap.opportunities },
+    { label: "Next Steps (for me)", value: recap.next_steps },
+  ];
+
+  for (const b of bullets) {
+    if (!b.value || !b.value.trim()) continue;
+    lines.push(``, `• *${b.label}:*\n${b.value.trim()}`);
+  }
 
   if (audience === "prospect" && dealId && appUrl) {
     lines.push(``, `<${appUrl}/deals?dealId=${encodeURIComponent(dealId)}|Ouvrir le deal dans SalesOS →>`);
@@ -308,7 +387,7 @@ export async function sendMeetingRecapSlack(
   const { data: row } = await db
     .from("sales_coach_analyses")
     .select(
-      "id, hubspot_deal_id, meeting_title, meeting_started_at, deal_snapshot, meeting_recap, audience, participants, meeting_recap_slack_sent_at",
+      "id, hubspot_deal_id, recorder_email, meeting_title, meeting_started_at, deal_snapshot, meeting_recap, audience, participants, meeting_recap_slack_sent_at",
     )
     .eq("id", analysisId)
     .single();
@@ -322,8 +401,16 @@ export async function sendMeetingRecapSlack(
   const snapshot = (row.deal_snapshot as DealSnapshot | null) ?? null;
   const audience = (row.audience as Audience | null) ?? resolveAudience(snapshot);
 
-  // Header bits
-  const companyName = snapshot?.name?.trim() || (row.hubspot_deal_id ? `Deal ${row.hubspot_deal_id}` : "Unknown deal");
+  // Header bits — prefer the deal name, fall back to the associated company
+  // name, then to the company hint extracted from the meeting title (e.g.
+  // "Messika & Coachello" → "Messika"). Never expose the raw HubSpot deal id
+  // as a user-facing label.
+  const titleHint = extractTitleSearchHint(row.meeting_title, row.recorder_email ?? "");
+  const companyName =
+    snapshot?.name?.trim() ||
+    snapshot?.company?.name?.trim() ||
+    titleHint ||
+    "ce deal";
   const stageDisplay = snapshot?.is_closed_won === true
     ? "Closed Won"
     : snapshot?.stage_label?.trim() || null;
@@ -373,13 +460,28 @@ export async function sendMeetingRecapSlack(
     }
   }
 
+  let postedTs: string | null = null;
+  let permalink: string | null = null;
   try {
-    await slackPost("/chat.postMessage", {
+    const posted = (await slackPost("/chat.postMessage", {
       channel: channelId,
       text,
       unfurl_links: false,
       unfurl_media: false,
-    });
+    })) as { ts?: string; channel?: string };
+    postedTs = posted.ts ?? null;
+    if (postedTs && channelId) {
+      // Best-effort: fetch the permalink so the Recaps view can link back to
+      // the Slack thread. A failure here doesn't break the recap flow.
+      try {
+        const linkRes = await fetch(
+          `https://slack.com/api/chat.getPermalink?channel=${encodeURIComponent(channelId)}&message_ts=${encodeURIComponent(postedTs)}`,
+          { headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` } },
+        );
+        const linkData = (await linkRes.json()) as { ok?: boolean; permalink?: string };
+        if (linkData.ok && linkData.permalink) permalink = linkData.permalink;
+      } catch { /* permalink optional */ }
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, error: msg };
@@ -387,7 +489,13 @@ export async function sendMeetingRecapSlack(
 
   await db
     .from("sales_coach_analyses")
-    .update({ meeting_recap_slack_sent_at: new Date().toISOString() })
+    .update({
+      meeting_recap_slack_sent_at: new Date().toISOString(),
+      meeting_recap_slack_text: text,
+      meeting_recap_slack_ts: postedTs,
+      meeting_recap_slack_channel: channelId,
+      meeting_recap_slack_permalink: permalink,
+    })
     .eq("id", analysisId);
 
   console.log(`[meeting-recap/${analysisId}] sent to ${destinationLabel} (audience=${audience})`);

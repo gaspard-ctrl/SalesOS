@@ -73,10 +73,16 @@ async function postSlackAlert(args: {
   }
 }
 
+function stableValue(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return String(v);
+  try { return JSON.stringify(v); } catch { return ""; }
+}
+
 function buildEventKey(body: RadarWebhookPayload): string {
   const subject = body.profile?.username ?? body.company?.username ?? "unknown";
   const changeSig = body.changes
-    .map((c) => `${c.field}:${String(c.oldValue)}>${String(c.newValue)}`)
+    .map((c) => `${c.field}:${stableValue(c.oldValue)}>${stableValue(c.newValue)}`)
     .sort()
     .join("|");
   return `${body.event}:${subject}:${body.timestamp}:${changeSig}`.slice(0, 500);
@@ -172,13 +178,23 @@ export async function POST(req: NextRequest) {
 
     // ── Profile changed ──────────────────────────────────────────────
     if (body.event === "profile.changed" && body.profile) {
-      const titleChange = body.changes.find((c) => c.field === "headline" || c.field === "position");
+      // `position` (array) carries structured title+company; `headline` is just a string.
+      // Prefer position when both fire, since it lets us label "old → new" cleanly.
+      const positionChange = body.changes.find((c) => c.field === "position");
+      const headlineChange = body.changes.find((c) => c.field === "headline");
+      const titleChange = positionChange ?? headlineChange;
       if (titleChange) {
         const username = body.profile.username;
-        const oldValue = String(titleChange.oldValue ?? "");
-        const newValue = String(titleChange.newValue ?? "");
 
-        // Update linkedin_monitored_profiles
+        type Pos = { title?: string; companyName?: string };
+        const firstPos = (v: unknown): Pos | null =>
+          Array.isArray(v) && v.length > 0 ? (v[0] as Pos) : null;
+
+        const oldPos = positionChange ? firstPos(positionChange.oldValue) : null;
+        const newPos = positionChange ? firstPos(positionChange.newValue) : null;
+        const oldTitle = oldPos?.title ?? (headlineChange ? String(headlineChange.oldValue ?? "") : "");
+        const newTitle = newPos?.title ?? (headlineChange ? String(headlineChange.newValue ?? "") : "");
+
         const { data: monitored } = await db
           .from("linkedin_monitored_profiles")
           .select("full_name, company, headline, is_champion")
@@ -186,17 +202,24 @@ export async function POST(req: NextRequest) {
           .maybeSingle();
 
         const displayName = monitored?.full_name ?? username;
-        const previousCompany = monitored?.company ?? "—";
         const isChampion = monitored?.is_champion === true;
 
-        // Determine new company from snapshot or fallback to monitored profile's company
-        const snapshotPosition = body.newSnapshot?.position as { companyName?: string }[] | undefined;
-        const newCompany = snapshotPosition?.[0]?.companyName ?? previousCompany;
+        // Old company from the position payload itself (truth at change-time);
+        // fall back to the stored value if we only have a headline change.
+        const snapshotPosition = body.newSnapshot?.position as Pos[] | undefined;
+        const previousCompany = oldPos?.companyName ?? monitored?.company ?? "—";
+        const newCompany =
+          newPos?.companyName ?? snapshotPosition?.[0]?.companyName ?? previousCompany;
 
-        // Persist the new headline + company so subsequent signals use fresh data.
+        const fmtLabel = (t: string, c: string) =>
+          [t, c && c !== "—" ? c : ""].filter(Boolean).join(" @ ") || "—";
+        const oldLabel = fmtLabel(oldTitle, previousCompany);
+        const newLabel = fmtLabel(newTitle, newCompany);
+
+        // Persist refreshed snapshot. Keep prior headline if we only got a position change.
         await db.from("linkedin_monitored_profiles")
           .update({
-            headline: newValue,
+            headline: newTitle || monitored?.headline || null,
             company: newCompany,
             last_snapshot: body.newSnapshot,
             last_change_at: new Date().toISOString(),
@@ -216,10 +239,15 @@ export async function POST(req: NextRequest) {
         // Skipped for champions — on les traite déjà comme prioritaires.
         let icpResult: IcpScoreResult | null = null;
         if (!isChampion && !isCompanyInTargets && newCompany && newCompany !== "—") {
-          icpResult = await scoreIcpMatch(newCompany, newValue);
+          icpResult = await scoreIcpMatch(newCompany, newTitle);
         }
 
         const isIcpMatch = !!icpResult?.is_match && (icpResult?.score ?? 0) >= 70;
+        const sameCompany = previousCompany !== "—" && previousCompany === newCompany;
+        const moveLabel =
+          previousCompany !== "—" && !sameCompany
+            ? ` (${previousCompany} → ${newCompany})`
+            : "";
         const finalSignalType = isChampion
           ? "champion_change"
           : isIcpMatch
@@ -228,13 +256,19 @@ export async function POST(req: NextRequest) {
         const finalAgentId = isChampion ? "champion-tracker" : "job-change";
         const finalScore = isChampion ? 95 : isIcpMatch ? icpResult!.score : 85;
         const finalWhyRelevant = isChampion
-          ? `${displayName} (ancien champion${previousCompany !== "—" ? ` chez ${previousCompany}` : ""}) rejoint ${newCompany} — opportunité de re-pitch sur sa nouvelle boîte.`
+          ? sameCompany
+            ? `${displayName} (champion) change de poste chez ${newCompany} — opportunité de re-pitch sur son nouveau scope.`
+            : `${displayName} (ancien champion${previousCompany !== "—" ? ` chez ${previousCompany}` : ""}) rejoint ${newCompany} — opportunité de re-pitch sur sa nouvelle boîte.`
           : isIcpMatch
-            ? `${displayName} rejoint ${newCompany} — non listée dans les cibles mais ICP match (${icpResult!.score}/100). ${icpResult!.reasoning}`
-            : `${displayName} a changé de poste — nouveau décideur potentiel pour le coaching.`;
+            ? `${displayName} rejoint ${newCompany}${moveLabel} — non listée dans les cibles mais ICP match (${icpResult!.score}/100). ${icpResult!.reasoning}`
+            : `${displayName} a changé de poste${moveLabel} — nouveau décideur potentiel pour le coaching.`;
         const title = isChampion
-          ? `🌟 Champion — ${displayName} rejoint ${newCompany !== "—" ? newCompany : "une nouvelle boîte"}`
-          : `${displayName} change de poste${newCompany !== "—" ? ` chez ${newCompany}` : ""}`;
+          ? sameCompany
+            ? `🌟 Champion — ${displayName} change de poste chez ${newCompany}`
+            : `🌟 Champion — ${displayName} rejoint ${newCompany !== "—" ? newCompany : "une nouvelle boîte"}`
+          : sameCompany
+            ? `${displayName} change de poste chez ${newCompany}`
+            : `${displayName} rejoint ${newCompany !== "—" ? newCompany : "une nouvelle boîte"}${previousCompany !== "—" ? ` (ex-${previousCompany})` : ""}`;
         const action = isChampion
           ? `Recontacter ${displayName} — ancien champion, idéal pour ré-amorcer un cycle chez ${newCompany}.`
           : `Contacter ${displayName} pour se présenter et proposer un accompagnement.`;
@@ -249,7 +283,7 @@ export async function POST(req: NextRequest) {
               company_name: newCompany,
               signal_type: finalSignalType,
               title,
-              summary: `${oldValue} → ${newValue}`,
+              summary: `${oldLabel} → ${newLabel}`,
               strength: 3,
               score: finalScore,
               source_url: body.profile!.url,

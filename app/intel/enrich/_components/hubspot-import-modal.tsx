@@ -176,7 +176,13 @@ export function HubspotImportModal({
   const confirm = () => {
     const selected = allProfiles
       .filter((p) => selectedIds.has(idOf(p)))
-      .map((p) => ({ ...p, selected: true, isChampion: markAsChampion || p.isChampion }));
+      .map((p) => ({
+        ...p,
+        selected: true,
+        // Auto-champion : tick global, flag déjà set, OU deal clos (won/lost) —
+        // ces contacts ont une relation commerciale aboutie, ils sont champions de fait.
+        isChampion: markAsChampion || p.isChampion || p.topDeal?.isClosed === true,
+      }));
     onConfirm(selected, { isChampion: markAsChampion });
   };
 

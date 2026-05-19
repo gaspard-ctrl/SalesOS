@@ -12,7 +12,6 @@ import {
   CheckCheck,
   Archive,
   Copy,
-  ListPlus,
 } from "lucide-react";
 import { CompanyAvatar } from "@/components/ui/company-avatar";
 import { ScoreGauge } from "@/components/ui/score-gauge";
@@ -37,7 +36,6 @@ export function IntelDetailPanel({
   onClose: () => void;
   onPatch: (patch: Partial<Pick<Intel, "is_read" | "is_actioned" | "archived">>) => void;
 }) {
-  const [taskOk, setTaskOk] = React.useState<"idle" | "loading" | "ok" | "err">("idle");
   const [copied, setCopied] = React.useState(false);
 
   React.useEffect(() => {
@@ -45,17 +43,6 @@ export function IntelDetailPanel({
     if (!intel.is_read) onPatch({ is_read: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intel.id]);
-
-  async function createHubspotTask() {
-    setTaskOk("loading");
-    try {
-      const r = await fetch(`/api/intel/${intel.id}/hubspot-task`, { method: "POST" });
-      if (!r.ok) throw new Error();
-      setTaskOk("ok");
-    } catch {
-      setTaskOk("err");
-    }
-  }
 
   function copyMessage() {
     const msg = intel.suggested_action ?? intel.title;
@@ -220,20 +207,6 @@ export function IntelDetailPanel({
           label={intel.is_actioned ? "Actionné" : "Marquer actionné"}
           active={intel.is_actioned}
           onClick={() => onPatch({ is_actioned: !intel.is_actioned })}
-        />
-        <FooterBtn
-          icon={<ListPlus size={13} />}
-          label={
-            taskOk === "loading"
-              ? "Création…"
-              : taskOk === "ok"
-                ? "Task créée"
-                : taskOk === "err"
-                  ? "Erreur"
-                  : "Task HubSpot"
-          }
-          onClick={createHubspotTask}
-          active={taskOk === "ok"}
         />
         <FooterBtn icon={<Copy size={13} />} label={copied ? "Copié" : "Copier"} onClick={copyMessage} />
         <FooterBtn

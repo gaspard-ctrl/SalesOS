@@ -78,9 +78,8 @@ export async function GET(req: NextRequest) {
       const article = await fetchArticleById(parseInt(articleId, 10));
       if (!article) return NextResponse.json({ error: "Article not found" }, { status: 404 });
 
-      // Workaround: WP REST returns content.rendered="" today. Scrape the
-      // public page to fill the body so the article view can render it.
-      // Cached 12h per URL — remove once the WP-side mu-plugin lands.
+      // ACF post_builder is the canonical body source; this scrapes the public
+      // page only when an article lacks builder content (legacy / imported posts).
       if (!article.contentText && article.link) {
         const body = await fetchArticleBody(article.link);
         if (body.contentHtml) {

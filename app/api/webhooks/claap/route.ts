@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { resolveDealFromParticipants } from "@/lib/hubspot";
+import {
+  resolveDealFromParticipants,
+  resolveCompanyFromParticipants,
+  type CompanyMatchSnapshot,
+} from "@/lib/hubspot";
 import { extractExternalParticipants, extractTitleSearchHint } from "@/lib/claap";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +67,19 @@ export async function POST(req: NextRequest) {
 
     // Scope filter: external meeting + linked to a HubSpot deal
     let meetingType = rec.meeting?.type ?? "";
-    let dealId = rec.deal?.id ?? null;
+
+    // HubSpot deal IDs natifs sont des entiers. Tout ID alphanumérique (ex:
+    // "8ncGo4qjgFJW32zx") vient d'un objet interne Claap et ne résoudra pas
+    // côté HubSpot — on l'ignore et on tombe dans le fallback résolveur.
+    const rawDealIdFromClaap = rec.deal?.id ?? null;
+    let dealId: string | null =
+      rawDealIdFromClaap && /^\d+$/.test(rawDealIdFromClaap) ? rawDealIdFromClaap : null;
+    if (rawDealIdFromClaap && !dealId) {
+      console.warn(
+        `[claap-webhook] discarding non-numeric Claap deal id "${rawDealIdFromClaap}" for recording ${rec.id}`,
+      );
+    }
+
     const recorderEmail = rec.recorder?.email ?? "";
     const transcriptUrl = rec.transcripts?.find((t) => t.isActive)?.textUrl ?? rec.transcripts?.[0]?.textUrl ?? null;
 
@@ -71,24 +87,51 @@ export async function POST(req: NextRequest) {
     // to decide whether to override Claap's "internal" classification (below).
     const titleHint = extractTitleSearchHint(rec.title, recorderEmail);
 
-    // Fallback: if Claap didn't link a deal, try to resolve via participant
-    // emails (stage 1+2 inside the resolver) then via the title hint (stage 3).
-    // We run this BEFORE the internal-drop decision so a HubSpot match can
-    // serve as evidence to override Claap's mis-classification.
-    if (!dealId && recorderEmail) {
-      const participantEmails = (rec.meeting?.participants ?? [])
-        .map((p) => p.email)
-        .filter((e): e is string => !!e);
-      dealId = await resolveDealFromParticipants(
-        participantEmails,
-        recorderEmail,
-        titleHint,
-      ).catch((e) => {
-        console.warn("[claap-webhook] deal auto-resolve failed:", e);
-        return null;
-      });
-      if (dealId) {
-        console.log(`[claap-webhook] auto-resolved deal ${dealId} for recording ${rec.id}`);
+    const participantEmails = (rec.meeting?.participants ?? [])
+      .map((p) => p.email)
+      .filter((e): e is string => !!e);
+
+    // Fallback: if Claap didn't link a (valid) deal, try to resolve via
+    // participant emails (stage 1+2 inside the resolver), the title hint
+    // (stage 3), and finally LLM semantic matching against the active deal
+    // pool (stage 4). Runs BEFORE the internal-drop decision so a HubSpot
+    // match can serve as evidence to override Claap's mis-classification.
+    //
+    // In parallel, look up the HubSpot company by domain/name — kept on the
+    // row for UI fallback when the deal can't be loaded. Does NOT participate
+    // in prospect/client classification (that's deal-stage only).
+    let companyMatch: CompanyMatchSnapshot | null = null;
+    if (recorderEmail) {
+      const [resolvedDeal, resolvedCompany] = await Promise.all([
+        dealId
+          ? Promise.resolve(dealId)
+          : resolveDealFromParticipants(
+              participantEmails,
+              recorderEmail,
+              titleHint,
+              rec.title ?? null,
+            ).catch((e) => {
+              console.warn("[claap-webhook] deal auto-resolve failed:", e);
+              return null;
+            }),
+        resolveCompanyFromParticipants(
+          participantEmails,
+          recorderEmail,
+          titleHint,
+        ).catch((e) => {
+          console.warn("[claap-webhook] company auto-resolve failed:", e);
+          return null;
+        }),
+      ]);
+      if (resolvedDeal && resolvedDeal !== dealId) {
+        console.log(`[claap-webhook] auto-resolved deal ${resolvedDeal} for recording ${rec.id}`);
+      }
+      dealId = resolvedDeal;
+      companyMatch = resolvedCompany;
+      if (companyMatch) {
+        console.log(
+          `[claap-webhook] matched company ${companyMatch.id} (${companyMatch.name ?? "?"}, lifecycle=${companyMatch.lifecyclestage ?? "?"}) for recording ${rec.id}`,
+        );
       }
     }
 
@@ -130,6 +173,8 @@ export async function POST(req: NextRequest) {
       claap_event_id: payload.eventId ?? null,
       recorder_email: recorderEmail || "unknown",
       hubspot_deal_id: dealId,
+      hubspot_company_id: companyMatch?.id ?? null,
+      company_snapshot: companyMatch,
       meeting_title: rec.title ?? null,
       meeting_started_at: rec.meeting?.startingAt ?? null,
       meeting_type: meetingType || null,
@@ -177,42 +222,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Storage error" }, { status: 500 });
     }
 
-    // Fire-and-forget trigger analysis. Pass transcriptUrl so the analyzer doesn't
-    // have to re-fetch recording metadata from Claap (textUrl is valid 24h).
-    // Use the actual request origin so dev and prod both route back to themselves,
-    // instead of accidentally hitting the prod URL from local dev.
+    // Trigger analysis. On Netlify we call the Background Function directly to
+    // skip the intermediate Next.js sync route — fewer hops = fewer chances of
+    // a timeout/abort leaving the row stuck in `pending`. In dev we fall back
+    // to the regular route which runs inline. Either way: pass transcriptUrl
+    // so the analyzer doesn't have to re-fetch from Claap (textUrl is valid 24h).
     const siteUrl = req.nextUrl.origin;
     const internalSecret = process.env.INTERNAL_SECRET;
+    const isNetlifyEnv = !!(process.env.NETLIFY || process.env.URL || process.env.DEPLOY_URL);
 
-    if (siteUrl && internalSecret) {
-      // Await the trigger fetch so Netlify doesn't kill the function before the
-      // request goes out. The analyzer flips status to "analyzing" and returns
-      // ~immediately, so we wait at most a couple of seconds — Claude itself
-      // runs on its own request budget after that.
+    if (!internalSecret) {
+      console.warn("[claap-webhook] missing INTERNAL_SECRET — analysis will not start");
+    } else {
+      const triggerUrl = isNetlifyEnv
+        ? `${siteUrl}/.netlify/functions/sales-coach-analyze-background`
+        : `${siteUrl}/api/sales-coach/analyze/${inserted.id}`;
+      const body = isNetlifyEnv
+        ? JSON.stringify({ id: inserted.id, transcriptUrl })
+        : JSON.stringify({ transcriptUrl });
       try {
-        const triggerRes = await fetch(`${siteUrl}/api/sales-coach/analyze/${inserted.id}`, {
+        const triggerRes = await fetch(triggerUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "x-internal-secret": internalSecret,
           },
-          body: JSON.stringify({ transcriptUrl }),
+          body,
           signal: AbortSignal.timeout(8000),
         });
-        if (!triggerRes.ok) {
+        // Background functions return 202 once queued; the regular route returns 200.
+        if (!triggerRes.ok && triggerRes.status !== 202) {
           const text = await triggerRes.text().catch(() => "");
           console.error(`[claap-webhook] trigger non-2xx (${triggerRes.status}):`, text.slice(0, 200));
         }
       } catch (e) {
-        // AbortError after 8s is expected when Claude takes longer than that to
-        // start streaming; the analyzer keeps running server-side.
+        // AbortError after 8s is expected for the inline-dev path when Claude
+        // takes longer to start streaming; bg trigger should return 202 in <1s.
         const msg = e instanceof Error ? e.message : String(e);
         if (!msg.includes("aborted") && !msg.includes("timeout")) {
           console.error("[claap-webhook] trigger fetch failed:", msg);
         }
       }
-    } else {
-      console.warn("[claap-webhook] missing SITE_URL or INTERNAL_SECRET — analysis will not start");
     }
 
     return NextResponse.json({ ok: true, id: inserted.id });
