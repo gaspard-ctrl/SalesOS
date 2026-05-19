@@ -717,6 +717,133 @@ export async function resolveDealFromParticipants(
 }
 
 /* ─────────────────────────────────────────────────────────────────────── */
+/*  Manual deal search (autocomplete + exact match)                         */
+/* ─────────────────────────────────────────────────────────────────────── */
+
+export type DealSearchResult = {
+  id: string;
+  name: string;
+  stage_label: string | null;
+  pipeline_label: string | null;
+  amount: number | null;
+  close_date: string | null;
+  owner_name: string | null;
+  is_closed_won: boolean;
+  is_closed: boolean;
+};
+
+/**
+ * Recherche HubSpot par nom de deal pour l'autocomplete et la résolution
+ * manuelle quand le résolveur auto a échoué.
+ *
+ * - Découpe le query en tokens et applique CONTAINS_TOKEN pour chacun (AND
+ *   intra-groupe) : "Coachello Plan" matchera "Coachello Plan Pro" mais pas
+ *   uniquement "Plan B".
+ * - Si query est vide, retourne []. La page UI affichera les deals après que
+ *   l'utilisateur ait commencé à taper.
+ * - Résout en parallèle stage_label / pipeline_label / owner_name pour que
+ *   le dropdown soit informatif sans round-trips supplémentaires côté UI.
+ */
+export async function searchDealsByName(
+  query: string,
+  limit = 15,
+): Promise<DealSearchResult[]> {
+  if (!process.env.HUBSPOT_ACCESS_TOKEN) return [];
+  const q = query.trim();
+  if (q.length < 2) return [];
+
+  const tokens = q
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2);
+  if (tokens.length === 0) return [];
+
+  type SearchHit = { id: string; properties?: Record<string, string> };
+  const searchRes = await hubspotFetch<{ results?: SearchHit[] }>(
+    "/crm/v3/objects/deals/search",
+    "POST",
+    {
+      filterGroups: [
+        {
+          filters: tokens.map((token) => ({
+            propertyName: "dealname",
+            operator: "CONTAINS_TOKEN",
+            value: token,
+          })),
+        },
+      ],
+      sorts: [{ propertyName: "hs_lastmodifieddate", direction: "DESCENDING" }],
+      properties: [
+        "dealname",
+        "dealstage",
+        "amount",
+        "closedate",
+        "hubspot_owner_id",
+        "hs_is_closed",
+        "hs_is_closed_won",
+      ],
+      limit,
+    },
+  ).catch(() => ({ results: [] }));
+
+  const hits = searchRes.results ?? [];
+  if (hits.length === 0) return [];
+
+  // Charge pipelines + owners une seule fois pour enrichir tous les résultats.
+  const [pipelinesRes, ownersRes] = await Promise.allSettled([
+    hubspotFetch<PipelinesResponse>("/crm/v3/pipelines/deals"),
+    hubspotFetch<OwnersResponse>("/crm/v3/owners?limit=200"),
+  ]);
+
+  const stageById = new Map<string, { stage: string; pipeline: string | null }>();
+  if (pipelinesRes.status === "fulfilled") {
+    for (const pl of pipelinesRes.value.results ?? []) {
+      for (const st of pl.stages) {
+        stageById.set(st.id, { stage: st.label, pipeline: pl.label ?? null });
+      }
+    }
+  }
+
+  const ownerById = new Map<string, string>();
+  if (ownersRes.status === "fulfilled") {
+    for (const o of ownersRes.value.results ?? []) {
+      const name = `${o.firstName ?? ""} ${o.lastName ?? ""}`.trim() || o.email || "";
+      if (name) ownerById.set(o.id, name);
+    }
+  }
+
+  return hits.map((h) => {
+    const p = h.properties ?? {};
+    const stageInfo = p.dealstage ? stageById.get(p.dealstage) : undefined;
+    return {
+      id: h.id,
+      name: p.dealname ?? "",
+      stage_label: stageInfo?.stage ?? null,
+      pipeline_label: stageInfo?.pipeline ?? null,
+      amount: p.amount ? Number(p.amount) : null,
+      close_date: p.closedate || null,
+      owner_name: p.hubspot_owner_id ? ownerById.get(p.hubspot_owner_id) ?? null : null,
+      is_closed_won: p.hs_is_closed_won === "true",
+      is_closed: p.hs_is_closed === "true",
+    };
+  });
+}
+
+/**
+ * Cherche un deal HubSpot par nom exact (case-insensitive). Utilisé quand
+ * l'utilisateur saisit un nom sans passer par l'autocomplete. Retourne tous
+ * les deals dont `dealname` correspond exactement (modulo casse / espaces),
+ * pour que l'UI puisse demander un choix s'il y en a plusieurs.
+ */
+export async function findDealsByExactName(name: string): Promise<DealSearchResult[]> {
+  const trimmed = name.trim();
+  if (!trimmed) return [];
+  const candidates = await searchDealsByName(trimmed, 50);
+  const needle = trimmed.toLowerCase();
+  return candidates.filter((c) => c.name.trim().toLowerCase() === needle);
+}
+
+/* ─────────────────────────────────────────────────────────────────────── */
 /*  Stage 4: LLM-powered deal matching                                      */
 /* ─────────────────────────────────────────────────────────────────────── */
 

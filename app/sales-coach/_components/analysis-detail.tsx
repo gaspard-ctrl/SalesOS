@@ -25,10 +25,23 @@ import {
 import { MeddicBadge } from "@/components/ui/meddic-badge";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { useSalesCoachDetail, useSalesCoachDealHistory } from "@/lib/hooks/use-sales-coach";
-import type { SalesCoachAnalysis, AxisScore, MeddicScore } from "@/lib/guides/sales-coach";
-import { MEETING_KIND_LABELS, isDiscoveryKind, repairAnalysis } from "@/lib/guides/sales-coach";
+import type {
+  AnySalesCoachAnalysis,
+  AxisScore,
+  ClientSalesCoachAnalysis,
+  CustomerHealth,
+  MeddicScore,
+  SalesCoachAnalysis,
+} from "@/lib/guides/sales-coach";
+import {
+  getMeetingKindLabel,
+  isClientAnalysis,
+  isDiscoveryKind,
+  repairAnalysis,
+} from "@/lib/guides/sales-coach";
 import { SynthesisTab } from "./synthesis-tab";
 import { EmailDraftModal } from "./email-draft-modal";
+import { ManualDealResolution } from "./manual-deal-resolution";
 import { Sparkles } from "lucide-react";
 import { COLORS, scoreToColor } from "@/lib/design/tokens";
 import { ScoreGauge } from "@/components/ui/score-gauge";
@@ -40,7 +53,7 @@ interface Props {
   onDeleted?: () => void;
 }
 
-type TabId = "synthese" | "axes" | "meddic" | "bosche" | "history" | "transcript";
+type TabId = "synthese" | "axes" | "meddic" | "bosche" | "customer_health" | "history" | "transcript";
 
 function scoreColor(score: number): string {
   return scoreToColor(score, 10).fg;
@@ -68,6 +81,23 @@ const AXES_LABELS: { key: keyof SalesCoachAnalysis["axes"]; label: string }[] = 
   { key: "value_articulation", label: "Value articulation" },
   { key: "objection_handling", label: "Objection handling" },
   { key: "next_steps", label: "Next steps & closing" },
+];
+
+const CLIENT_AXES_LABELS: { key: keyof ClientSalesCoachAnalysis["axes"]; label: string }[] = [
+  { key: "opening", label: "Opening & rapport relationnel" },
+  { key: "discovery", label: "Discovery (évolution des objectifs)" },
+  { key: "active_listening", label: "Écoute active" },
+  { key: "value_reinforcement", label: "Value reinforcement (ROI livré)" },
+  { key: "expansion_discovery", label: "Expansion discovery" },
+  { key: "next_steps", label: "Next steps & follow-through" },
+];
+
+const CUSTOMER_HEALTH_LABELS: { key: keyof CustomerHealth; label: string }[] = [
+  { key: "relationship", label: "Relation & multi-threading" },
+  { key: "adoption", label: "Adoption produit" },
+  { key: "sentiment", label: "Sentiment" },
+  { key: "expansion_signals", label: "Signaux d'expansion" },
+  { key: "risk_flags", label: "Signaux de risque" },
 ];
 
 const MEDDIC_LABELS: { key: keyof SalesCoachAnalysis["meddic"]; label: string; short: string }[] = [
@@ -585,7 +615,7 @@ function DealTopo({
 
 function MeetingKindBadge({ kind, size = "sm" }: { kind: string | null; size?: "sm" | "md" }) {
   if (!kind) return null;
-  const label = MEETING_KIND_LABELS[kind as keyof typeof MEETING_KIND_LABELS] ?? kind;
+  const label = getMeetingKindLabel(kind) ?? kind;
   const sizeClass = size === "md" ? "text-xs font-semibold px-2.5 py-1" : "text-[11px] font-semibold px-2 py-0.5";
   return (
     <span
@@ -663,6 +693,23 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
     return <div className="flex items-center justify-center h-full text-sm" style={{ color: "#dc2626" }}>{error || "Analyse introuvable"}</div>;
   }
 
+  // Meeting Claap externe sans deal HubSpot résolu : on demande à l'utilisateur
+  // d'associer manuellement un deal (ou de supprimer la ligne). L'analyse n'a
+  // pas été lancée par le webhook.
+  if (detail.status === "awaiting_manual_deal") {
+    return (
+      <ManualDealResolution
+        analysisId={analysisId}
+        meetingTitle={detail.meeting_title}
+        meetingStartedAt={detail.meeting_started_at}
+        recorderEmail={detail.recorder_email}
+        participants={detail.participants}
+        onResolved={reload}
+        onDeleted={() => onDeleted?.()}
+      />
+    );
+  }
+
   if (detail.status !== "done" || !detail.analysis) {
     return (
       <div className="flex flex-col items-center justify-center h-full px-6 text-center">
@@ -726,11 +773,13 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
 
   // Defensive repair for the malformed shape Haiku 4.5 occasionally produces
   // (everything from `coaching_priorities` onwards stuffed as one string).
-  const a = repairAnalysis(detail.analysis);
+  const a = repairAnalysis(detail.analysis as AnySalesCoachAnalysis);
+  const isClient = isClientAnalysis(a);
   const meetingDate = detail.meeting_started_at
     ? new Date(detail.meeting_started_at).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" })
     : "";
-  const isDisco = isDiscoveryKind(detail.meeting_kind);
+  // BOSCHE n'a de sens que pour les discoveries prospect.
+  const isDisco = !isClient && isDiscoveryKind(detail.meeting_kind as Parameters<typeof isDiscoveryKind>[0]);
 
   // Normalize string-list fields: Claude occasionally returns an object
   // { "1": "...", "2": "..." } instead of a string array — accept both.
@@ -762,7 +811,7 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
           .filter((s): s is string => !!s)
       : [];
   const names = participantNames.length > 0 ? participantNames : fallbackNames;
-  const meetingKindLabel = detail.meeting_kind ? MEETING_KIND_LABELS[detail.meeting_kind] : null;
+  const meetingKindLabel = getMeetingKindLabel(detail.meeting_kind);
 
   return (
     <div className="flex flex-col h-full" style={{ background: COLORS.bgPage }}>
@@ -976,8 +1025,12 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
           tabs={[
             { key: "synthese", label: "Synthèse", icon: Sparkles },
             { key: "axes", label: "6 axes", icon: Target },
-            { key: "meddic", label: "MEDDIC", icon: TrendingUp },
-            ...(isDisco ? [{ key: "bosche", label: "BOSCHE", icon: TrendingUp }] : []),
+            ...(isClient
+              ? [{ key: "customer_health", label: "Customer Health", icon: TrendingUp }]
+              : [
+                  { key: "meddic", label: "MEDDIC", icon: TrendingUp },
+                  ...(isDisco ? [{ key: "bosche", label: "BOSCHE", icon: TrendingUp }] : []),
+                ]),
             { key: "history", label: `Historique${history.length > 0 ? ` (${history.length})` : ""}`, icon: History },
             { key: "transcript", label: "Transcript", icon: FileText },
           ]}
@@ -993,14 +1046,24 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
             onOpenEmailDraft={() => setEmailModalOpen(true)}
             onGoToAxes={() => setTab("axes")}
             onGoToMeddic={() => setTab("meddic")}
+            onGoToCustomerHealth={() => setTab("customer_health")}
           />
         )}
 
         {tab === "axes" && (
           <div className="space-y-3">
-            {AXES_LABELS.map(({ key, label }) => (
-              <AxisCard key={key} label={label} axis={a.axes?.[key] ?? EMPTY_AXIS} collapsible />
-            ))}
+            {isClient
+              ? CLIENT_AXES_LABELS.map(({ key, label }) => (
+                  <AxisCard key={key} label={label} axis={a.axes?.[key] ?? EMPTY_AXIS} collapsible />
+                ))
+              : AXES_LABELS.map(({ key, label }) => (
+                  <AxisCard
+                    key={key}
+                    label={label}
+                    axis={(a as SalesCoachAnalysis).axes?.[key] ?? EMPTY_AXIS}
+                    collapsible
+                  />
+                ))}
 
             {coachingPriorities.length > 0 && (
               <div className="rounded-lg p-4" style={{ background: "#fef2f4", border: "1px solid #f01563" }}>
@@ -1033,89 +1096,138 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
           </div>
         )}
 
-        {tab === "meddic" && (
-          <div className="space-y-3">
-            <div className="rounded-lg p-3 text-xs" style={{ background: "#eef2ff", border: "1px solid #c7d2fe", color: "#3730a3" }}>
-              <strong>MEDDIC</strong> — framework de qualification appliqué à tous types de meetings. Les dimensions marquées N/A ne sont pas observables dans ce type de call, mais la reco reste pertinente.
-            </div>
-            {!a.meddic && (
-              <div className="rounded-lg p-4 text-sm" style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}>
-                Analyse MEDDIC non disponible pour ce meeting (analyse générée avant l&apos;ajout du framework, ou incomplete). Ré-analyse le meeting via &quot;Analyser un meeting passé&quot; pour obtenir les scores MEDDIC.
+        {tab === "meddic" && !isClient && (() => {
+          const prospect = a as SalesCoachAnalysis;
+          return (
+            <div className="space-y-3">
+              <div className="rounded-lg p-3 text-xs" style={{ background: "#eef2ff", border: "1px solid #c7d2fe", color: "#3730a3" }}>
+                <strong>MEDDIC</strong> — framework de qualification appliqué à tous types de meetings. Les dimensions marquées N/A ne sont pas observables dans ce type de call, mais la reco reste pertinente.
               </div>
-            )}
-            {a.meddic && (
+              {!prospect.meddic && (
+                <div className="rounded-lg p-4 text-sm" style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}>
+                  Analyse MEDDIC non disponible pour ce meeting (analyse générée avant l&apos;ajout du framework, ou incomplete). Ré-analyse le meeting via &quot;Analyser un meeting passé&quot; pour obtenir les scores MEDDIC.
+                </div>
+              )}
+              {prospect.meddic && (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                    gap: 10,
+                  }}
+                >
+                  {MEDDIC_LABELS.map(({ key, label }) => {
+                    const dim = prospect.meddic[key];
+                    if (!dim) return null;
+                    return (
+                      <CompactScoreCard
+                        key={key}
+                        label={label}
+                        axis={dim}
+                        framework="meddic"
+                        dimension={key as string}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {tab === "customer_health" && isClient && (() => {
+          const client = a as ClientSalesCoachAnalysis;
+          const ch = client.customer_health;
+          return (
+            <div className="space-y-3">
+              <div
+                className="rounded-lg p-3 text-xs"
+                style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", color: "#065f46" }}
+              >
+                <strong>Customer Health</strong> — lecture qualitative de l&apos;état du compte (relation, adoption, sentiment, signaux d&apos;expansion, risques). Sert à orienter le prochain touchpoint CS, pas à scorer le compte.
+              </div>
+              {!ch && (
+                <div className="rounded-lg p-4 text-sm" style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}>
+                  Lecture Customer Health non disponible. Re-lance l&apos;analyse pour la générer.
+                </div>
+              )}
+              {ch && CUSTOMER_HEALTH_LABELS.map(({ key, label }) => {
+                const value = (ch[key] ?? "").trim();
+                const isEmpty = !value || /pas observable/i.test(value);
+                return (
+                  <div
+                    key={key}
+                    className="rounded-lg p-4"
+                    style={{ background: "#fff", border: "1px solid #eeeeee" }}
+                  >
+                    <div className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "#065f46" }}>
+                      {label}
+                    </div>
+                    <p
+                      className="text-sm leading-relaxed"
+                      style={{ color: isEmpty ? "#888" : "#333", fontStyle: isEmpty ? "italic" : "normal" }}
+                    >
+                      {value || "Pas observable dans ce meeting"}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        {tab === "bosche" && !isClient && isDisco && (() => {
+          const prospect = a as SalesCoachAnalysis;
+          const bosche = prospect.bosche;
+          if (!bosche || typeof bosche !== "object") return null;
+          return (
+            <div className="space-y-3">
+              {bosche.trigger_identified ? (
+                <div className="rounded-lg p-4" style={{ background: "#fff", border: "1px solid #f01563" }}>
+                  <div className="text-xs font-medium uppercase tracking-wider" style={{ color: "#f01563" }}>
+                    Trigger Coachello détecté
+                  </div>
+                  <div className="text-base font-semibold mt-1" style={{ color: "#111" }}>
+                    {bosche.trigger_identified}
+                  </div>
+                  <div className="text-xs mt-2 flex items-center gap-1.5" style={{ color: "#666" }}>
+                    <span>Critères de sortie :</span>
+                    {bosche.exit_criteria_met ? (
+                      <span className="font-medium" style={{ color: "#059669" }}>✓ remplis</span>
+                    ) : (
+                      <span className="font-medium" style={{ color: "#dc2626" }}>✗ non remplis</span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg p-4 text-sm" style={{ background: "#fafafa", color: "#888", border: "1px dashed #e5e5e5" }}>
+                  Pas de trigger BOSCHE clairement identifié.
+                </div>
+              )}
+
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
                   gap: 10,
                 }}
               >
-                {MEDDIC_LABELS.map(({ key, label }) => {
-                  const dim = a.meddic[key];
-                  if (!dim) return null;
+                {BOSCHE_LABELS.map(({ key, label }) => {
+                  const dim = (bosche[key] ?? EMPTY_AXIS) as AxisScore;
                   return (
                     <CompactScoreCard
                       key={key}
                       label={label}
                       axis={dim}
-                      framework="meddic"
+                      framework="bosche"
                       dimension={key as string}
                     />
                   );
                 })}
               </div>
-            )}
-          </div>
-        )}
-
-        {tab === "bosche" && isDisco && a.bosche && typeof a.bosche === "object" && (
-          <div className="space-y-3">
-            {a.bosche.trigger_identified ? (
-              <div className="rounded-lg p-4" style={{ background: "#fff", border: "1px solid #f01563" }}>
-                <div className="text-xs font-medium uppercase tracking-wider" style={{ color: "#f01563" }}>
-                  Trigger Coachello détecté
-                </div>
-                <div className="text-base font-semibold mt-1" style={{ color: "#111" }}>
-                  {a.bosche.trigger_identified}
-                </div>
-                <div className="text-xs mt-2 flex items-center gap-1.5" style={{ color: "#666" }}>
-                  <span>Critères de sortie :</span>
-                  {a.bosche.exit_criteria_met ? (
-                    <span className="font-medium" style={{ color: "#059669" }}>✓ remplis</span>
-                  ) : (
-                    <span className="font-medium" style={{ color: "#dc2626" }}>✗ non remplis</span>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-lg p-4 text-sm" style={{ background: "#fafafa", color: "#888", border: "1px dashed #e5e5e5" }}>
-                Pas de trigger BOSCHE clairement identifié.
-              </div>
-            )}
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-                gap: 10,
-              }}
-            >
-              {BOSCHE_LABELS.map(({ key, label }) => {
-                const dim = (a.bosche[key] ?? EMPTY_AXIS) as AxisScore;
-                return (
-                  <CompactScoreCard
-                    key={key}
-                    label={label}
-                    axis={dim}
-                    framework="bosche"
-                    dimension={key as string}
-                  />
-                );
-              })}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {tab === "history" && (
           <div className="space-y-4">
@@ -1133,7 +1245,7 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
                 <div className="space-y-2">
                   {history.map((h) => {
                     const d = h.meeting_started_at ? new Date(h.meeting_started_at).toLocaleDateString("fr-FR") : "?";
-                    const kind = h.meeting_kind ? MEETING_KIND_LABELS[h.meeting_kind] : null;
+                    const kind = getMeetingKindLabel(h.meeting_kind);
                     return (
                       <a
                         key={h.id}
