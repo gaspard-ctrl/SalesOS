@@ -9,7 +9,7 @@ import type { Agent } from "@/lib/intel-types";
 import { useIntelAgents, toggleAgent, runAgent } from "@/lib/hooks/use-intel-agents";
 import { AgentCard } from "./_components/agent-card";
 import { AgentConfigDrawer } from "./_components/agent-config-drawer";
-import { GlobalSettingsDrawer } from "./_components/global-settings-drawer";
+import { GlobalSettingsDrawer } from "@/components/icp-targets-drawer";
 import { AgentLogsDrawer } from "./_components/agent-logs-drawer";
 import type { AgentLogsResponse } from "@/app/api/intel/agents/logs/route";
 
