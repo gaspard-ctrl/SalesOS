@@ -70,16 +70,34 @@ Synthèse Claude structurée : objectif, identité contact, insights entreprise/
 
 ### Mass Prospection (`/mass-prospection`)
 Outil de campagne d'emailing en 3 phases :
-- **Setup** : création d'une campagne (type, longueur, tonalité via QCM), import CSV de prospects
+- **Setup** : création d'une campagne (type, longueur, tonalité via QCM), import CSV de prospects, ou import direct depuis le Radar (`/api/mass-prospection/resolve-radar`)
 - **Review** : génération IA d'emails personnalisés par prospect (Claude), édition manuelle
 - **Detail** : suivi des envois (statut, drafts Gmail, erreurs)
 
-### Intel — Market Intelligence (`/intel`)
-Tableau de bord master/detail des signaux de marché collectés par des agents automatiques.
+Chaque email envoyé est tracé dans `outreach_log` (mass-prospection + prospection 1-to-1), exposé via `/api/outreach/counts` pour afficher un badge "X échanges" à côté de chaque contact dans les UIs de sélection.
+
+### Intel - Market Intelligence (`/intel`)
+Tableau de bord master/detail des signaux de marché.
 - Liste filtrable par score, période, statut, source, recherche texte
 - Actions : marquer lu / actionné / archivé, créer une tâche HubSpot depuis un signal
-- **`/intel/agents`** : gestion des 8 agents (job-change, company-news, competitor-activity, funding, hiring-spike, intent-content, champion-tracker, ads…). Activation, lancement manuel, configuration ICP. Cron hebdomadaire.
-- **`/intel/enrich`** : enrichissement de listes de prospects (Netrows ou HubSpot), résolution usernames LinkedIn, recherche d'emails, sauvegarde en « Radar »
+- **`/intel/agents`** : runner d'agent unifié (route `/api/intel/agents/[id]/run`). Le seul agent actif aujourd'hui est `job-change` (push, alimenté par le webhook Netrows Radar sur la table `linkedin_monitored_profiles`). Diagnostic par agent (`/api/intel/agents/[id]/diagnostic`). Les anciens agents pull (ads, funding, hiring-spike, competitor-activity, champion-tracker, intent-content, weekly-scan) ont été retirés en faveur de la collecte temps réel via Radar + Watchlist.
+
+### Enrichment (`/enrichment`)
+Outil d'enrichissement de listes de prospects. Quatre onglets :
+- **Netrows** : recherche cross-product company × titles × keywords, traitée en Background Function (table `netrows_search_jobs`, polling côté UI, panneau combo-logs pour suivre chaque appel). Geo picker (autocomplete locations Netrows).
+- **HubSpot** : import depuis le CRM avec filtres avancés (owner, stage, lifecycle, country).
+- **CSV** : import direct d'un fichier de prospects.
+- **Radar** : monitoring continu via Netrows webhook + résolution paresseuse des emails manquants (`/api/intel/enrich/radar/resolve-email`, `/resolve-missing-emails`).
+
+Résolution usernames LinkedIn, recherche d'emails (Hunter via Netrows), sauvegarde en listes nommées (`enrichment_lists`).
+
+### Watch List (`/watchlist`)
+Pilotage des comptes cibles par sales rep. Liste des comptes (table `scope_companies`) groupée par rep dans une strip latérale, table principale avec sector / plateforme de coaching / signaux récents.
+- **Page détail (`/watchlist/[id]`)** : 3 briefs générés à la demande, cachés dans `watchlist_company_briefs` (kind `ai_summary` | `news` | `hubspot_recap`).
+  - **AI Summary** : synthèse Claude croisant HubSpot recap + news LinkedIn + prospects radar + signaux marché. Lancée en Background Function (`watchlist-ai-summary-background`).
+  - **News** : posts LinkedIn récents (Netrows getCompanyPosts) + signaux intel des 30 derniers jours.
+  - **HubSpot Recap** : résolution paresseuse de la HubSpot Company (cache sur `scope_companies.hubspot_company_id`), historique deals + engagements. Background Function dédiée (`watchlist-hubspot-recap-background`).
+- Prospects radar associés au compte, notes libres, modal Gmail pour voir les threads avec chaque prospect.
 
 ### Marketing (`/marketing`)
 Hub marketing avec onglets :
@@ -291,8 +309,11 @@ app/
   prospecting/page.tsx              # Recherche contacts + emails
   mass-prospection/page.tsx         # Campagnes prospection
   intel/page.tsx                    # Market signals
-    intel/agents/page.tsx           # Gestion agents intel
-    intel/enrich/page.tsx           # Enrichissement listes
+    intel/agents/page.tsx           # Gestion agents intel (runner unifié + diagnostic)
+    intel/enrich/page.tsx           # Redirect legacy vers /enrichment
+  enrichment/page.tsx               # Enrichissement listes (Netrows / HubSpot / CSV / Radar)
+  watchlist/page.tsx                # Watch List : comptes cibles par sales rep
+    watchlist/[id]/page.tsx         # Détail compte : AI summary + news + HubSpot recap
   marketing/page.tsx                # Hub marketing (Overview, Articles, SEO, Content, Leads)
     marketing/leads/page.tsx
     marketing/linkedin/page.tsx
@@ -319,7 +340,10 @@ app/
     deals/                          # list + details + score(-all) + analyze + generate-email + send-slack + [id]/linkedin
     prospection/                    # search + ai-search + details + generate(-bulk) + netrows-search
     mass-prospection/               # campaigns CRUD + generate + send + csv-parse
-    intel/                          # [id] + agents (+/runs) + agents/<name>/run + enrich/* + list
+    intel/                          # [id] + agents/[id] (run/runs/diagnostic) + admin (scope-companies, sales-reps, targets, competitor-*) + enrich/* + list
+    enrich/                         # Voir intel/enrich/* (resolve-email, netrows-search/[id], netrows-locations, ...)
+    watchlist/                      # accounts + accounts/[id]/prospects + companies/[id]/(briefs,notes) + sales-reps
+    outreach/                       # counts (badge "X échanges" par contact)
     marketing/                      # blog + content + events + leads(+sync,file,funnel,orphan-alerts) + linkedin(posts,competitors) + overview + seo + seo-trends
     sales-coach/                    # list + claap-recordings + [id](+draft-email,reanalyze,resend-slack,resolve-deal) + analyze/[id] + backfill + recover-stuck + trends
     linkedin/                       # profile + company + search + message + scan + weekly-scan + status + init-monitoring + setup-radar
@@ -362,8 +386,18 @@ lib/
   fuzzy-match.ts          # Jaro-Winkler pour matching HubSpot
   target-companies.ts     # ICP targets dynamiques (DB + fallback)
   business-context.ts     # Contexte métier Coachello + hash
-  intel-agents.ts         # Définitions statiques 8 agents intel
+  intel-agents.ts         # Définitions statiques agents intel (job-change uniquement)
   intel-types.ts          # Types signaux/agents intel
+  intel/
+    run-netrows-search.ts # Orchestre la fan-out cross-product Netrows people search (BG fn)
+    resolve-radar-email.ts# Résolution lazy d'email Hunter pour un profil radar
+  watchlist/
+    briefs.ts             # Helpers DB + types BriefContent (ai_summary | news | hubspot_recap)
+    fetch-news.ts         # Posts LinkedIn Netrows + signaux intel récents
+    fetch-company-recap.ts# Historique HubSpot (deals + engagements) + résolution Company
+    resolve-hubspot-company.ts # Lazy resolve scope_company -> hubspot_company_id
+    run-ai-summary.ts     # Prompt Claude + emit_summary tool pour brief AI
+  scope-companies.ts      # CRUD scope_companies + parsing CSV
   marketing-types.ts      # Types dashboard marketing
   default-guide.ts        # Réexport (compat)
 
@@ -384,7 +418,9 @@ lib/
   hooks/                  # Wrappers SWR côté client
     use-deals / use-intels / use-marketing / use-sales-coach /
     use-enrichment / use-calendar-events / use-gmail-status /
-    use-radar-status / use-intel-agents / use-user-me
+    use-radar-status / use-intel-agents / use-user-me /
+    use-watchlist / use-watchlist-company / use-gmail-threads /
+    use-outreach-counts
 
 components/
   sidebar/                # SidebarContext + toggle
@@ -415,7 +451,9 @@ Voir section 1 pour la description fonctionnelle de chaque module. Cette section
 | `/deals` | [app/deals/page.tsx](app/deals/page.tsx) | Scoring : [app/api/deals/score/route.ts](app/api/deals/score/route.ts) — Analyse : [app/api/deals/analyze/route.ts](app/api/deals/analyze/route.ts) — Algo : [lib/deal-scoring.ts](lib/deal-scoring.ts) |
 | `/prospecting` | [app/prospecting/page.tsx](app/prospecting/page.tsx) | Recherche : [app/api/prospection/search/route.ts](app/api/prospection/search/route.ts) — Génération : [app/api/prospection/generate/route.ts](app/api/prospection/generate/route.ts) — Guide : [lib/guides/prospection.ts](lib/guides/prospection.ts) |
 | `/mass-prospection` | [app/mass-prospection/page.tsx](app/mass-prospection/page.tsx) | Campagnes : [app/api/mass-prospection/](app/api/mass-prospection/) |
-| `/intel` | [app/intel/page.tsx](app/intel/page.tsx) | Agents : [lib/intel-agents.ts](lib/intel-agents.ts) — Routes : [app/api/intel/](app/api/intel/) |
+| `/enrichment` | [app/enrichment/page.tsx](app/enrichment/page.tsx) | Onglets Netrows/HubSpot/CSV/Radar. Runner BG : [lib/intel/run-netrows-search.ts](lib/intel/run-netrows-search.ts) |
+| `/watchlist` | [app/watchlist/page.tsx](app/watchlist/page.tsx) | Briefs : [lib/watchlist/briefs.ts](lib/watchlist/briefs.ts). Détail : [app/watchlist/[id]/page.tsx](app/watchlist/%5Bid%5D/page.tsx) |
+| `/intel` | [app/intel/page.tsx](app/intel/page.tsx) | Runner unifié : [app/api/intel/agents/[id]/run/route.ts](app/api/intel/agents/%5Bid%5D/run/route.ts) - Agents : [lib/intel-agents.ts](lib/intel-agents.ts) |
 | `/marketing` | [app/marketing/page.tsx](app/marketing/page.tsx) | Routes : [app/api/marketing/](app/api/marketing/) — GA4/GSC : [lib/google-analytics.ts](lib/google-analytics.ts), [lib/google-search-console.ts](lib/google-search-console.ts) |
 | `/sales-coach` | [app/sales-coach/page.tsx](app/sales-coach/page.tsx) | Analyse : [lib/sales-coach/run-analysis.ts](lib/sales-coach/run-analysis.ts) — Guide : [lib/guides/sales-coach.ts](lib/guides/sales-coach.ts) |
 | `/settings` | [app/settings/page.tsx](app/settings/page.tsx) | — |
@@ -489,7 +527,6 @@ Voir section 1 pour la description fonctionnelle de chaque module. Cette section
 | `/api/linkedin/search` | GET | Recherche profils. |
 | `/api/linkedin/message` | POST | Génération message LinkedIn. |
 | `/api/linkedin/scan` | GET | Scan profils monitorés. |
-| `/api/linkedin/weekly-scan` | POST | Scan hebdo. |
 | `/api/linkedin/status` | GET | Statut Netrows (subscription + radar). |
 | `/api/linkedin/init-monitoring` | POST | Initialise monitoring. |
 | `/api/linkedin/setup-radar` | POST | Configure radar prospects. |
@@ -506,20 +543,58 @@ Voir section 1 pour la description fonctionnelle de chaque module. Cette section
 | `/api/mass-prospection/campaigns/[id]/regenerate/[emailId]` | POST | Régénère un email. |
 | `/api/mass-prospection/campaigns/[id]/send/[emailId]` | POST | Envoie un email. |
 | `/api/mass-prospection/csv-parse` | POST | Parse un CSV de prospects. |
+| `/api/mass-prospection/resolve-radar` | POST | Importe les prospects radar dans une campagne. |
 
-### Intel — Market Intelligence
+### Outreach
+
+| Route | Méthode | Description |
+|-------|---------|-------------|
+| `/api/outreach/counts` | GET | Compteurs d'emails envoyés par contact (emails + hubspot ids) pour badges UI. |
+
+### Intel - Market Intelligence
 
 | Route | Méthode | Description |
 |-------|---------|-------------|
 | `/api/intel/list` | GET | Signaux de l'utilisateur. |
 | `/api/intel/[id]` | GET / PATCH | Marquer lu / actionné / archivé. |
 | `/api/intel/[id]/hubspot-task` | POST | Crée une tâche HubSpot. |
-| `/api/intel/agents` | GET | État des 8 agents + métriques hebdo. |
+| `/api/intel/agents` | GET | État des agents + métriques. |
 | `/api/intel/agents/[id]` | GET | Détails d'un agent. |
-| `/api/intel/agents/[id]/run` | POST | Lance manuellement un agent. |
+| `/api/intel/agents/[id]/run` | POST | Runner unifié (déclenchement manuel ou cron). |
 | `/api/intel/agents/[id]/runs` | GET | Historique d'exécution. |
-| `/api/intel/agents/{ads,champion-tracker,competitor-activity,funding,hiring-spike,intent-content}/run` | POST | Endpoints dédiés par agent. |
-| `/api/intel/enrich/*` | GET / POST | Enrichissement : email, hubspot (search/preview/count/owners/stages), listes, radar, netrows. |
+| `/api/intel/agents/[id]/diagnostic` | GET | Diagnostic de configuration (clés API, ICP, scope, dernière run). |
+| `/api/intel/agents/logs` | GET | Logs agrégés des runs. |
+| `/api/intel/admin/scope-companies` | GET / POST / PATCH / DELETE | CRUD scope companies (table `scope_companies`). |
+| `/api/intel/admin/scope-companies/bulk-import` | POST | Import CSV. |
+| `/api/intel/admin/sales-reps` | GET / POST | Sales reps Coachello (target ICP par rep). |
+| `/api/intel/admin/targets` | GET / POST | ICP targets globaux. |
+| `/api/intel/admin/competitor-{companies,profiles,discover}` | GET / POST | Tracking concurrents LinkedIn. |
+| `/api/intel/enrich/netrows-search` | POST | Démarre un job people search (BG fn). |
+| `/api/intel/enrich/netrows-search/[id]` | GET | Polling d'un job en cours / résultats. |
+| `/api/intel/enrich/netrows-locations` | GET | Autocomplete locations Netrows (geo picker). |
+| `/api/intel/enrich/radar` | GET / POST | Liste / sauve les profils radar. |
+| `/api/intel/enrich/radar/refresh` | POST | Force un refresh Netrows pour un profil. |
+| `/api/intel/enrich/radar/resolve-email` | POST | Résout l'email Hunter d'un profil radar. |
+| `/api/intel/enrich/radar/resolve-missing-emails` | POST | Résout en batch les emails manquants. |
+| `/api/intel/enrich/add-to-radar` | POST | Ajoute des profils au radar (monitoring). |
+| `/api/intel/enrich/lists` | GET / POST / DELETE | Listes d'enrichissement sauvegardées. |
+| `/api/intel/enrich/email` | POST | Recherche email Hunter via Netrows. |
+| `/api/intel/enrich/resolve-username` | POST | Résolution username LinkedIn. |
+| `/api/intel/enrich/hubspot-{search,preview,count,owners,stages}` | GET / POST | Import HubSpot avec filtres. |
+
+### Watchlist
+
+| Route | Méthode | Description |
+|-------|---------|-------------|
+| `/api/watchlist/sales-reps` | GET | Sales reps + comptage de comptes assignés. |
+| `/api/watchlist/accounts` | GET | Liste des `scope_companies` (filtre optionnel par rep). |
+| `/api/watchlist/accounts/[id]/prospects` | GET | Prospects radar associés au compte. |
+| `/api/watchlist/companies/[id]` | GET / PATCH | Détail compte + édition (sector, plateforme, notes). |
+| `/api/watchlist/companies/[id]/notes` | POST | Sauvegarde des notes libres. |
+| `/api/watchlist/companies/[id]/briefs` | GET | État courant des 3 briefs (cache `watchlist_company_briefs`). |
+| `/api/watchlist/companies/[id]/briefs/ai-summary` | POST | Lance la génération du brief AI (BG fn). |
+| `/api/watchlist/companies/[id]/briefs/news` | POST | Rafraîchit les news (sync, Netrows getCompanyPosts + market_signals). |
+| `/api/watchlist/companies/[id]/briefs/hubspot-recap` | POST | Lance le recap HubSpot (BG fn). |
 
 ### Marketing
 
@@ -612,8 +687,17 @@ Voir section 11 pour les détails.
 - **[fuzzy-match.ts](lib/fuzzy-match.ts)** — Jaro-Winkler + normalisation (accents, suffixes corp) pour lookups HubSpot.
 - **[target-companies.ts](lib/target-companies.ts)** — ICP (DB `guide_defaults` + fallback hardcodé).
 - **[business-context.ts](lib/business-context.ts)** — Contexte métier Coachello + hash (pour invalider les classifications).
-- **[intel-agents.ts](lib/intel-agents.ts)** + **[intel-types.ts](lib/intel-types.ts)** — Définitions statiques des 8 agents (`SignalType`, `AgentId`).
-- **[marketing-types.ts](lib/marketing-types.ts)** — Types dashboard marketing.
+- **[intel-agents.ts](lib/intel-agents.ts)** + **[intel-types.ts](lib/intel-types.ts)** - Définitions statiques de l'agent intel (`job-change` uniquement aujourd'hui), helpers `AgentDef`, `SignalType`, `AgentId`.
+- **[intel/run-netrows-search.ts](lib/intel/run-netrows-search.ts)** - Orchestre la fan-out cross-product Netrows people search (job table `netrows_search_jobs` + combo logs). Exécuté par la Background Function `netrows-search-background`.
+- **[intel/resolve-radar-email.ts](lib/intel/resolve-radar-email.ts)** - Résolution paresseuse d'email (Hunter via Netrows) pour un profil radar.
+- **[scope-companies.ts](lib/scope-companies.ts)** - CRUD `scope_companies`, parsing/sérialisation CSV, helper `maybeCreateSalesRep`.
+- **lib/watchlist/** - Brief generation pour la Watch List :
+  - `briefs.ts` : helpers DB (upsert/finish ok|error) et types `BriefContent` discriminés par `kind`.
+  - `fetch-news.ts` : posts LinkedIn (Netrows getCompanyPosts) + signaux intel récents (`market_signals`).
+  - `fetch-company-recap.ts` : historique HubSpot (deals + engagements) pour un compte.
+  - `resolve-hubspot-company.ts` : lazy resolve `scope_company` → `hubspot_company_id` (fuzzy match + cache).
+  - `run-ai-summary.ts` : prompt Claude + tool `emit_summary` pour le brief AI.
+- **[marketing-types.ts](lib/marketing-types.ts)** - Types dashboard marketing.
 
 ### Guides (prompts système)
 - **[guides/bot.ts](lib/guides/bot.ts)** — `DEFAULT_BOT_GUIDE` (routing CRM / général / veille, liste outils, canaux Slack, équipe).
@@ -849,7 +933,7 @@ CREATE TABLE market_signals (         -- table source pour /intel
   id UUID PRIMARY KEY,
   user_id UUID REFERENCES users(id),
   agent_id TEXT,
-  type TEXT,           -- funding | hiring | job_change | ...
+  type TEXT,           -- job_change | job_change_icp_match (push Radar) | ...
   title TEXT, summary TEXT, source_url TEXT,
   score INTEGER,
   is_read BOOLEAN DEFAULT FALSE,
@@ -865,6 +949,89 @@ CREATE TABLE linkedin_posts_cache (post_url UNIQUE, author, company_match, is_pr
 CREATE TABLE linkedin_username_cache ( ... );
 CREATE TABLE linkedin_competitor_profiles (username, competitor_name, role_type);  -- AE | AM | BDR | SDR
 CREATE TABLE radar_refresh_tracking ( ... );
+CREATE TABLE radar_email_resolution (    -- cache résolution Hunter par profil
+  username TEXT PRIMARY KEY,
+  email TEXT, status TEXT, resolved_at TIMESTAMPTZ
+);
+
+-- Fan-out async people search (cross-product company x titles x keywords)
+-- Exécuté par netlify/functions/netrows-search-background.mts.
+CREATE TABLE netrows_search_jobs (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       UUID REFERENCES users(id) ON DELETE SET NULL,
+  status        TEXT NOT NULL DEFAULT 'pending',  -- pending | running | done | error
+  criteria      JSONB NOT NULL,
+  combos_total  INT NOT NULL DEFAULT 0,
+  combos_done   INT NOT NULL DEFAULT 0,
+  profiles      JSONB,
+  total         INT,
+  capped        JSONB,
+  error_message TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE netrows_search_jobs_combo_logs (   -- log par appel API durant le fan-out
+  job_id UUID REFERENCES netrows_search_jobs(id) ON DELETE CASCADE,
+  combo JSONB, status TEXT, count INT, error TEXT, logged_at TIMESTAMPTZ
+);
+```
+
+### Watch List & comptes cibles
+
+```sql
+-- Comptes cibles (entreprises monitorées). Source de vérité pour /watchlist
+-- et pour le ciblage ICP côté agents.
+CREATE TABLE scope_companies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  domain TEXT,
+  country TEXT,
+  size_bucket TEXT,
+  sales_rep TEXT,
+  sector TEXT,                            -- ajouté via migration
+  current_coaching_platform TEXT,         -- ajouté via migration (concurrent ou complément)
+  hubspot_company_id TEXT,                -- résolu en lazy depuis la Watch List
+  hubspot_resolved_at TIMESTAMPTZ,
+  linkedin_username TEXT,                 -- cache slug Netrows pour getCompanyPosts
+  linkedin_radar JSONB,                   -- DEPRECATED (drop migration livrée)
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Briefs générés à la demande pour la page détail Watch List.
+-- 1 row par (scope_company_id, kind). Lock applicatif 5 min sur `status='running'`.
+CREATE TABLE watchlist_company_briefs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  scope_company_id UUID REFERENCES scope_companies(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('ai_summary', 'news', 'hubspot_recap')),
+  status TEXT NOT NULL DEFAULT 'idle' CHECK (status IN ('idle', 'running', 'ok', 'error')),
+  content JSONB,
+  error TEXT,
+  model TEXT,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  triggered_by_user_id UUID,
+  UNIQUE (scope_company_id, kind)
+);
+```
+
+### Outreach log
+
+```sql
+-- Trace tous les emails envoyés depuis SalesOS (prospection 1-to-1 + mass-prospection).
+-- Alimente le badge "X échanges" dans les UIs de sélection (radar, mass-prospection, prospecting).
+CREATE TABLE outreach_log (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     TEXT NOT NULL,
+  email       TEXT NOT NULL,
+  email_lower TEXT GENERATED ALWAYS AS (LOWER(email)) STORED,
+  hubspot_id  TEXT,
+  source      TEXT NOT NULL,             -- 'mass_prospection' | 'prospection' | 'watchlist'
+  source_id   UUID,
+  subject     TEXT,
+  sent_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 ```
 
 Migrations complètes : [supabase/migrations/](supabase/migrations/).
@@ -873,13 +1040,26 @@ Migrations complètes : [supabase/migrations/](supabase/migrations/).
 
 ## 10. Cron jobs & fonctions planifiées
 
-Implémentées en tant que **Netlify Scheduled Functions** dans [netlify/functions/](netlify/functions/).
+Implémentées en tant que **Netlify Scheduled / Background Functions** dans [netlify/functions/](netlify/functions/). Les Background Functions ont jusqu'à 15 min d'exécution (vs ~26s pour les API routes sync sur le plan Pro), elles sont déclenchées par les API routes via `fetch(`/.netlify/functions/<name>`)` avec header `X-Internal-Secret`.
 
-| Fonction | Schedule | Endpoint appelé | Auth | Rôle |
-|----------|----------|-----------------|------|------|
-| `lead-orphan-alerts-background.mts` | `0 9 * * *` (tous les jours 9h UTC) | `POST /api/marketing/leads/orphan-alerts` | `X-Cron-Secret` | Alerte sur les leads Slack non traités. |
-| `score-deals-background.mts` | `0 22 1,15 * *` (1er et 15 de chaque mois, 22h UTC) | `POST /api/deals/score-all` (par chunks de 5) | `X-Cron-Secret` | Rescore tous les deals HubSpot ouverts. |
-| `sales-coach-analyze-background.mts` | Non planifié — déclenché par webhook Claap | Exécute `runSalesCoachAnalysis()` | `X-Internal-Secret` | Analyse asynchrone des enregistrements Claap. |
+### Scheduled (cron)
+
+| Fonction | Schedule | Endpoint / action | Auth | Rôle |
+|----------|----------|-------------------|------|------|
+| `lead-orphan-alerts-background.mts` | `0 9 * * *` (tous les jours 9h UTC) | `POST /api/marketing/leads/orphan-alerts` | `X-Cron-Secret` | Alerte Slack sur les leads non traités. |
+| `score-deals-background.mts` | `0 22 1,15 * *` (1er et 15, 22h UTC) | `POST /api/deals/score-all` (chunks de 5) | `X-Cron-Secret` | Rescore tous les deals HubSpot ouverts. |
+| `sales-coach-recover-stuck-scheduled.mts` | `*/10 * * * *` (toutes les 10 min) | `POST /api/sales-coach/recover-stuck` | `X-Cron-Secret` | Récupère les analyses Claap bloquées en `analyzing` depuis trop longtemps. |
+
+### Background (sans schedule, déclenchées à la demande)
+
+| Fonction | Déclencheur | Auth | Rôle |
+|----------|-------------|------|------|
+| `sales-coach-analyze-background.mts` | Webhook Claap (`/api/webhooks/claap`) | `X-Internal-Secret` | Analyse asynchrone d'un meeting + recap Slack. |
+| `deals-analyze-background.mts` | `/api/deals/analyze` | `X-Internal-Secret` | Analyse approfondie d'un deal (offload depuis l'UI). |
+| `marketing-generate-content-background.mts` | `/api/marketing/content` (génération drafts) | `X-Internal-Secret` | Génération de drafts FR/EN d'articles WordPress. |
+| `netrows-search-background.mts` | `/api/intel/enrich/netrows-search` | `X-Internal-Secret` | Fan-out cross-product people search Netrows (table `netrows_search_jobs`). |
+| `watchlist-ai-summary-background.mts` | `/api/watchlist/companies/[id]/briefs/ai-summary` | `X-Internal-Secret` | Génère le brief AI d'un compte Watch List. |
+| `watchlist-hubspot-recap-background.mts` | `/api/watchlist/companies/[id]/briefs/hubspot-recap` | `X-Internal-Secret` | Récupère le recap HubSpot d'un compte Watch List. |
 
 **Variables nécessaires** : `URL` (ou `SITE_URL`), `CRON_SECRET`, `INTERNAL_SECRET`.
 
@@ -944,13 +1124,36 @@ Slack #1a-new-incoming-leads → lib/slack-leads.ts (sync périodique ou /api/ma
 → Cron quotidien 9h : leads pending ancien → alerte Slack
 ```
 
-### Flux Intel
+### Flux Intel (job-change, push)
 ```
-Cron / lancement manuel /api/intel/agents/[id]/run
-→ Agent (lib/intel-agents.ts) : Tavily + Netrows + LLM
-→ signal-scoring.ts : score + raison
-→ Insert market_signals
+Webhook Netrows /api/webhooks/netrows (HMAC vérifié)
+→ détection job change sur linkedin_monitored_profiles
+→ signal-scoring.ts : score + raison + matching ICP (scope_companies)
+→ Insert market_signals (type job_change | job_change_icp_match)
 → UI /intel : master/detail + actions (lu/actionné/archivé/créer tâche HubSpot)
+```
+
+### Flux Watch List (briefs à la demande)
+```
+Clic "Régénérer" sur la page détail
+→ POST /api/watchlist/companies/[id]/briefs/{ai-summary|hubspot-recap}
+→ Lock applicatif : upsert briefs row status='running' (5 min TTL)
+→ fetch /.netlify/functions/watchlist-{ai-summary|hubspot-recap}-background (X-Internal-Secret)
+→ BG fn : collecte (HubSpot + Netrows + market_signals + scope_company)
+→ run-ai-summary.ts : prompt Claude + tool emit_summary
+→ finishBriefOk(content) ou finishBriefError(error)
+→ UI poll /api/watchlist/companies/[id]/briefs (SWR refresh)
+```
+
+### Flux Netrows people search (fan-out)
+```
+Soumission criteria depuis /enrichment
+→ POST /api/intel/enrich/netrows-search → insert netrows_search_jobs (status=pending)
+→ fetch /.netlify/functions/netrows-search-background
+→ BG fn : cross-product companies × titles, 1 appel Netrows par combo (timeout 25s)
+→ log par combo dans netrows_search_jobs_combo_logs
+→ update job (combos_done, profiles[], total)
+→ UI poll /api/intel/enrich/netrows-search/[id] + panneau combo-logs
 ```
 
 ### Flux Marketing Overview
@@ -1006,10 +1209,16 @@ Via `/settings` → Préférences de modèle, ou directement dans `guide_default
 3. Ajouter le label dans `TOOL_LABELS` côté frontend ([app/page.tsx](app/page.tsx))
 
 ### Ajouter un agent Intel
-1. Définir l'agent dans [lib/intel-agents.ts](lib/intel-agents.ts) (id, catégorie, type, endpoint)
-2. Créer la route `app/api/intel/agents/<name>/run/route.ts`
-3. Implémenter la collecte (Tavily / Netrows / autre) + scoring via `signal-scoring.ts`
-4. Le cron / déclenchement manuel passe par `/api/intel/agents/[id]/run`
+1. Définir l'agent dans [lib/intel-agents.ts](lib/intel-agents.ts) (id, catégorie, type, `runEndpoint`)
+2. Implémenter le runner directement dans [app/api/intel/agents/[id]/run/route.ts](app/api/intel/agents/%5Bid%5D/run/route.ts) (dispatch sur `id`)
+3. Pour un agent long, déléguer à une Background Function dans `netlify/functions/` (auth `X-Internal-Secret`)
+4. Insérer les signaux dans `market_signals` via `signal-scoring.ts` pour scoring + raison
+
+### Ajouter un brief Watch List
+1. Définir le `kind` et le type `BriefContent` dans [lib/watchlist/briefs.ts](lib/watchlist/briefs.ts) (mettre à jour le CHECK constraint de la migration `watchlist_company_briefs.sql`)
+2. Créer la route `app/api/watchlist/companies/[id]/briefs/<kind>/route.ts` qui upsert `status=running` puis trigger la BG fn
+3. Créer la BG fn dans `netlify/functions/watchlist-<kind>-background.mts`
+4. Ajouter le rendu dans [app/watchlist/[id]/_components/brief-section.tsx](app/watchlist/%5Bid%5D/_components/brief-section.tsx)
 
 ### Modifier le scoring des deals
 [app/api/deals/score/route.ts](app/api/deals/score/route.ts) — prompt Claude. Modèle de scoring : [lib/deal-scoring.ts](lib/deal-scoring.ts).
@@ -1040,5 +1249,7 @@ Via `/settings` → Préférences de modèle, ou directement dans `guide_default
 Éditer le fichier dans [netlify/functions/](netlify/functions/) puis ajuster le `schedule` cron dans la `config` exportée.
 
 ---
+
+> **Note navigation** : Les pages `/enrichment`, `/intel`, `/watchlist` existent et sont fonctionnelles mais leurs entrées sont commentées dans [components/sidebar.tsx](components/sidebar.tsx). Décommenter pour les rendre visibles aux sales.
 
 *Coachello · SalesOS · Interne · Confidentiel · Mai 2026*
