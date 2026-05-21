@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Target } from "lucide-react";
 import { COLORS } from "@/lib/design/tokens";
@@ -30,6 +31,14 @@ import { CsvImport } from "./_components/csv-import";
 type TabId = "netrows" | "hubspot" | "csv" | "radar";
 
 export default function EnrichmentPage() {
+  return (
+    <Suspense fallback={null}>
+      <EnrichmentPageInner />
+    </Suspense>
+  );
+}
+
+function EnrichmentPageInner() {
   // Préfill depuis Watch List : /enrichment?source=watchlist&company=<nom>
   // Le lazy initial state garantit que CriteriaForm reçoit dès le premier
   // render le critère prérempli (companies + titles défaut).
