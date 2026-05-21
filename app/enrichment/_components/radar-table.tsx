@@ -7,7 +7,7 @@ import { COLORS } from "@/lib/design/tokens";
 import { useRadarStatus } from "@/lib/hooks/use-radar-status";
 import { removeFromRadar, removeFromRadarBulk, refreshRadarProfiles, type RadarRefreshResult } from "@/lib/hooks/use-enrichment";
 import type { RadarProfile } from "@/lib/intel-types";
-import { timeAgo } from "../../_helpers";
+import { timeAgo } from "@/app/intel/_helpers";
 
 const SOURCE_LABELS: Record<string, string> = {
   manual: "Manuel",
