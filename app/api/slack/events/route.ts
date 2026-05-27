@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifySlackSignature } from "@/lib/slack/verify";
 import { getUserInfo, publishHomeView } from "@/lib/slack/api";
 import { buildHomeView } from "@/lib/slack/home-view";
+import { isThreadTracked } from "@/lib/slack/chat-thread";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +81,34 @@ export async function POST(req: NextRequest) {
           // Toujours répondre en thread sur les mentions pour pas polluer le canal
           threadTs: event.thread_ts ?? event.ts ?? "",
           slackUserId: event.user!,
+          text: cleaned,
+          teamId: payload.team_id,
+        });
+        return NextResponse.json({ ok: true });
+      }
+
+      // ── Réponse dans un thread où le bot a déjà été mentionné ────────────
+      // On reçoit TOUS les messages des canaux où le bot est membre, mais on
+      // ne réagit QUE si c'est une réponse dans un thread déjà tracké en DB
+      // (sinon on spammerait tous les canaux à chaque message).
+      if (event.type === "message" && (event.channel_type === "channel" || event.channel_type === "group")) {
+        if (event.bot_id || event.subtype === "bot_message" || event.subtype === "message_changed" || event.subtype === "message_deleted") {
+          return NextResponse.json({ ok: true });
+        }
+        if (!event.thread_ts || !event.channel || !event.user) {
+          return NextResponse.json({ ok: true });
+        }
+        const tracked = await isThreadTracked({
+          channel: event.channel,
+          threadTs: event.thread_ts,
+        });
+        if (!tracked) return NextResponse.json({ ok: true });
+
+        const cleaned = stripBotMention(event.text ?? "");
+        await dispatchToBackground(req, {
+          channel: event.channel,
+          threadTs: event.thread_ts,
+          slackUserId: event.user,
           text: cleaned,
           teamId: payload.team_id,
         });
