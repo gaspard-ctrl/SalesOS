@@ -37,6 +37,13 @@ export async function POST(req: NextRequest) {
     return new NextResponse("invalid signature", { status: 401 });
   }
 
+  // Slack retry automatiquement si pas de 200 en <3s. Sans dedup, chaque retry
+  // redéclenche la bg function et l'utilisateur reçoit le même message N fois.
+  // On ACK 200 immédiatement sur les retries, le 1er call a déjà été dispatché.
+  if (req.headers.get("x-slack-retry-num")) {
+    return NextResponse.json({ ok: true });
+  }
+
   let payload: SlackEventPayload;
   try {
     payload = JSON.parse(rawBody) as SlackEventPayload;
