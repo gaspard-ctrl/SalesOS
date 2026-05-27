@@ -156,7 +156,7 @@ export default function IntelAgentsPage() {
             cursor: "pointer",
           }}
         >
-          <Target size={13} /> Cibles globales (ICP)
+          <Target size={13} /> Companies & rôles cibles
         </button>
       </div>
 

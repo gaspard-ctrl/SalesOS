@@ -51,7 +51,16 @@ export async function POST(req: NextRequest) {
   const dryRun = Boolean(body.dryRun);
 
   const parsed = parseScopeCompaniesCsv(body.csv);
-  const rows = dedupRows(parsed.rows);
+  const errors = [...parsed.errors];
+  const validRows: Row[] = [];
+  for (const r of parsed.rows) {
+    if (!r.owner) {
+      errors.push({ line: 0, reason: `Owner manquant pour "${r.name}"` });
+      continue;
+    }
+    validRows.push(r);
+  }
+  const rows = dedupRows(validRows);
 
   const { data: existing, error: fetchErr } = await db
     .from("scope_companies")
@@ -84,7 +93,7 @@ export async function POST(req: NextRequest) {
     toInsert: toInsert.length,
     toUpdate: toUpdate.length,
     skipped: skipped.length,
-    errors: parsed.errors,
+    errors,
   };
 
   if (dryRun) return NextResponse.json({ dryRun: true, summary });

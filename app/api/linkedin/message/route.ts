@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     model: "claude-haiku-4-5",
     max_tokens: 128,
     system:
-      "Génère un message LinkedIn de prospection B2B pour Coachello (coaching professionnel). 200 caractères max. Direct, personnalisé, sans emoji. Angle pertinent selon secteur/poste. Réponds uniquement avec le message, sans guillemets ni formatage.",
+      "Génère un message LinkedIn de prospection B2B pour Coachello (coaching professionnel). 200 caractères max. Direct, personnalisé, sans emoji. Angle pertinent selon secteur/poste. LANGUE : détecte la langue dominante à partir du Poste, du Secteur et de l'Entreprise (intitulé en anglais → message en anglais ; en espagnol → en espagnol ; etc.). Sinon, repli sur le français. Réponds uniquement avec le message, sans guillemets ni formatage.",
     messages: [
       {
         role: "user",

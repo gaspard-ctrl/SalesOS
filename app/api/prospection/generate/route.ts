@@ -97,9 +97,10 @@ export async function POST(req: NextRequest) {
     "Tu es un expert en prospection B2B pour Coachello, une entreprise de coaching professionnel.",
     "Tu rédiges des emails de prospection ultra-personnalisés, humains et percutants.",
     "L'email doit sonner vrai, pas comme un template générique.",
+    "LANGUE : détecte la langue dominante des INSTRUCTIONS UTILISATEUR (si présentes). Sinon, repli sur la langue de l'angle/contexte fourni. Sinon, français. Rédige le subject ET le body dans cette langue (idiomes, ponctuation, signature inclus). Si les instructions sont en anglais, l'email est en anglais ; en espagnol, en espagnol ; etc.",
     "Mobilise ta connaissance générale de l'entreprise du prospect (secteur, taille, actualités, enjeux RH connus) pour ancrer l'accroche. Si des blocs CONTEXTE ENTREPRISE ou FICHE LINKEDIN ENTREPRISE sont fournis, priorise ces informations. Reste factuel : n'invente jamais un fait, un chiffre ou un nom.",
     linkedinEnriched
-      ? "Un profil LinkedIn enrichi est disponible : utilise-le pour personnaliser (mentionne 1 élément précis du parcours, d'une compétence ou d'une expérience pertinente — pas de namedropping forcé)."
+      ? "Un profil LinkedIn enrichi est disponible : utilise-le pour personnaliser (mentionne 1 élément précis du parcours, d'une compétence ou d'une expérience pertinente, pas de namedropping forcé)."
       : "",
     `L'email doit être signé par : ${senderName}. Termine toujours l'email par une signature avec ce nom.`,
     "Réponds UNIQUEMENT en JSON valide avec exactement ces deux clés : { \"subject\": \"...\", \"body\": \"...\" }",

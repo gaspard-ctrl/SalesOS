@@ -69,7 +69,7 @@ export function AiSummaryCard({
         </div>
       ) : (
         <p style={{ margin: 0, fontSize: 12, color: COLORS.ink3 }}>
-          Aucune synthèse générée pour le moment. La génération à la demande sera disponible bientôt.
+          Aucune synthèse pour le moment. Clique sur <strong>Générer</strong> en haut à droite.
         </p>
       )}
 

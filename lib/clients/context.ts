@@ -1,9 +1,13 @@
 import { db } from "../db";
 import { fetchDealContext, renderDealContextForPrompt, type DealSnapshot } from "../hubspot";
+import { discoverExtraClaapMeetings } from "./claap-discovery";
 
 // Charge et rend le contexte d'un closed-won pour l'extraction des fields :
 //  - snapshot HubSpot complet du deal (engagements, contacts, company),
 //  - meetings Claap analysés liés à ce deal (transcript + meeting_recap),
+//  - meetings Claap NON indexés dans sales_coach_analyses mais matchables
+//    via domaine participant / titre (anciens deals, meetings ratés par le
+//    webhook Claap),
 //  - normalise en markdown prompt-ready.
 
 export type ClaapMeetingForClient = {
@@ -14,6 +18,14 @@ export type ClaapMeetingForClient = {
   audience: string | null;
   meeting_recap_summary: string | null;
   transcript_text: string | null;
+  // true si le meeting vient de la discovery live Claap, false (ou undefined)
+  // s'il vient déjà de sales_coach_analyses. Utilisé par l'UI pour afficher
+  // un tag distinct et par runClientEnrichment pour persister la liste des
+  // découverts (cf. clients.discovered_claap_recordings).
+  is_discovered?: boolean;
+  // URL Claap directe pour cliquer depuis l'UI. Vide pour les indexed (déjà
+  // accessibles via /sales-coach?id=<id>).
+  claap_url?: string | null;
 };
 
 const MAX_TRANSCRIPT_CHARS_PER_MEETING = 35_000;
@@ -49,19 +61,45 @@ export async function loadClaapMeetingsForDeal(dealId: string): Promise<ClaapMee
     audience: r.audience,
     meeting_recap_summary: r.meeting_recap?.summary ?? null,
     transcript_text: r.transcript_text,
+    is_discovered: false,
+    claap_url: null,
   }));
 }
 
 export type ClientEnrichmentContext = {
   deal: DealSnapshot | null;
+  // Toutes les rencontres trouvées : indexées (sales_coach_analyses) +
+  // découvertes directement sur Claap. Distinguées via `source` pour le rendu
+  // (les indexées ont un meeting_recap, les découvertes pas, donc on injecte
+  // plus de transcript brut pour ces dernières).
   meetings: ClaapMeetingForClient[];
 };
 
 export async function loadClientContext(dealId: string): Promise<ClientEnrichmentContext> {
-  const [deal, meetings] = await Promise.all([
+  const [deal, indexed] = await Promise.all([
     fetchDealContext(dealId),
     loadClaapMeetingsForDeal(dealId),
   ]);
+
+  // Étape 2 : on cherche sur Claap directement les meetings qui ne sont pas
+  // dans sales_coach_analyses (anciens deals, meetings ratés). Best-effort —
+  // si Claap est down ou si on n'a pas de signaux de match (pas de company),
+  // on continue avec seulement les indexés.
+  const alreadyIndexed = new Set(indexed.map((m) => m.recording_id));
+  const extras = await discoverExtraClaapMeetings(deal, alreadyIndexed).catch((e) => {
+    console.warn(`[clients/context] Claap discovery failed:`, e instanceof Error ? e.message : e);
+    return [] as ClaapMeetingForClient[];
+  });
+
+  // Ordre chronologique ASC pour rendu cohérent (premier meeting du deal en
+  // haut, dernier en bas — facilite la lecture par Claude sur l'évolution
+  // des discussions).
+  const meetings = [...indexed, ...extras].sort((a, b) => {
+    const da = a.meeting_started_at ? new Date(a.meeting_started_at).getTime() : 0;
+    const db = b.meeting_started_at ? new Date(b.meeting_started_at).getTime() : 0;
+    return da - db;
+  });
+
   return { deal, meetings };
 }
 

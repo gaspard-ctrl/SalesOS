@@ -90,11 +90,16 @@ export async function resolveMeetingParticipantRecipients(
   const recorderDomain = recorderEmail.split("@")[1];
   if (!recorderDomain) return [];
 
+  // Claap ne liste pas systématiquement le recorder dans `meeting.participants`
+  // (cas typique : meeting où l'enregistreur n'est pas sur l'invite calendar).
+  // On l'injecte explicitement pour que l'alerte parte au recorder et pas
+  // uniquement à Arthur en fallback. Dédupliqué via Set.
   const internalEmails = Array.from(
     new Set(
-      (rec.meeting?.participants ?? [])
-        .map((p) => p.email?.toLowerCase().trim())
-        .filter((e): e is string => !!e && e.includes("@") && e.split("@")[1] === recorderDomain),
+      [
+        recorderEmail,
+        ...(rec.meeting?.participants ?? []).map((p) => p.email?.toLowerCase().trim() ?? ""),
+      ].filter((e) => !!e && e.includes("@") && e.split("@")[1] === recorderDomain),
     ),
   );
 

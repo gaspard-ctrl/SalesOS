@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { addProfileToRadar, resolveUsername } from "@/lib/netrows";
+import { resolveRadarEmails, type RadarProfileForResolve } from "@/lib/intel/resolve-radar-email";
 import type { ProfileSource } from "@/lib/intel-types";
 
 export const dynamic = "force-dynamic";
@@ -98,6 +99,7 @@ export async function POST(req: NextRequest) {
     try {
       await addProfileToRadar(username);
       const shouldFlagChampion = globalChampion || p.is_champion === true;
+      const incomingEmail = (p.email ?? "").trim();
       const row: Record<string, unknown> = {
         username,
         full_name: p.fullName ?? displayName,
@@ -108,6 +110,11 @@ export async function POST(req: NextRequest) {
         radar_active: true,
       };
       if (p.hubspotId) row.hubspot_id = p.hubspotId;
+      if (incomingEmail && incomingEmail.includes("@")) {
+        row.email = incomingEmail;
+        row.email_source = p.hubspotId ? "hubspot" : "netrows";
+        row.email_resolved_at = new Date().toISOString();
+      }
       // Ne JAMAIS écrire is_champion=false ici (sinon on désactiverait un
       // champion existant). On ne le set qu'à la promotion explicite.
       if (shouldFlagChampion) row.is_champion = true;
@@ -121,11 +128,33 @@ export async function POST(req: NextRequest) {
     await new Promise((r) => setTimeout(r, 1500));
   }
 
+  // ── 4. Auto-resolve email pour les profils ajoutés sans email mais avec
+  // hubspot_id (HubSpot batch read = 1 appel, gratuit, rapide).
+  let emailsAutoResolved = 0;
+  if (added.length > 0) {
+    const { data: needsEmail } = await db
+      .from("linkedin_monitored_profiles")
+      .select("id, username, full_name, headline, company, profile_url, hubspot_id, email, email_confidence, email_source")
+      .in("username", added)
+      .is("email", null)
+      .not("hubspot_id", "is", null);
+    const profilesToResolve = (needsEmail ?? []) as RadarProfileForResolve[];
+    if (profilesToResolve.length > 0) {
+      try {
+        const { resolved } = await resolveRadarEmails(profilesToResolve);
+        emailsAutoResolved = resolved.filter((r) => r.source === "hubspot").length;
+      } catch (e) {
+        console.warn("[add-to-radar] auto-resolve emails failed:", e instanceof Error ? e.message : e);
+      }
+    }
+  }
+
   return NextResponse.json({
     added,
     skipped,
     failed,
     unresolved,
     resolvedCount,
+    emailsAutoResolved,
   });
 }

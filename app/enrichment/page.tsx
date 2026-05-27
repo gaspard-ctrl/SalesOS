@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Target } from "lucide-react";
+import { Target, Building2 } from "lucide-react";
 import { COLORS } from "@/lib/design/tokens";
 import type { ComboLog, EnrichmentList, EnrichmentProfile, HubspotCriteria, NetrowsCriteria } from "@/lib/intel-types";
 import {
@@ -38,6 +38,8 @@ export default function EnrichmentPage() {
   );
 }
 
+type ScopeCompanyOption = { id: string; name: string };
+
 function EnrichmentPageInner() {
   // Préfill depuis Watch List : /enrichment?source=watchlist&company=<nom>
   // Le lazy initial state garantit que CriteriaForm reçoit dès le premier
@@ -45,8 +47,27 @@ function EnrichmentPageInner() {
   const searchParams = useSearchParams();
   const watchlistCompany =
     searchParams?.get("source") === "watchlist" ? searchParams.get("company") : null;
+  const initialTab = ((): TabId => {
+    const t = searchParams?.get("tab");
+    if (t === "netrows" || t === "hubspot" || t === "csv" || t === "radar") return t;
+    return "netrows";
+  })();
 
-  const [tab, setTab] = React.useState<TabId>("netrows");
+  const [tab, setTab] = React.useState<TabId>(initialTab);
+  const [targetCompany, setTargetCompany] = React.useState<string | null>(watchlistCompany ?? null);
+  const [scopeCompanies, setScopeCompanies] = React.useState<ScopeCompanyOption[]>([]);
+  const [formKey, setFormKey] = React.useState(0);
+
+  React.useEffect(() => {
+    fetch("/api/intel/admin/scope-companies")
+      .then((r) => r.json())
+      .then((j) => {
+        const list = (j.companies ?? []) as { id: string; name: string }[];
+        setScopeCompanies(list.map((c) => ({ id: c.id, name: c.name })));
+      })
+      .catch(() => setScopeCompanies([]));
+  }, []);
+
   const [icpOpen, setIcpOpen] = React.useState(false);
   const [profiles, setProfiles] = React.useState<EnrichmentProfile[]>([]);
   const [lastCriteriaNetrows, setLastCriteriaNetrows] = React.useState<NetrowsCriteria | null>(() =>
@@ -80,6 +101,25 @@ function EnrichmentPageInner() {
 
   const { lists, reload: reloadLists } = useEnrichmentLists();
   const { reload: reloadRadar } = useRadarStatus();
+
+  function applyTargetCompany(name: string | null) {
+    setTargetCompany(name);
+    if (name) {
+      setLastCriteriaNetrows((prev) => ({
+        companies: [name],
+        titles: prev?.titles ?? DEFAULT_TITLES,
+        keywords: prev?.keywords ?? "",
+        firstName: prev?.firstName,
+        lastName: prev?.lastName,
+        geo: prev?.geo,
+        geoName: prev?.geoName,
+        schoolId: prev?.schoolId,
+        keywordSchool: prev?.keywordSchool,
+      }));
+      setLastCriteriaHubspot((prev) => ({ ...(prev ?? {}), q: name }));
+    }
+    setFormKey((k) => k + 1);
+  }
 
   function selectList(l: EnrichmentList) {
     setActiveListId(l.id);
@@ -260,7 +300,10 @@ function EnrichmentPageInner() {
     setError(null);
     setCsvResult(null);
     try {
-      const r = await addToRadarBulk(profilesToImport);
+      const tagged = targetCompany
+        ? profilesToImport.map((p) => ({ ...p, company: p.company || targetCompany }))
+        : profilesToImport;
+      const r = await addToRadarBulk(tagged);
       await reloadRadar();
       const parts: string[] = [];
       if (r.added.length > 0) parts.push(`${r.added.length} ajouté${r.added.length > 1 ? "s" : ""}`);
@@ -334,6 +377,44 @@ function EnrichmentPageInner() {
           </div>
 
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "4px 10px",
+                fontSize: 12,
+                borderRadius: 8,
+                border: `1px solid ${targetCompany ? COLORS.brand : COLORS.line}`,
+                background: targetCompany ? COLORS.brandTintSoft : COLORS.bgCard,
+                color: targetCompany ? COLORS.brand : COLORS.ink2,
+              }}
+            >
+              <Building2 size={13} />
+              <span style={{ fontWeight: 500 }}>Pour</span>
+              <select
+                value={targetCompany ?? ""}
+                onChange={(e) => applyTargetCompany(e.target.value || null)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  fontSize: 12,
+                  color: "inherit",
+                  cursor: "pointer",
+                  paddingRight: 4,
+                  maxWidth: 180,
+                }}
+              >
+                <option value="">Toutes mes companies</option>
+                {scopeCompanies.map((c) => (
+                  <option key={c.id} value={c.name}>{c.name}</option>
+                ))}
+                {targetCompany && !scopeCompanies.some((c) => c.name === targetCompany) && (
+                  <option value={targetCompany}>{targetCompany} (hors watchlist)</option>
+                )}
+              </select>
+            </div>
             <button
               type="button"
               onClick={() => setIcpOpen(true)}
@@ -350,7 +431,7 @@ function EnrichmentPageInner() {
                 cursor: "pointer",
               }}
             >
-              <Target size={13} /> Jobs cibles
+              <Target size={13} /> Rôles cibles
             </button>
 
             <div style={{ display: "flex", gap: 0, border: `1px solid ${COLORS.line}`, borderRadius: 8, padding: 2 }}>
@@ -403,6 +484,7 @@ function EnrichmentPageInner() {
           {tab === "netrows" && (
             <>
               <CriteriaForm
+                key={`netrows-${formKey}`}
                 initial={lastCriteriaNetrows ?? undefined}
                 onSubmit={onSubmitNetrows}
                 isLoading={searching}
@@ -457,6 +539,7 @@ function EnrichmentPageInner() {
           {tab === "hubspot" && (
             <>
               <HubspotFilters
+                key={`hubspot-${formKey}`}
                 initial={lastCriteriaHubspot ?? undefined}
                 onSubmit={onSubmitHubspot}
                 isLoading={searching}

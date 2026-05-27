@@ -215,6 +215,8 @@ export const CLIENT_FIELDS_TOOL: Anthropic.Tool = {
   },
 };
 
-// Modèle par défaut pour l'extraction. Sonnet pour la qualité d'extraction
-// structurée — Haiku se trompe trop sur les 30 fields. Voir §10 du plan.
-export const CLIENT_EXTRACTION_MODEL = "claude-sonnet-4-6";
+// Modèle par défaut pour l'extraction. Haiku 4.5 pendant la phase de test
+// pour diviser le coût par 3 (~0,13 € au lieu de 0,40 € par enrichissement).
+// Le plan §10 prévoyait Sonnet par défaut — à rebasculer quand on validera la
+// qualité d'extraction sur les 30 fields structurés.
+export const CLIENT_EXTRACTION_MODEL = "claude-haiku-4-5-20251001";

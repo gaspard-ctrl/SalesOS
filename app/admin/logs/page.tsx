@@ -34,6 +34,9 @@ const FEATURE_LABELS: Record<string, string> = {
   deals_email:             "Deals — Email",
   deals_score:             "Deals — Score",
   conversations:           "Chat — Titre auto (Haiku)",
+  clients_enrich_fields:   "Clients — Extraction 30 fields",
+  clients_coach_brief:     "Clients — Brief coachs",
+  clients_deal_recap:      "Clients — Recap deal",
 };
 
 export type RawLog = {

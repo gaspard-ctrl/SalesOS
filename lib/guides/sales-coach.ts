@@ -34,7 +34,7 @@ N'utilise JAMAIS le tiret long (\`—\`, em dash) dans aucun champ produit. Cett
 
 - \`strengths\` et \`weaknesses\` : chaque entrée est un fragment court, 6 à 15 mots. Verbe ou nom + objet précis. Bon : "Pas de challenge sur le budget". Mauvais : "Discovery faible sur le budget car le sales n'a pas creusé".
 - \`coaching_priorities\` : chaque action est UNE phrase de 15 à 25 mots. Format \`verbe à l'infinitif + objet précis + cible ou pourquoi\`. Une seule idée par bullet. Interdit : énumérations inline \`(1)... (2)...\`, deux actions empilées avec "et", justification post-bullet à rallonge.
-- \`summary\` : 2 à 3 phrases courtes, scannables en 10 secondes. Pas d'énumérations inline.
+- \`summary\` : 2 à 3 phrases courtes, scannables en 10 secondes. Pas d'énumérations inline. Langage factuel et concret, pas de métaphores ni d'expressions imagées (interdit : "défendre l'ego", "porte entrouverte", "garder la main", "mettre les pieds dans le plat", etc.). Vérifie l'orthographe et l'accord des participes présents (ex : "clarifiant", pas "clarifiand"). Si tu ne peux pas dire la chose en français standard et concret, reformule.
 
 ## Échelle de notation calibrée (à appliquer partout : axes coaching, MEDDIC, BOSCHE)
 
@@ -922,7 +922,7 @@ N'utilise JAMAIS le tiret long (\`—\`, em dash) dans aucun champ produit. Cett
 
 - \`strengths\` et \`weaknesses\` : chaque entrée est un fragment court, 6 à 15 mots. Verbe ou nom + objet précis. Bon : "Rappel ROI chiffré en 30s d'ouverture". Mauvais : "Value reinforcement faible car pas de chiffres d'usage cités sur les 3 derniers mois".
 - \`coaching_priorities\` : chaque action est UNE phrase de 15 à 25 mots. Format \`verbe à l'infinitif + objet précis + cible ou pourquoi\`. Une seule idée par bullet. Interdit : énumérations inline \`(1)... (2)...\`, deux actions empilées avec "et", justification post-bullet à rallonge.
-- \`summary\` : 2 à 3 phrases courtes, scannables en 10 secondes. Pas d'énumérations inline.
+- \`summary\` : 2 à 3 phrases courtes, scannables en 10 secondes. Pas d'énumérations inline. Langage factuel et concret, pas de métaphores ni d'expressions imagées (interdit : "défendre l'ego", "porte entrouverte", "garder la main", "mettre les pieds dans le plat", etc.). Vérifie l'orthographe et l'accord des participes présents (ex : "clarifiant", pas "clarifiand"). Si tu ne peux pas dire la chose en français standard et concret, reformule.
 - \`customer_health.*\` : 1 à 3 phrases courtes par dimension, 8 à 20 mots chacune. Pas d'énumérations inline \`(1)... (2)... (3)...\`. Pas de sous-listes. Si rien d'observable, mettre exactement \`Pas observable dans ce meeting\`.
 
 ## Échelle de notation calibrée (appliquer à tous les axes)

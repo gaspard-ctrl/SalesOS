@@ -25,6 +25,118 @@ type ImportSummary = {
   errors: { line: number; reason: string }[];
 };
 
+type TargetField = "name" | "owner" | "sector" | "current_coaching_platform" | "notes";
+
+type ColumnMapping = Record<TargetField, number>;
+
+type MappingState = {
+  headers: string[];
+  rows: string[][];
+  mapping: ColumnMapping;
+  defaultOwner: string | null;
+};
+
+const TARGET_FIELDS: { key: TargetField; label: string; required: boolean }[] = [
+  { key: "name", label: "Entreprise", required: true },
+  { key: "owner", label: "Owner", required: false },
+  { key: "sector", label: "Secteur", required: false },
+  { key: "current_coaching_platform", label: "Plateforme coaching", required: false },
+  { key: "notes", label: "Notes", required: false },
+];
+
+function splitCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        cur += ch;
+      }
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === ",") {
+        out.push(cur);
+        cur = "";
+      } else cur += ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+function parseCsvAll(text: string): { headers: string[]; rows: string[][] } {
+  const lines = text.split(/\r?\n/);
+  let headers: string[] = [];
+  const rows: string[][] = [];
+  let headerSet = false;
+  for (const raw of lines) {
+    if (!raw.trim()) continue;
+    const cells = splitCsvLine(raw);
+    if (!headerSet) {
+      headers = cells.map((c) => c.trim());
+      headerSet = true;
+    } else {
+      rows.push(cells);
+    }
+  }
+  return { headers, rows };
+}
+
+function autoDetectMapping(headers: string[]): ColumnMapping {
+  const lower = headers.map((h) => h.toLowerCase());
+  const find = (...candidates: string[]): number =>
+    lower.findIndex((c) => candidates.includes(c));
+  return {
+    name: find("name", "company", "entreprise", "société", "societe"),
+    owner: find("owner", "propriétaire", "proprietaire", "responsable"),
+    sector: find("sector", "secteur", "industry", "industrie"),
+    current_coaching_platform: find(
+      "current_coaching_platform",
+      "coaching_platform",
+      "plateforme",
+      "plateforme_coaching",
+      "platform",
+      "coaching platform",
+      "plateforme de coaching",
+      "plateforme coaching"
+    ),
+    notes: find("notes", "note", "commentaire", "commentaires"),
+  };
+}
+
+function rewriteCsvWithMapping(
+  rows: string[][],
+  mapping: ColumnMapping,
+  defaultOwner: string | null
+): string {
+  const escape = (v: string): string => {
+    if (/[",\r\n]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
+    return v;
+  };
+  const fallbackOwner = (defaultOwner ?? "").trim();
+  const header = "name,owner,sector,current_coaching_platform,notes";
+  const body = rows.map((cells) => {
+    const get = (idx: number) => (idx >= 0 ? (cells[idx] ?? "").trim() : "");
+    const ownerFromCsv = get(mapping.owner);
+    const owner = ownerFromCsv || fallbackOwner;
+    return [
+      escape(get(mapping.name)),
+      escape(owner),
+      escape(get(mapping.sector)),
+      escape(get(mapping.current_coaching_platform)),
+      escape(get(mapping.notes)),
+    ].join(",");
+  });
+  return [header, ...body].join("\n");
+}
+
 export type IcpDrawerSection = "companies" | "roles";
 
 export function IcpTargetsDrawer({
@@ -43,10 +155,10 @@ export function IcpTargetsDrawer({
   const resolvedTitle =
     title ??
     (showCompanies && showRoles
-      ? "Cibles globales (ICP)"
+      ? "Mes companies & rôles cibles"
       : showCompanies
-      ? "Cibles ICP"
-      : "Jobs cibles");
+      ? "Mes companies"
+      : "Rôles cibles");
   const { mutate: swrMutate } = useSWRConfig();
   const [companies, setCompanies] = React.useState<ScopeCompany[]>([]);
   const [reps, setReps] = React.useState<SalesRep[]>([]);
@@ -55,8 +167,12 @@ export function IcpTargetsDrawer({
   const [savingRoles, setSavingRoles] = React.useState(false);
   const [feedback, setFeedback] = React.useState<{ kind: "ok" | "err"; msg: string } | null>(null);
   const [filter, setFilter] = React.useState("");
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = React.useState(false);
   const [importing, setImporting] = React.useState(false);
   const [importPreview, setImportPreview] = React.useState<{ csv: string; summary: ImportSummary } | null>(null);
+  const [mappingState, setMappingState] = React.useState<MappingState | null>(null);
+  const [mappingLoading, setMappingLoading] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const invalidateWatchlist = React.useCallback(() => {
@@ -91,6 +207,7 @@ export function IcpTargetsDrawer({
   async function reloadCompanies() {
     const r = await fetch("/api/intel/admin/scope-companies").then((x) => x.json());
     setCompanies(r.companies ?? []);
+    setSelectedIds(new Set());
   }
 
   async function reloadReps() {
@@ -147,7 +264,49 @@ export function IcpTargetsDrawer({
       return;
     }
     setCompanies((cs) => cs.filter((c) => c.id !== id));
+    setSelectedIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
     invalidateWatchlist();
+  }
+
+  async function bulkDeleteSelected() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const names = companies.filter((c) => selectedIds.has(c.id)).map((c) => c.name);
+    const preview = names.slice(0, 3).join(", ") + (names.length > 3 ? `, +${names.length - 3}` : "");
+    if (!confirm(`Supprimer ${ids.length} entreprise${ids.length > 1 ? "s" : ""} (${preview}) ?`)) return;
+    setBulkDeleting(true);
+    setFeedback(null);
+    try {
+      const r = await fetch("/api/intel/admin/scope-companies", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error ?? "Erreur suppression");
+      setCompanies((cs) => cs.filter((c) => !selectedIds.has(c.id)));
+      setSelectedIds(new Set());
+      setFeedback({ kind: "ok", msg: `${ids.length} entreprise${ids.length > 1 ? "s" : ""} supprimée${ids.length > 1 ? "s" : ""}.` });
+      invalidateWatchlist();
+    } catch (e) {
+      setFeedback({ kind: "err", msg: e instanceof Error ? e.message : "Erreur" });
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   async function saveRoles() {
@@ -198,22 +357,62 @@ export function IcpTargetsDrawer({
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async () => {
+    reader.onload = () => {
       const csv = String(reader.result ?? "");
+      const { headers, rows } = parseCsvAll(csv);
+      if (headers.length === 0 || rows.length === 0) {
+        setFeedback({ kind: "err", msg: "CSV vide ou illisible." });
+        return;
+      }
+      setFeedback(null);
+      setMappingState({
+        headers,
+        rows,
+        mapping: autoDetectMapping(headers),
+        defaultOwner: null,
+      });
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
+  async function confirmMapping() {
+    if (!mappingState) return;
+    if (mappingState.mapping.name < 0) {
+      setFeedback({ kind: "err", msg: "La colonne Entreprise est obligatoire." });
+      return;
+    }
+    const ownerMapped = mappingState.mapping.owner >= 0;
+    const defaultOwner = (mappingState.defaultOwner ?? "").trim();
+    if (!ownerMapped && !defaultOwner) {
+      setFeedback({
+        kind: "err",
+        msg: "Owner obligatoire : choisis un owner par défaut ou mappe la colonne owner.",
+      });
+      return;
+    }
+    setMappingLoading(true);
+    setFeedback(null);
+    try {
+      const csv = rewriteCsvWithMapping(
+        mappingState.rows,
+        mappingState.mapping,
+        mappingState.defaultOwner
+      );
       const r = await fetch("/api/intel/admin/scope-companies/bulk-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ csv, dryRun: true }),
       });
       const j = await r.json();
-      if (!r.ok) {
-        setFeedback({ kind: "err", msg: j.error ?? "Erreur import" });
-        return;
-      }
+      if (!r.ok) throw new Error(j.error ?? "Erreur import");
+      setMappingState(null);
       setImportPreview({ csv, summary: j.summary as ImportSummary });
-    };
-    reader.readAsText(file);
-    e.target.value = "";
+    } catch (e) {
+      setFeedback({ kind: "err", msg: e instanceof Error ? e.message : "Erreur" });
+    } finally {
+      setMappingLoading(false);
+    }
   }
 
   async function commitImport(mode: "skip" | "update") {
@@ -395,6 +594,45 @@ export function IcpTargetsDrawer({
                   ))}
                 </datalist>
 
+                {selectedIds.size > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "8px 12px",
+                      marginBottom: 6,
+                      background: COLORS.bgSoft,
+                      border: `1px solid ${COLORS.line}`,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <span style={{ fontSize: 12, color: COLORS.ink1 }}>
+                      {selectedIds.size} sélectionnée{selectedIds.size > 1 ? "s" : ""}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedIds(new Set())}
+                      style={{ ...btnSecondary(), padding: "4px 8px" }}
+                    >
+                      Tout désélectionner
+                    </button>
+                    <button
+                      type="button"
+                      onClick={bulkDeleteSelected}
+                      disabled={bulkDeleting}
+                      style={{
+                        ...btnSecondary(),
+                        marginLeft: "auto",
+                        color: COLORS.err,
+                        borderColor: COLORS.err,
+                      }}
+                    >
+                      <Trash2 size={12} /> {bulkDeleting ? "Suppression…" : "Supprimer la sélection"}
+                    </button>
+                  </div>
+                )}
+
                 <div
                   style={{
                     border: `1px solid ${COLORS.line}`,
@@ -415,6 +653,29 @@ export function IcpTargetsDrawer({
                       }}
                     >
                       <tr>
+                        <th style={th(32)}>
+                          <input
+                            type="checkbox"
+                            aria-label="Tout sélectionner"
+                            checked={filtered.length > 0 && filtered.every((c) => selectedIds.has(c.id))}
+                            ref={(el) => {
+                              if (!el) return;
+                              const someSelected = filtered.some((c) => selectedIds.has(c.id));
+                              const allSelected = filtered.length > 0 && filtered.every((c) => selectedIds.has(c.id));
+                              el.indeterminate = someSelected && !allSelected;
+                            }}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setSelectedIds((prev) => {
+                                const next = new Set(prev);
+                                if (checked) filtered.forEach((c) => next.add(c.id));
+                                else filtered.forEach((c) => next.delete(c.id));
+                                return next;
+                              });
+                            }}
+                            style={{ cursor: "pointer" }}
+                          />
+                        </th>
                         <th style={th()}>Entreprise</th>
                         <th style={th(140)}>Owner</th>
                         <th style={th(160)}>Secteur</th>
@@ -426,13 +687,20 @@ export function IcpTargetsDrawer({
                     <tbody>
                       {filtered.length === 0 && (
                         <tr>
-                          <td colSpan={6} style={{ padding: 24, textAlign: "center", color: COLORS.ink3, fontSize: 12 }}>
+                          <td colSpan={7} style={{ padding: 24, textAlign: "center", color: COLORS.ink3, fontSize: 12 }}>
                             {companies.length === 0 ? "Aucune entreprise. Ajoutes-en ou importe un CSV." : "Aucun résultat."}
                           </td>
                         </tr>
                       )}
                       {filtered.map((c) => (
-                        <CompanyRow key={c.id} company={c} onPatch={patchCompany} onRemove={removeCompany} />
+                        <CompanyRow
+                          key={c.id}
+                          company={c}
+                          selected={selectedIds.has(c.id)}
+                          onToggleSelected={toggleSelected}
+                          onPatch={patchCompany}
+                          onRemove={removeCompany}
+                        />
                       ))}
                     </tbody>
                   </table>
@@ -502,6 +770,17 @@ export function IcpTargetsDrawer({
         </footer>
       </aside>
 
+      {mappingState && (
+        <ColumnMappingModal
+          state={mappingState}
+          reps={reps}
+          loading={mappingLoading}
+          onChange={setMappingState}
+          onCancel={() => setMappingState(null)}
+          onConfirm={confirmMapping}
+        />
+      )}
+
       {importPreview && (
         <ImportPreviewModal
           summary={importPreview.summary}
@@ -514,17 +793,316 @@ export function IcpTargetsDrawer({
   );
 }
 
+function ColumnMappingModal({
+  state,
+  reps,
+  loading,
+  onChange,
+  onCancel,
+  onConfirm,
+}: {
+  state: MappingState;
+  reps: SalesRep[];
+  loading: boolean;
+  onChange: (s: MappingState) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { headers, rows, mapping, defaultOwner } = state;
+  const setField = (key: TargetField, idx: number) => {
+    onChange({ ...state, mapping: { ...mapping, [key]: idx } });
+  };
+  const setDefaultOwner = (v: string | null) => {
+    onChange({ ...state, defaultOwner: v });
+  };
+  const [customOwner, setCustomOwner] = React.useState("");
+  const [customMode, setCustomMode] = React.useState(false);
+  const sample = rows.slice(0, 5);
+  const nameOk = mapping.name >= 0;
+  const ownerColMapped = mapping.owner >= 0;
+  const fallbackOwner = (defaultOwner ?? "").trim();
+  const ownerOk = ownerColMapped || fallbackOwner.length > 0;
+  const canContinue = nameOk && ownerOk && !loading;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.5)",
+        zIndex: 200,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      onClick={onCancel}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 720,
+          maxWidth: "94%",
+          maxHeight: "88vh",
+          background: COLORS.bgCard,
+          borderRadius: 12,
+          padding: 20,
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+          overflow: "hidden",
+        }}
+      >
+        <div>
+          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: COLORS.ink0 }}>
+            Mapper les colonnes du CSV
+          </h3>
+          <p style={{ margin: "4px 0 0", fontSize: 12, color: COLORS.ink2 }}>
+            {rows.length} ligne{rows.length > 1 ? "s" : ""} détectée{rows.length > 1 ? "s" : ""}.
+            Associe chaque champ à une colonne de ton fichier. Seule l&apos;entreprise est obligatoire.
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "160px 1fr",
+            rowGap: 8,
+            columnGap: 12,
+            alignItems: "center",
+          }}
+        >
+          {TARGET_FIELDS.map((f) => (
+            <React.Fragment key={f.key}>
+              <label style={{ fontSize: 12, color: COLORS.ink1 }}>
+                {f.label}
+                {f.required && <span style={{ color: COLORS.err }}> *</span>}
+              </label>
+              <select
+                value={mapping[f.key]}
+                onChange={(e) => setField(f.key, Number(e.target.value))}
+                style={{
+                  padding: "6px 8px",
+                  fontSize: 12,
+                  border: `1px solid ${COLORS.line}`,
+                  borderRadius: 6,
+                  background: COLORS.bgCard,
+                  color: COLORS.ink1,
+                }}
+              >
+                {!f.required && <option value={-1}>— Ignorer —</option>}
+                {f.required && mapping[f.key] < 0 && (
+                  <option value={-1} disabled>
+                    — Choisir une colonne —
+                  </option>
+                )}
+                {headers.map((h, idx) => (
+                  <option key={idx} value={idx}>
+                    {h || `Colonne ${idx + 1}`}
+                  </option>
+                ))}
+              </select>
+            </React.Fragment>
+          ))}
+
+          <label style={{ fontSize: 12, color: COLORS.ink1 }}>
+            Owner par défaut
+            {!ownerColMapped && <span style={{ color: COLORS.err }}> *</span>}
+          </label>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <select
+              value={
+                customMode || (fallbackOwner && !reps.some((r) => r.name === fallbackOwner))
+                  ? "__custom__"
+                  : fallbackOwner || ""
+              }
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "") {
+                  setCustomMode(false);
+                  setCustomOwner("");
+                  setDefaultOwner(null);
+                } else if (v === "__custom__") {
+                  setCustomMode(true);
+                  setDefaultOwner(customOwner || null);
+                } else {
+                  setCustomMode(false);
+                  setCustomOwner("");
+                  setDefaultOwner(v);
+                }
+              }}
+              style={{
+                padding: "6px 8px",
+                fontSize: 12,
+                border: `1px solid ${COLORS.line}`,
+                borderRadius: 6,
+                background: COLORS.bgCard,
+                color: COLORS.ink1,
+                flex: 1,
+              }}
+            >
+              <option value="">— Aucun —</option>
+              {reps.map((r) => (
+                <option key={r.id} value={r.name}>
+                  {r.name}
+                </option>
+              ))}
+              <option value="__custom__">+ Nouveau owner…</option>
+            </select>
+            {(customMode || (fallbackOwner && !reps.some((r) => r.name === fallbackOwner))) && (
+              <input
+                value={customOwner || fallbackOwner}
+                onChange={(e) => {
+                  setCustomOwner(e.target.value);
+                  setDefaultOwner(e.target.value || null);
+                }}
+                placeholder="Nom du owner"
+                autoFocus
+                style={{
+                  padding: "6px 8px",
+                  fontSize: 12,
+                  border: `1px solid ${COLORS.line}`,
+                  borderRadius: 6,
+                  background: COLORS.bgCard,
+                  color: COLORS.ink1,
+                  width: 160,
+                }}
+              />
+            )}
+          </div>
+        </div>
+
+        {fallbackOwner && (
+          <p style={{ margin: 0, fontSize: 11, color: COLORS.ink3 }}>
+            {ownerColMapped
+              ? `Appliqué uniquement aux lignes sans owner dans le CSV.`
+              : `Appliqué à toutes les ${rows.length} entreprises importées.`}
+          </p>
+        )}
+        {!ownerOk && (
+          <p style={{ margin: 0, fontSize: 11, color: COLORS.err }}>
+            Owner obligatoire : choisis un owner par défaut ou mappe la colonne owner.
+          </p>
+        )}
+
+        <div
+          style={{
+            border: `1px solid ${COLORS.line}`,
+            borderRadius: 8,
+            overflow: "auto",
+            flex: 1,
+            minHeight: 0,
+          }}
+        >
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead style={{ background: COLORS.bgSoft }}>
+              <tr>
+                {TARGET_FIELDS.map((f) => (
+                  <th
+                    key={f.key}
+                    style={{
+                      textAlign: "left",
+                      padding: "6px 10px",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: COLORS.ink3,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      borderBottom: `1px solid ${COLORS.line}`,
+                    }}
+                  >
+                    {f.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sample.map((cells, i) => (
+                <tr key={i} style={{ borderBottom: `1px solid ${COLORS.line}` }}>
+                  {TARGET_FIELDS.map((f) => {
+                    const idx = mapping[f.key];
+                    const raw = idx >= 0 ? (cells[idx] ?? "").trim() : "";
+                    const v = f.key === "owner" && !raw && fallbackOwner ? fallbackOwner : raw;
+                    const fromDefault = f.key === "owner" && !raw && fallbackOwner;
+                    return (
+                      <td
+                        key={f.key}
+                        style={{
+                          padding: "6px 10px",
+                          color: v ? COLORS.ink1 : COLORS.ink3,
+                          fontStyle: fromDefault ? "italic" : "normal",
+                          maxWidth: 200,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {v || "—"}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+              {rows.length > sample.length && (
+                <tr>
+                  <td
+                    colSpan={TARGET_FIELDS.length}
+                    style={{ padding: "6px 10px", fontSize: 11, color: COLORS.ink3, fontStyle: "italic" }}
+                  >
+                    + {rows.length - sample.length} ligne{rows.length - sample.length > 1 ? "s" : ""}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button type="button" onClick={onCancel} style={btnSecondary()}>
+            Annuler
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={!canContinue}
+            style={{ ...btnPrimary(), opacity: canContinue ? 1 : 0.6 }}
+          >
+            {loading ? "Analyse…" : "Continuer"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CompanyRow({
   company,
+  selected,
+  onToggleSelected,
   onPatch,
   onRemove,
 }: {
   company: ScopeCompany;
+  selected: boolean;
+  onToggleSelected: (id: string) => void;
   onPatch: (id: string, patch: Partial<ScopeCompany>) => void;
   onRemove: (id: string, name: string) => void;
 }) {
   return (
-    <tr style={{ borderBottom: `1px solid ${COLORS.line}` }}>
+    <tr
+      style={{
+        borderBottom: `1px solid ${COLORS.line}`,
+        background: selected ? COLORS.bgSoft : "transparent",
+      }}
+    >
+      <td style={{ ...td(), textAlign: "center" }}>
+        <input
+          type="checkbox"
+          aria-label={`Sélectionner ${company.name}`}
+          checked={selected}
+          onChange={() => onToggleSelected(company.id)}
+          style={{ cursor: "pointer" }}
+        />
+      </td>
       <td style={td()}>
         <InlineEditable
           value={company.name}
