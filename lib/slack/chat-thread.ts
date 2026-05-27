@@ -22,6 +22,23 @@ export async function loadThreadMessages(key: SlackThreadKey): Promise<Anthropic
   return (data?.messages ?? []) as Anthropic.MessageParam[];
 }
 
+/**
+ * Vérifie si un thread est déjà tracké par CoachelloGPT. Utilisé par le
+ * handler `message.channels` pour ne répondre QUE dans les threads où le
+ * bot a déjà été invoqué (sinon il répondrait à tous les messages des
+ * canaux où il est membre).
+ */
+export async function isThreadTracked(key: SlackThreadKey): Promise<boolean> {
+  if (!key.threadTs) return false;
+  const { data } = await db
+    .from("slack_chat_threads")
+    .select("id")
+    .eq("slack_channel_id", key.channel)
+    .eq("slack_thread_ts", key.threadTs)
+    .single();
+  return !!data;
+}
+
 export async function saveThreadMessages(args: {
   key: SlackThreadKey;
   userId: string;
