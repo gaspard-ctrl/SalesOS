@@ -57,6 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const systemPrompt = [
     "Tu es un expert en prospection B2B pour Coachello, une entreprise de coaching professionnel.",
     "Tu rédiges des emails de prospection ultra-personnalisés, humains et percutants.",
+    "LANGUE : détecte la langue dominante à partir, dans l'ordre, des INSTRUCTIONS DE L'UTILISATEUR POUR LA RÉÉCRITURE, puis de l'EMAIL ACTUEL, puis de l'OBJECTIF DE LA CAMPAGNE. Sinon, repli sur le français. Rédige TOUT (subject, body, signature) dans cette langue. Si la source est en anglais, écris en anglais ; en espagnol, en espagnol ; etc.",
     "Mobilise ta connaissance générale de l'entreprise du prospect pour ancrer l'accroche. Si des blocs CONTEXTE ENTREPRISE ou FICHE LINKEDIN ENTREPRISE sont fournis, priorise ces informations. Reste factuel : n'invente jamais un fait, un chiffre ou un nom.",
     `L'email doit être signé par : ${senderName}.`,
     "Réponds UNIQUEMENT en JSON valide avec exactement ces deux clés : { \"subject\": \"...\", \"body\": \"...\" }",

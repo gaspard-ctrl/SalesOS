@@ -179,6 +179,44 @@ export type DealRecap = {
   onboarding_risks?: string[];
 };
 
+// ── Coach brief (généré par l'enrichissement, partagé manuellement aux coachs) ─
+// Structure calquée sur le message Slack qu'on envoie au canal coachs au
+// staffing : intro company + contexte business + programmes + objectifs +
+// langues + journey + dates. Stocké structuré, rendu en markdown côté UI
+// (CoachBriefPanel) ou plus tard en Slack/email.
+
+export type CoachBriefLanguages = {
+  region: string; // ex: "EUROPE", "APAC", "LATAM", "Global"
+  languages: string[];
+};
+
+export type CoachBriefProgram = {
+  name: string;        // ex: "Executive Program", "Managers Program"
+  description: string; // ex: "designed to accompany senior leaders on strategic topics"
+  nb_sessions?: number | null;
+  population?: string | null; // ex: "senior leaders", "managers"
+};
+
+export type CoachBrief = {
+  intro?: string | null;
+  industry?: string | null;
+  website?: string | null;
+  context?: string | null;
+  programs?: CoachBriefProgram[];
+  goal?: string | null;
+  location?: string | null;
+  coaching_languages?: CoachBriefLanguages[];
+  coachee_journey?: string | null;
+  ai_coaching?: boolean | null;
+  coachello_app?: string | null;          // "Slack", "Teams", "Email"
+  briefing_meeting_date?: string | null;  // ISO ou texte libre si pas encore fixé
+  nb_sessions_per_coachee?: number | null;
+  tripartite?: string | null;             // "Optional in first session", "Required", "None"
+  onboarding_start_date?: string | null;
+  program_end_date?: string | null;
+  program_duration?: string | null;       // "6 months", "9 months", "6 to 9 months"
+};
+
 // ── Health / Insights / News (squelettes — remplis dans une étape ultérieure) ─
 export type HealthLabel = "green" | "yellow" | "red";
 export type HealthSnapshot = {
@@ -208,6 +246,19 @@ export type News = {
   }>;
 };
 
+// ── Recordings Claap découverts (live API, pas encore dans sales_coach_analyses) ─
+// Persistés en JSONB dans `clients.discovered_claap_recordings` au moment de
+// l'enrichissement. Sert au TimelinePanel pour afficher des meetings qui
+// existent côté Claap mais qui n'ont pas (encore) été passés dans le pipeline
+// sales-coach. Cf. migration clients_discovered_meetings.sql.
+export type DiscoveredRecording = {
+  recording_id: string;
+  meeting_title: string | null;
+  meeting_started_at: string | null;
+  claap_url: string | null;
+  discovered_at: string;
+};
+
 // ── Row Supabase ─────────────────────────────────────────────────────────
 export type ClientRow = {
   id: string;
@@ -220,10 +271,13 @@ export type ClientRow = {
   deal_amount: number | null;
   fields_json: Partial<ClientFields>;
   deal_recap: DealRecap | null;
+  coach_brief: CoachBrief | null;
+  coach_brief_generated_at: string | null;
   health: Health | null;
   health_history: HealthSnapshot[];
   insights: Insights | null;
   news: News | null;
+  discovered_claap_recordings: DiscoveredRecording[];
   enrichment_status: "pending" | "running" | "done" | "error";
   enrichment_error: string | null;
   last_enriched_at: string | null;

@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Search, ExternalLink, Trash2, RefreshCw, ChevronUp, ChevronDown, X, Filter, Crown, Mail, Copy, Check } from "lucide-react";
+import { Search, ExternalLink, Trash2, RefreshCw, ChevronUp, ChevronDown, X, Filter, Crown, Mail, Copy, Check, Download, Send } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { CompanyAvatar } from "@/components/ui/company-avatar";
 import { ExchangesBadge } from "@/components/ui/exchanges-badge";
 import { COLORS } from "@/lib/design/tokens";
@@ -59,6 +60,7 @@ function compareDate(a: string | null, b: string | null, dir: SortDir): number {
 }
 
 export function RadarTable() {
+  const router = useRouter();
   const { profiles, isLoading, reload } = useRadarStatus();
   const [q, setQ] = React.useState("");
   const [sourceFilter, setSourceFilter] = React.useState<Set<string>>(new Set());
@@ -315,6 +317,52 @@ export function RadarTable() {
     setQ("");
   }
 
+  function exportCsv() {
+    const escape = (v: string | null | undefined): string => {
+      const s = (v ?? "").toString();
+      if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+    const header = [
+      "email",
+      "full_name",
+      "headline",
+      "company",
+      "linkedin_username",
+      "linkedin_url",
+      "source",
+      "email_source",
+      "email_confidence",
+      "last_change_at",
+      "last_refreshed_at",
+      "created_at",
+    ].join(",");
+    const rows = sorted.map((p) =>
+      [
+        escape(p.email),
+        escape(p.full_name),
+        escape(p.headline),
+        escape(p.company),
+        escape(p.username),
+        escape(p.profile_url),
+        escape(p.source),
+        escape(p.email_source),
+        escape(p.email_confidence),
+        escape(p.last_change_at),
+        escape(p.last_refreshed_at),
+        escape(p.created_at),
+      ].join(",")
+    );
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `radar-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const hasActiveFilters = q || sourceFilter.size > 0 || companyFilter.size > 0 || staleOnly;
 
   return (
@@ -414,6 +462,29 @@ export function RadarTable() {
 
         <span style={{ marginLeft: "auto", fontSize: 12, color: COLORS.ink2, display: "inline-flex", alignItems: "center", gap: 12 }}>
           <span>{sorted.length} / {profiles.length} profils</span>
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={sorted.length === 0}
+            title="Exporter la sélection visible en CSV (email garanti en première colonne)"
+            style={{
+              padding: "6px 10px",
+              fontSize: 12,
+              borderRadius: 8,
+              border: `1px solid ${COLORS.line}`,
+              background: COLORS.bgCard,
+              color: sorted.length === 0 ? COLORS.ink3 : COLORS.ink2,
+              cursor: sorted.length === 0 ? "default" : "pointer",
+              fontWeight: 500,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              opacity: sorted.length === 0 ? 0.5 : 1,
+            }}
+          >
+            <Download size={12} />
+            Exporter CSV
+          </button>
           {missingEmailCount > 0 && (
             <button
               type="button"
@@ -498,10 +569,36 @@ export function RadarTable() {
           </button>
           <button
             type="button"
+            onClick={() => {
+              const ids = sorted
+                .filter((p) => selected.has(p.username))
+                .map((p) => p.id);
+              if (ids.length === 0) return;
+              router.push(`/mass-prospection?from=watchlist&ids=${ids.join(",")}`);
+            }}
+            style={{
+              marginLeft: "auto",
+              padding: "6px 12px",
+              fontSize: 12,
+              borderRadius: 6,
+              border: `1px solid ${COLORS.brand}`,
+              background: COLORS.brand,
+              color: "white",
+              cursor: "pointer",
+              fontWeight: 500,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <Send size={12} />
+            Prospecter {selected.size} profil{selected.size > 1 ? "s" : ""}
+          </button>
+          <button
+            type="button"
             onClick={onBulkRemove}
             disabled={bulkRemoving}
             style={{
-              marginLeft: "auto",
               padding: "6px 12px",
               fontSize: 12,
               borderRadius: 6,
@@ -516,7 +613,7 @@ export function RadarTable() {
             }}
           >
             <Trash2 size={12} />
-            Retirer {selected.size} profil{selected.size > 1 ? "s" : ""} du Radar
+            Retirer {selected.size}
           </button>
         </div>
       )}

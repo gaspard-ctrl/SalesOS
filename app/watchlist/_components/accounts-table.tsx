@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Search } from "lucide-react";
+import { Search, Send, UserSearch } from "lucide-react";
 import { COLORS } from "@/lib/design/tokens";
 import { CompanyAvatar } from "@/components/ui/company-avatar";
 import type { WatchAccount } from "@/app/api/watchlist/accounts/route";
@@ -78,6 +78,28 @@ export function AccountsTable({
     else {
       setSortKey(k);
       setSortDir(k === "name" || k === "sector" || k === "platform" ? "asc" : "desc");
+    }
+  }
+
+  async function prospectCompany(account: WatchAccount, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (account.radar_count === 0) {
+      router.push(`/enrichment?source=watchlist&company=${encodeURIComponent(account.name)}`);
+      return;
+    }
+    try {
+      const r = await fetch(`/api/watchlist/accounts/${account.id}/prospects`);
+      const j = await r.json();
+      const ids = (j.prospects ?? [])
+        .map((p: { id?: string }) => p.id)
+        .filter((id: string | undefined): id is string => Boolean(id));
+      if (ids.length === 0) {
+        router.push(`/enrichment?source=watchlist&company=${encodeURIComponent(account.name)}`);
+        return;
+      }
+      router.push(`/mass-prospection?from=watchlist&ids=${ids.join(",")}`);
+    } catch {
+      router.push(`/enrichment?source=watchlist&company=${encodeURIComponent(account.name)}`);
     }
   }
 
@@ -160,6 +182,7 @@ export function AccountsTable({
                 <th style={th(80, "right")} onClick={() => toggleSort("signals_30d")}>Signaux 30j {sortIndicator(sortKey === "signals_30d", sortDir)}</th>
                 <th style={th(80, "right")} onClick={() => toggleSort("outreach_count")}>Échanges {sortIndicator(sortKey === "outreach_count", sortDir)}</th>
                 <th style={th(80, "right")}>Owner</th>
+                <th style={th(140, "right")}></th>
               </tr>
             </thead>
             <tbody>
@@ -201,6 +224,29 @@ export function AccountsTable({
                   <td style={{ ...td(), textAlign: "right" }}>{a.signals_30d}</td>
                   <td style={{ ...td(), textAlign: "right" }}>{a.outreach_count}</td>
                   <td style={{ ...td(), textAlign: "right", color: COLORS.ink2 }}>{a.owner ?? "—"}</td>
+                  <td style={{ ...td(), textAlign: "right", whiteSpace: "nowrap" }}>
+                    <button
+                      type="button"
+                      onClick={(e) => prospectCompany(a, e)}
+                      title={a.radar_count > 0 ? `Prospecter les ${a.radar_count} contact${a.radar_count > 1 ? "s" : ""} de cette company` : "Aucun prospect : ouvrir l'enrichissement pour en trouver"}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "4px 10px",
+                        fontSize: 11,
+                        borderRadius: 6,
+                        border: `1px solid ${a.radar_count > 0 ? COLORS.brand : COLORS.line}`,
+                        background: a.radar_count > 0 ? COLORS.brand : COLORS.bgCard,
+                        color: a.radar_count > 0 ? "white" : COLORS.ink2,
+                        cursor: "pointer",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {a.radar_count > 0 ? <Send size={11} /> : <UserSearch size={11} />}
+                      {a.radar_count > 0 ? "Prospecter" : "Enrichir"}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

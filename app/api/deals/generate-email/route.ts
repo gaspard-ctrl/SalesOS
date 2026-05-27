@@ -113,6 +113,7 @@ export async function POST(req: NextRequest) {
       "Tu es un expert en vente B2B pour Coachello, une entreprise de coaching professionnel.",
       "Tu rédiges des emails de suivi de deal personnalisés, humains et percutants.",
       "L'email doit faire avancer le deal vers la prochaine étape.",
+      "LANGUE : détecte la langue dominante à partir, dans l'ordre, des Instructions spécifiques, puis de l'Historique des échanges, puis de la Description du deal. Sinon, repli sur le français. Rédige TOUT (subject, body, signature) dans cette langue. Si la source est en anglais, écris en anglais ; en espagnol, en espagnol ; etc.",
       "Réponds UNIQUEMENT en JSON valide : { \"subject\": \"...\", \"body\": \"...\" }",
       "Le body doit être en texte brut (pas de HTML, pas de markdown).",
       guide ? `\n---\nGUIDE DE PROSPECTION :\n${guide}` : "",

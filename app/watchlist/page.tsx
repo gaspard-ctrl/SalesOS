@@ -1,10 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Target } from "lucide-react";
+import Link from "next/link";
+import { Target, UserSearch, Radar } from "lucide-react";
 import { COLORS } from "@/lib/design/tokens";
 import { useWatchSalesReps, useWatchAccounts } from "@/lib/hooks/use-watchlist";
-import { IcpTargetsDrawer } from "@/components/icp-targets-drawer";
 import { SalesStrip } from "./_components/sales-strip";
 import { AccountsTable } from "./_components/accounts-table";
 
@@ -12,7 +12,6 @@ export default function WatchListPage() {
   const { reps, isLoading: repsLoading } = useWatchSalesReps();
   const [selectedRep, setSelectedRep] = React.useState<string | null>(null);
   const { accounts, isLoading: accountsLoading } = useWatchAccounts(selectedRep);
-  const [icpOpen, setIcpOpen] = React.useState(false);
 
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden", background: COLORS.bgPage }}>
@@ -44,36 +43,66 @@ export default function WatchListPage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIcpOpen(true)}
-            style={{
-              marginLeft: "auto",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 12px",
-              fontSize: 12,
-              fontWeight: 500,
-              borderRadius: 8,
-              border: `1px solid ${COLORS.line}`,
-              background: COLORS.bgCard,
-              color: COLORS.ink1,
-              cursor: "pointer",
-            }}
-          >
-            <Target size={13} /> Cibles ICP
-          </button>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+            <Link
+              href="/enrichment"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 12px",
+                fontSize: 12,
+                fontWeight: 500,
+                borderRadius: 8,
+                border: `1px solid ${COLORS.brand}`,
+                background: COLORS.brand,
+                color: "white",
+                textDecoration: "none",
+              }}
+            >
+              <UserSearch size={13} /> Trouver des prospects
+            </Link>
+            <Link
+              href="/enrichment?tab=radar"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 12px",
+                fontSize: 12,
+                fontWeight: 500,
+                borderRadius: 8,
+                border: `1px solid ${COLORS.line}`,
+                background: COLORS.bgCard,
+                color: COLORS.ink1,
+                textDecoration: "none",
+              }}
+            >
+              <Radar size={13} /> Mon Radar
+            </Link>
+            <Link
+              href="/watchlist/companies"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 12px",
+                fontSize: 12,
+                fontWeight: 500,
+                borderRadius: 8,
+                border: `1px solid ${COLORS.line}`,
+                background: COLORS.bgCard,
+                color: COLORS.ink1,
+                textDecoration: "none",
+              }}
+            >
+              <Target size={13} /> Mes companies
+            </Link>
+          </div>
         </div>
 
         <AccountsTable accounts={accounts} isLoading={accountsLoading} />
       </div>
-
-      <IcpTargetsDrawer
-        open={icpOpen}
-        onClose={() => setIcpOpen(false)}
-        sections={["companies"]}
-      />
     </div>
   );
 }

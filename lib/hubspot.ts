@@ -205,10 +205,11 @@ export type DealContactSnapshot = {
 };
 
 export type DealEngagementSnapshot = {
-  type: "meeting" | "call" | "note" | "engagement";
+  type: "meeting" | "call" | "note" | "email" | "engagement";
   date: string | null;
   title: string | null;
   body: string;
+  direction?: "in" | "out" | null;
 };
 
 export type DealCompanySnapshot = {
@@ -330,22 +331,47 @@ export async function fetchDealContext(dealId: string): Promise<DealSnapshot | n
     : [];
 
   if (engIds.length > 0) {
-    const [meetingsRes, callsRes, notesRes] = await Promise.allSettled([
+    // 100 = limite max HubSpot par page. On laisse 1 seule page pour chaque
+    // source — rarement plus de 100 meetings/calls/notes par deal. Pour les
+    // emails on paginate via hubspotSearchAll (jusqu'à 500) car certains
+    // deals matures ont 200-300 emails et la richesse de cette source justifie
+    // de tout remonter.
+    const [meetingsRes, callsRes, notesRes, emailsRes] = await Promise.allSettled([
       hubspotFetch<{ results?: SearchResultRow[] }>("/crm/v3/objects/meetings/search", "POST", {
         filterGroups: [{ filters: [{ propertyName: "associations.deal", operator: "EQ", value: dealId }] }],
         properties: ["hs_meeting_title", "hs_meeting_body", "hs_timestamp", "hs_meeting_outcome"],
-        limit: 15,
+        sorts: [{ propertyName: "hs_timestamp", direction: "DESCENDING" }],
+        limit: 100,
       }),
       hubspotFetch<{ results?: SearchResultRow[] }>("/crm/v3/objects/calls/search", "POST", {
         filterGroups: [{ filters: [{ propertyName: "associations.deal", operator: "EQ", value: dealId }] }],
         properties: ["hs_call_title", "hs_call_body", "hs_timestamp", "hs_call_disposition"],
-        limit: 15,
+        sorts: [{ propertyName: "hs_timestamp", direction: "DESCENDING" }],
+        limit: 100,
       }),
       hubspotFetch<{ results?: SearchResultRow[] }>("/crm/v3/objects/notes/search", "POST", {
         filterGroups: [{ filters: [{ propertyName: "associations.deal", operator: "EQ", value: dealId }] }],
         properties: ["hs_note_body", "hs_timestamp"],
-        limit: 10,
+        sorts: [{ propertyName: "hs_timestamp", direction: "DESCENDING" }],
+        limit: 100,
       }),
+      hubspotSearchAll<SearchResultRow>(
+        "emails" as HubspotObjectType,
+        {
+          filterGroups: [{ filters: [{ propertyName: "associations.deal", operator: "EQ", value: dealId }] }],
+          properties: [
+            "hs_email_subject",
+            "hs_email_text",
+            "hs_email_html",
+            "hs_timestamp",
+            "hs_email_direction",
+            "hs_email_from_email",
+          ],
+          sorts: [{ propertyName: "hs_timestamp", direction: "DESCENDING" }],
+          limit: 100,
+        },
+        500,
+      ).then((results) => ({ results })),
     ]);
 
     if (meetingsRes.status === "fulfilled") {
@@ -378,6 +404,23 @@ export async function fetchDealContext(dealId: string): Promise<DealSnapshot | n
           date: np.hs_timestamp ?? null,
           title: null,
           body: stripHtml(np.hs_note_body ?? "").slice(0, 2000),
+        });
+      }
+    }
+    if (emailsRes.status === "fulfilled") {
+      for (const e of emailsRes.value.results ?? []) {
+        const ep = e.properties ?? {};
+        const direction = ep.hs_email_direction === "INCOMING_EMAIL" ? "in" : "out";
+        // hs_email_text est plain text quand HubSpot l'a indexé ; sinon on
+        // strip le HTML. Beaucoup d'emails commerciaux ont les deux mais le
+        // texte est plus propre.
+        const bodyRaw = ep.hs_email_text || stripHtml(ep.hs_email_html ?? "");
+        engagements.push({
+          type: "email",
+          date: ep.hs_timestamp ?? null,
+          title: ep.hs_email_subject ?? null,
+          body: bodyRaw.slice(0, 2500),
+          direction,
         });
       }
     }
@@ -432,7 +475,12 @@ export async function fetchDealContext(dealId: string): Promise<DealSnapshot | n
     is_closed_won: p.hs_is_closed_won ? p.hs_is_closed_won === "true" : null,
     createdate: p.createdate ?? null,
     contacts,
-    engagements: engagements.slice(0, 30),
+    // Pas de cap ici : on remonte TOUS les engagements (meetings, calls, notes,
+    // emails) tirés via /search avec leurs propres limites (15/15/10/25). La
+    // troncature finale se fait dans renderDealContextForPrompt sur un budget
+    // de caractères, pas un nombre d'items — pour ne pas couper arbitrairement
+    // un email récent au profit d'un meeting ancien (ou inversement).
+    engagements,
     company,
   };
 }
@@ -479,13 +527,33 @@ export function renderDealContextForPrompt(snapshot: DealSnapshot | null): strin
 
   if (snapshot.engagements.length > 0) {
     lines.push(``);
-    lines.push(`## Engagements HubSpot récents (${snapshot.engagements.length})`);
-    for (const e of snapshot.engagements.slice(0, 15)) {
+    lines.push(`## Engagements HubSpot (${snapshot.engagements.length})`);
+    // On rend TOUS les engagements, ordonnés du plus récent au plus ancien,
+    // mais avec un budget global de ~100k caractères pour ne pas exploser le
+    // prompt. Au-delà : on tronque et on log dans le prompt le nombre de
+    // skippés. Budget choisi pour rester sous ~30k tokens d'input juste sur
+    // cette section, ce qui laisse de la place pour les transcripts Claap.
+    const MAX_ENGAGEMENT_CHARS = 100_000;
+    let charsUsed = 0;
+    let rendered = 0;
+    for (const e of snapshot.engagements) {
       const date = e.date ? new Date(e.date).toLocaleDateString("fr-FR") : "?";
-      const label = e.type.toUpperCase();
+      const directionSuffix = e.type === "email" && e.direction ? ` ${e.direction === "in" ? "←" : "→"}` : "";
+      const label = `${e.type.toUpperCase()}${directionSuffix}`;
       const title = e.title ? ` — ${e.title}` : "";
-      const body = e.body ? ` : ${e.body.slice(0, 400)}` : "";
-      lines.push(`- [${label} ${date}]${title}${body}`);
+      // Emails et notes méritent un budget plus large (souvent denses) que
+      // les calls/meetings qui sont déjà résumés par les Claap recaps.
+      const bodyLimit = e.type === "email" || e.type === "note" ? 1200 : 500;
+      const body = e.body ? ` : ${e.body.slice(0, bodyLimit)}` : "";
+      const line = `- [${label} ${date}]${title}${body}`;
+      if (charsUsed + line.length > MAX_ENGAGEMENT_CHARS) {
+        const skipped = snapshot.engagements.length - rendered;
+        lines.push(`(${skipped} engagement(s) plus ancien(s) omis pour rester sous le budget de prompt)`);
+        break;
+      }
+      lines.push(line);
+      charsUsed += line.length;
+      rendered++;
     }
   }
 

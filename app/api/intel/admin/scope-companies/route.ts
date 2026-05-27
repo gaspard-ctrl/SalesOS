@@ -60,3 +60,20 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ company: data });
 }
+
+export async function DELETE(req: NextRequest) {
+  const user = await getAuthenticatedUser();
+  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+
+  const body = (await req.json().catch(() => null)) as { ids?: unknown } | null;
+  const ids = Array.isArray(body?.ids)
+    ? body!.ids.filter((v): v is string => typeof v === "string" && v.length > 0)
+    : [];
+  if (ids.length === 0) {
+    return NextResponse.json({ error: "ids requis" }, { status: 400 });
+  }
+
+  const { error } = await db.from("scope_companies").delete().in("id", ids);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, deleted: ids.length });
+}

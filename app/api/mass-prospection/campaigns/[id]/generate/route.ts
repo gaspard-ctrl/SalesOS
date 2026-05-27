@@ -68,6 +68,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     "Tu es un expert en prospection B2B pour Coachello, une entreprise de coaching professionnel.",
     "Tu rédiges des emails de prospection ultra-personnalisés, humains et percutants.",
     "L'email doit sonner vrai, pas comme un template générique.",
+    "LANGUE : détecte la langue dominante à partir, dans l'ordre, de l'OBJECTIF DE LA CAMPAGNE, puis du CONTEXTE ENTREPRISE / FICHE LINKEDIN, puis du Poste du prospect. Sinon, repli sur le français. Rédige TOUT (subject, body, signature) dans cette langue. Si la source est en anglais, écris en anglais ; en espagnol, en espagnol ; etc.",
     "Mobilise ta connaissance générale de l'entreprise du prospect (secteur, taille, actualités, enjeux RH connus) pour ancrer l'accroche. Si des blocs CONTEXTE ENTREPRISE ou FICHE LINKEDIN ENTREPRISE sont fournis, priorise ces informations. Reste factuel : n'invente jamais un fait, un chiffre ou un nom.",
     "Varie les accroches d'un prospect à l'autre : si deux prospects se ressemblent, change l'angle (secteur, actualité, douleur).",
     `L'email doit être signé par : ${senderName}. Termine toujours l'email par une signature avec ce nom.`,

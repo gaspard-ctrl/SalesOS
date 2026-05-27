@@ -209,6 +209,18 @@ export async function POST(req: NextRequest) {
     // manuellement depuis l'UI. Le bouton "Oui" de la fiche déclenchera ensuite
     // l'analyse exactement comme ce webhook le ferait.
     if (!dealId) {
+      // Dédup de l'alerte Slack : Claap rejoue parfois `recording_added` pour
+      // un même `recording.id`. L'upsert ci-dessous est idempotent côté DB,
+      // mais sans ce check, l'alerte partirait à chaque retry. On regarde
+      // l'état avant upsert, et on n'envoie l'alerte que sur la PREMIÈRE
+      // transition vers awaiting_manual_deal.
+      const { data: existingRow } = await db
+        .from("sales_coach_analyses")
+        .select("status")
+        .eq("claap_recording_id", rec.id)
+        .maybeSingle();
+      const alreadyAwaiting = existingRow?.status === "awaiting_manual_deal";
+
       const { data: awaitingRow, error: awaitingErr } = await db
         .from("sales_coach_analyses")
         .upsert(
@@ -226,6 +238,13 @@ export async function POST(req: NextRequest) {
       if (awaitingErr || !awaitingRow) {
         console.error("[claap-webhook] awaiting upsert error:", awaitingErr);
         return NextResponse.json({ error: "Storage error" }, { status: 500 });
+      }
+
+      if (alreadyAwaiting) {
+        console.log(
+          `[claap-webhook] ${awaitingRow.id} already awaiting_manual_deal — skipping duplicate Slack alert`,
+        );
+        return NextResponse.json({ ok: true, id: awaitingRow.id, awaiting: true, alertSkipped: true });
       }
 
       const alertRes = await sendManualDealAlert({

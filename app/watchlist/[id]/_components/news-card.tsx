@@ -99,7 +99,7 @@ export function NewsCard({
         </div>
       ) : (
         <p style={{ margin: 0, fontSize: 12, color: COLORS.ink3 }}>
-          Pas de news rafraîchies pour le moment. Le rafraîchissement à la demande sera disponible bientôt.
+          Pas encore de news pour cette company. Clique sur <strong>Générer</strong> en haut à droite pour en récupérer.
         </p>
       )}
     </BriefSection>

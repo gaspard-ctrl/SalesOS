@@ -80,6 +80,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     `Risques perçus côté deal : ${(analysis.risks ?? []).join(" · ") || "aucun"}.`,
     "",
     "Règles de rédaction :",
+    "- LANGUE : détecte la langue dominante de la Synthèse du meeting et des Next steps. Sinon, repli sur le français. Rédige TOUT (subject, body, signature) dans cette langue. Si la synthèse est en anglais, écris en anglais ; en espagnol, en espagnol ; etc.",
     "- ton chaleureux mais sobre, pas commercial",
     "- 4-6 phrases max",
     "- pas de markdown, pas de bullet points dans le corps",

@@ -94,7 +94,7 @@ export function HubspotRecapCard({
         </div>
       ) : (
         <p style={{ margin: 0, fontSize: 12, color: COLORS.ink3 }}>
-          Pas de récap HubSpot pour le moment. La génération à la demande sera disponible bientôt.
+          Pas encore de récap HubSpot. Clique sur <strong>Générer</strong> en haut à droite pour le lancer.
         </p>
       )}
     </BriefSection>
