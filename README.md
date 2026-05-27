@@ -251,7 +251,6 @@ ANTHROPIC_API_KEY=sk-ant-...
 # HubSpot
 HUBSPOT_ACCESS_TOKEN=pat-...
 HUBSPOT_CLIENT_SECRET=
-HUBSPOT_WEBHOOK_SECRET=
 HUBSPOT_WEBHOOK_TARGET_URL=
 NEXT_PUBLIC_HUBSPOT_PORTAL_ID=
 
@@ -289,6 +288,10 @@ INTERNAL_SECRET=                # protège les Netlify Functions internes
 
 # Slack routing (sales coach + recap + admin alerts)
 SLACK_MODE=                     # "prod" (DM aux sales) | "test" (default, DM Arthur)
+
+# Clients (closed-won enrichment)
+CLIENTS_AUTO_ENRICH=                  # "false" (test) bloque l'enrichissement auto au webhook ; le user lance manuellement via le bouton "Lancer l'enrichissement" sur /clients/[id]. Unset ou "true" : auto.
+CLIENTS_ENRICHMENT_DEAL_WHITELIST=    # liste CSV de dealIds HubSpot. Si défini ET auto-enrich activé, seuls ces deals déclenchent Claude au passage closed-won ; les autres restent en pending (manuel).
 ```
 
 > Ne jamais committer `.env.local`. Il est dans `.gitignore`.
