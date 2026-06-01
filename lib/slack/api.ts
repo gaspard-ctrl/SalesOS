@@ -77,6 +77,31 @@ export async function getRecentMessages(
   return data.messages ?? [];
 }
 
+/**
+ * Récupère le nom d'un canal à partir de son ID (`conversations.info`).
+ * Renvoie `null` pour les DM (pas de nom) ou en cas d'erreur, pour que le
+ * caller puisse simplement ne pas injecter de contexte canal.
+ */
+export async function getChannelName(channel: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${BASE}/conversations.info?channel=${encodeURIComponent(channel)}`,
+      { headers: { Authorization: `Bearer ${token()}` } },
+    );
+    const data = (await res.json()) as {
+      ok: boolean;
+      error?: string;
+      channel?: { name?: string; is_im?: boolean; is_mpim?: boolean };
+    };
+    if (!data.ok || !data.channel || data.channel.is_im || data.channel.is_mpim) {
+      return null;
+    }
+    return data.channel.name ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getUserInfo(userId: string): Promise<{
   id: string;
   name: string;
