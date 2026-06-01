@@ -82,14 +82,30 @@ function labelForTool(name: string): string {
 }
 
 /**
- * Tronque un texte Slack à la limite raisonnable. Slack accepte ~40k chars
- * dans chat.postMessage mais l'expérience devient illisible. On coupe à 8k
- * et on indique la troncature.
+ * Découpe un texte en blocs sûrs pour Slack. La limite du champ `text` de
+ * chat.update est de 12 000 caractères, mais Slack compte en octets UTF-8 :
+ * un texte français (accents = 2 octets, emojis = 4) peut dépasser la limite
+ * bien avant 12 000 caractères JS, ce qui renvoyait `msg_too_long`. On coupe
+ * donc à 3 500 caractères par message, sur des frontières de paragraphe/ligne
+ * quand c'est possible, et on limite à 6 blocs pour ne pas inonder le thread
+ * (le dernier est tronqué si la réponse est vraiment énorme).
  */
-function truncateForSlack(text: string): string {
-  const cap = 8000;
-  if (text.length <= cap) return text;
-  return text.slice(0, cap) + "\n\n_…(réponse tronquée à 8000 caractères)_";
+function splitForSlack(text: string, cap = 3500, maxChunks = 6): string[] {
+  const chunks: string[] = [];
+  let rest = text.trim();
+  while (rest.length > cap && chunks.length < maxChunks - 1) {
+    // Cherche une coupure propre (paragraphe > ligne > espace) dans la 2e
+    // moitié du bloc, sinon coupe net à `cap`.
+    let cut = rest.lastIndexOf("\n\n", cap);
+    if (cut < cap * 0.5) cut = rest.lastIndexOf("\n", cap);
+    if (cut < cap * 0.5) cut = rest.lastIndexOf(" ", cap);
+    if (cut < cap * 0.5) cut = cap;
+    chunks.push(rest.slice(0, cut).trimEnd());
+    rest = rest.slice(cut).trimStart();
+  }
+  if (rest.length > cap) rest = rest.slice(0, cap) + "\n\n_…(réponse tronquée)_";
+  if (rest) chunks.push(rest);
+  return chunks.length ? chunks : [text];
 }
 
 /**
@@ -198,10 +214,16 @@ export default async (req: Request) => {
     });
 
     const finalText = result.finalText.trim()
-      ? truncateForSlack(toSlackMrkdwn(result.finalText))
+      ? toSlackMrkdwn(result.finalText)
       : "_(Pas de réponse générée — réessaie en reformulant.)_";
 
-    await updateMessage({ channel, ts: placeholderTs, text: finalText });
+    // Le placeholder reçoit le 1er bloc ; les suivants sont postés en réponse
+    // dans le fil. Évite le msg_too_long de chat.update sur les longues réponses.
+    const chunks = splitForSlack(finalText);
+    await updateMessage({ channel, ts: placeholderTs, text: chunks[0] });
+    for (const chunk of chunks.slice(1)) {
+      await postMessage({ channel, thread_ts: threadTs || undefined, text: chunk });
+    }
 
     // ── 5) Persister le nouvel historique pour la prochaine question ────────
     await saveThreadMessages({
