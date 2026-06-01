@@ -1,7 +1,7 @@
 import { runChat, ChatAuthError } from "../../lib/chat/core";
 import { resolveSlackUser } from "../../lib/slack/user-resolve";
 import { loadThreadMessages, saveThreadMessages } from "../../lib/slack/chat-thread";
-import { postMessage, updateMessage, getRecentMessages } from "../../lib/slack/api";
+import { postMessage, updateMessage, getRecentMessages, getChannelName } from "../../lib/slack/api";
 
 const UNRECOGNIZED_TEXT =
   "Désolé, je ne reconnais pas ton compte Slack. Demande à Arthur de te configurer dans SalesOS.";
@@ -148,7 +148,12 @@ export default async (req: Request) => {
   }
 
   // ── 3) Charger l'historique du thread (si existant) + append message user ─
-  const history = await loadThreadMessages({ channel, threadTs });
+  // En parallèle, résoudre le nom du canal pour que CoachelloGPT déduise le
+  // client par défaut (ex: question dans #engie → compte Engie). null en DM.
+  const [history, channelName] = await Promise.all([
+    loadThreadMessages({ channel, threadTs }),
+    getChannelName(channel),
+  ]);
   const newMessages = [
     ...history,
     { role: "user" as const, content: text },
@@ -183,6 +188,7 @@ export default async (req: Request) => {
     const result = await runChat({
       userId: user.id,
       messages: newMessages,
+      channelName: channelName ?? undefined,
       onEvent: (event) => {
         if (event.type === "tool") {
           toolsCalled.push(event.name);

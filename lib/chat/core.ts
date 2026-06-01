@@ -1248,8 +1248,14 @@ export async function runChat(args: {
   userId: string;
   messages: Anthropic.MessageParam[];
   onEvent?: (event: ChatEvent) => void;
+  /**
+   * Nom du canal Slack d'où vient la question (sans le `#`). Permet à
+   * CoachelloGPT de déduire le client/compte par défaut quand la question ne
+   * le précise pas (ex: question posée dans #engie → compte Engie).
+   */
+  channelName?: string;
 }): Promise<ChatResult> {
-  const { userId, messages, onEvent } = args;
+  const { userId, messages, onEvent, channelName } = args;
   const emit = onEvent ?? (() => {});
 
   // 1) Charger la clé Claude chiffrée (ou fallback .env en dev)
@@ -1314,6 +1320,13 @@ export async function runChat(args: {
   systemPrompt += `\n\nCONTEXTE UTILISATEUR\nL'utilisateur connecté est ${userDisplay}${userOwnerId ? ` (HubSpot owner ID : ${userOwnerId})` : ""}.\nQuand il dit "mes deals" → utilise my_deals_only: true.\nQuand il dit "les deals de [prénom]" → résous le prénom ci-dessous et utilise owner_id.\n\nÉQUIPE COMMERCIALE (owners HubSpot) :\n${teamLines || "Aucun owner trouvé"}\n\nRÈGLES IMPORTANTES :\n- "les deals de Quentin" → trouver l'owner_id de Quentin dans la liste ci-dessus, puis get_deals avec owner_id\n- "deals perdu" ou "deals lost" = stage closedlost\n- "deals gagné" ou "deals won" = stage closedwon\n- Ne JAMAIS chercher un commercial comme un contact — ce sont des owners\n- Ne pose AUCUNE question de clarification — déduis du contexte`;
 
   systemPrompt += `\n\nCAPACITÉS LINKEDIN (Netrows)\nTu as accès à l'API LinkedIn pour enrichir tes réponses :\n\n• Profils :\n  - search_linkedin_people : trouver une personne par entreprise + titre\n  - get_linkedin_profile : profil complet — fallback automatique nom+entreprise si pas d'username\n  - get_linkedin_profile_by_email : reverse lookup email → profil\n  - get_linkedin_activity / get_linkedin_likes / get_linkedin_posts\n  - get_linkedin_similar_profiles\n\n• Entreprises :\n  - get_linkedin_company / get_linkedin_company_posts / get_linkedin_company_jobs\n  - search_linkedin_companies\n\n• Posts :\n  - search_linkedin_posts / get_linkedin_post_reactions\n\n• Emails :\n  - find_email_by_linkedin (5 crédits) / find_decision_maker_email (10 crédits)`;
+
+  // Contexte canal : la question est posée dans un canal Slack précis. Si ce
+  // canal est dédié à un client/compte (ex: #engie), c'est le sujet par défaut
+  // quand la question ne nomme aucun client explicitement.
+  if (channelName) {
+    systemPrompt += `\n\nCONTEXTE CANAL SLACK\nCette conversation a lieu dans le canal Slack #${channelName}.\nSi ce canal est dédié à un client ou un compte précis (ex: #engie → compte Engie, #adyen → compte Adyen, #salomon → compte Salomon), et que la question ne mentionne aucun autre client explicitement, considère par défaut qu'elle porte sur le compte associé à ce canal. Utilise ce nom comme query pour search_deals / search_contacts / get_companies.\nSi la question nomme explicitement un autre client, c'est cet autre client qui prime sur le canal.\nN'invente pas un client à partir d'un canal générique (ex: #general, #11-everything-prospects) : dans ce cas, ne déduis aucun compte par défaut.`;
+  }
 
   // 4) Boucle agentic
   let currentMessages: Anthropic.MessageParam[] = messages;
