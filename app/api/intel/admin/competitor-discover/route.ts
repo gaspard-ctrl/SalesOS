@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { searchPeople } from "@/lib/netrows";
+import { searchPeople } from "@/lib/brightdata/linkedin";
+import { BRIGHTDATA_API_KEY } from "@/lib/brightdata/serp";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -18,8 +19,8 @@ export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  if (!process.env.NETROWS_API_KEY) {
-    return NextResponse.json({ error: "Netrows non configuré" }, { status: 500 });
+  if (!BRIGHTDATA_API_KEY) {
+    return NextResponse.json({ error: "Bright Data non configuré" }, { status: 500 });
   }
 
   const body = (await req.json().catch(() => ({}))) as { company?: string };
@@ -37,6 +38,6 @@ export async function POST(req: NextRequest) {
     }));
     return NextResponse.json({ profiles, total: items.length, company });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur Netrows" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur Bright Data" }, { status: 500 });
   }
 }

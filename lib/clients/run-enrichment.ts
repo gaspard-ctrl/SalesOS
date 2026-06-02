@@ -8,6 +8,7 @@ import {
   CLIENT_EXTRACTION_SYSTEM_PROMPT,
   CLIENT_FIELDS_TOOL,
 } from "./prompt";
+import { getModelPreference } from "../models/get-model-preference";
 import { parseClientFieldsFromClaude } from "./parse-output";
 import { generateCoachBrief } from "./coach-brief";
 import { generateDealRecap } from "./deal-recap";
@@ -96,6 +97,7 @@ export async function runClientEnrichment(
       throw new Error("ANTHROPIC_API_KEY missing");
     }
 
+    const clientsModel = await getModelPreference("clients", CLIENT_EXTRACTION_MODEL);
     const client = new Anthropic({ timeout: 600_000 });
 
     // Lance fields + coach brief EN PARALLÈLE. Même contexte d'input, on
@@ -106,7 +108,7 @@ export async function runClientEnrichment(
     const fieldsPromise = withAnthropicRetry(
       () =>
         client.messages.create({
-          model: CLIENT_EXTRACTION_MODEL,
+          model: clientsModel,
           max_tokens: 8000,
           system: CLIENT_EXTRACTION_SYSTEM_PROMPT,
           messages: [{ role: "user", content: contextPrompt }],
@@ -159,7 +161,7 @@ export async function runClientEnrichment(
       billingPromise,
     ]);
 
-    logUsage(userId, CLIENT_EXTRACTION_MODEL, msg.usage.input_tokens, msg.usage.output_tokens, "clients_enrich_fields");
+    logUsage(userId, clientsModel, msg.usage.input_tokens, msg.usage.output_tokens, "clients_enrich_fields");
 
     const toolBlock = msg.content.find((b) => b.type === "tool_use");
     if (!toolBlock || !("input" in toolBlock)) {

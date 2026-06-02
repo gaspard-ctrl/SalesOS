@@ -11,6 +11,7 @@ const PRICING: Record<string, { input: number; output: number }> = {
   "claude-haiku-4-5-20251001": { input: 1, output: 5  },
   "claude-sonnet-4-6":       { input: 3,  output: 15 },
   "claude-opus-4-6":         { input: 5,  output: 25 },
+  "claude-opus-4-8":         { input: 5,  output: 25 },
 };
 const DEFAULT_PRICE = { input: 1, output: 5 };
 
@@ -22,10 +23,6 @@ function cost(model: string, input: number, output: number) {
 const FEATURE_LABELS: Record<string, string> = {
   chat:                    "Chat",
   briefing:                "Briefing",
-  market_scan:             "Market — Scan",
-  market_signals:          "Market — Signaux",
-  market_context:          "Market — Contexte",
-  market_contacts:         "Market — Contacts",
   prospection_search:      "Prospection — Recherche IA",
   prospection_generate:    "Prospection — Email",
   prospection_bulk:        "Prospection — Email en masse",

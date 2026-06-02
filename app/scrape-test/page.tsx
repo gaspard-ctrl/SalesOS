@@ -1,9 +1,511 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Search, Loader2, Linkedin, Building2, MapPin, X } from "lucide-react";
+import {
+  Search,
+  Loader2,
+  Linkedin,
+  Building2,
+  MapPin,
+  X,
+  Globe,
+  Newspaper,
+  TrendingUp,
+  Map as MapIcon,
+  ShoppingBag,
+  Image as ImageIcon,
+} from "lucide-react";
 
-// ── Types ────────────────────────────────────────────────────────────────
+const BRAND = "#f01563";
+
+// ════════════════════════════════════════════════════════════════════════
+//  Page : lab Bright Data à onglets (LinkedIn + SERP Google complet)
+// ════════════════════════════════════════════════════════════════════════
+type Tab = "serp" | "linkedin";
+
+export default function ScrapeTestPage() {
+  const [tab, setTab] = useState<Tab>("serp");
+
+  return (
+    <div style={{ maxWidth: 860, margin: "0 auto", padding: "32px 20px" }}>
+      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>Bright Data · Lab</h1>
+      <p style={{ color: "#6b7280", fontSize: 14, marginBottom: 20 }}>
+        Banc d&apos;essai de l&apos;API Bright Data. Onglet <strong>SERP Google</strong> : interroge tous les verticaux Google
+        (Web, News, Trends, Maps, Shopping, Images) via la zone <code>salesos_serp</code> — le cœur intel / marché /
+        veille. Onglet <strong>LinkedIn</strong> : scrape de profils.
+      </p>
+
+      {/* Onglets en pilule */}
+      <div
+        style={{
+          display: "inline-flex",
+          gap: 2,
+          border: "1px solid #eee",
+          borderRadius: 8,
+          padding: 2,
+          background: "#fafafa",
+          marginBottom: 24,
+        }}
+      >
+        <button type="button" onClick={() => setTab("serp")} style={tabBtn(tab === "serp")}>
+          <Globe size={13} /> SERP Google
+        </button>
+        <button type="button" onClick={() => setTab("linkedin")} style={tabBtn(tab === "linkedin")}>
+          <Linkedin size={13} /> LinkedIn
+        </button>
+      </div>
+
+      {tab === "serp" ? <SerpTab /> : <LinkedInTab />}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  Onglet SERP — tous les moteurs Google
+// ════════════════════════════════════════════════════════════════════════
+type Engine = "web" | "news" | "trends" | "maps" | "shopping" | "images";
+
+const ENGINES: {
+  key: Engine;
+  label: string;
+  icon: React.ComponentType<{ size?: number }>;
+  hint: string;
+  examples: string[];
+}[] = [
+  {
+    key: "web",
+    label: "Web",
+    icon: Globe,
+    hint: "Résultats organiques + knowledge graph (fiche entreprise), people-also-ask, recherches liées.",
+    examples: ["Salesforce", "best CRM software 2026", "Datadog headquarters"],
+  },
+  {
+    key: "news",
+    label: "News",
+    icon: Newspaper,
+    hint: "Veille société / marché : articles récents (titre, source, date, extrait).",
+    examples: ["Datadog layoffs", "OpenAI funding round", "Salesforce acquisition"],
+  },
+  {
+    key: "trends",
+    label: "Trends",
+    icon: TrendingUp,
+    hint: "Intérêt dans le temps (best-effort : Google Trends renvoie souvent du brut).",
+    examples: ["CRM software", "AI agents", "cold email"],
+  },
+  {
+    key: "maps",
+    label: "Maps / Local",
+    icon: MapIcon,
+    hint: "Présence locale : entreprises, adresses, notes, avis, téléphone.",
+    examples: ["SaaS companies Paris", "coworking Lyon", "marketing agency London"],
+  },
+  {
+    key: "shopping",
+    label: "Shopping",
+    icon: ShoppingBag,
+    hint: "Pricing concurrent : produits, prix, marchands.",
+    examples: ["macbook pro 16", "standing desk", "office chair ergonomic"],
+  },
+  {
+    key: "images",
+    label: "Images",
+    icon: ImageIcon,
+    hint: "Images : URLs sources, miniatures.",
+    examples: ["Salesforce logo", "Datadog office", "org chart"],
+  },
+];
+
+const COUNTRIES = [
+  { code: "us", label: "🇺🇸 US" },
+  { code: "fr", label: "🇫🇷 France" },
+  { code: "gb", label: "🇬🇧 UK" },
+  { code: "de", label: "🇩🇪 Allemagne" },
+  { code: "es", label: "🇪🇸 Espagne" },
+  { code: "ca", label: "🇨🇦 Canada" },
+];
+const LANGS = ["en", "fr", "de", "es", "it"];
+
+interface SerpResponse {
+  engine: Engine;
+  ok: boolean;
+  status: number;
+  ms: number;
+  isJson: boolean;
+  request: { googleUrl: string; zone: string; sentBody: Record<string, unknown> };
+  parsed: Record<string, unknown> | null;
+  raw: unknown;
+  error?: string;
+}
+
+function SerpTab() {
+  const [engine, setEngine] = useState<Engine>("web");
+  const [q, setQ] = useState("");
+  const [country, setCountry] = useState("us");
+  const [lang, setLang] = useState("en");
+  const [num, setNum] = useState(10);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [resp, setResp] = useState<SerpResponse | null>(null);
+
+  const current = ENGINES.find((e) => e.key === engine)!;
+
+  async function run(queryOverride?: string) {
+    const query = (queryOverride ?? q).trim();
+    if (!query) return;
+    if (queryOverride) setQ(queryOverride);
+    setLoading(true);
+    setError("");
+    setResp(null);
+    try {
+      const res = await fetch("/api/brightdata/serp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ engine, q: query, country, lang, num }),
+      });
+      const json = (await res.json()) as SerpResponse;
+      if (!res.ok && json.error) throw new Error(json.error);
+      setResp(json);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur inconnue");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      {/* Sélecteur de moteur */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+        {ENGINES.map((e) => {
+          const Icon = e.icon;
+          const active = e.key === engine;
+          return (
+            <button
+              key={e.key}
+              type="button"
+              onClick={() => {
+                setEngine(e.key);
+                setResp(null);
+                setError("");
+              }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 12px",
+                fontSize: 13,
+                fontWeight: 500,
+                borderRadius: 8,
+                border: `1px solid ${active ? BRAND : "#e5e7eb"}`,
+                background: active ? BRAND : "white",
+                color: active ? "white" : "#374151",
+                cursor: "pointer",
+              }}
+            >
+              <Icon size={13} /> {e.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 12 }}>{current.hint}</p>
+
+      {/* Contrôles partagés */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!loading) run();
+        }}
+        style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 10 }}
+      >
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Requête…"
+          style={{ ...inputStyle, flex: "2 1 260px" }}
+        />
+        <select value={country} onChange={(e) => setCountry(e.target.value)} style={selectStyle}>
+          {COUNTRIES.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        <select value={lang} onChange={(e) => setLang(e.target.value)} style={selectStyle}>
+          {LANGS.map((l) => (
+            <option key={l} value={l}>
+              {l.toUpperCase()}
+            </option>
+          ))}
+        </select>
+        <input
+          type="number"
+          min={1}
+          max={100}
+          value={num}
+          onChange={(e) => setNum(Number(e.target.value))}
+          title="Nombre de résultats"
+          style={{ ...inputStyle, flex: "0 0 70px", minWidth: 70 }}
+        />
+        <button
+          type="submit"
+          disabled={loading || !q.trim()}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "0 20px",
+            height: 42,
+            borderRadius: 8,
+            border: "none",
+            background: loading || !q.trim() ? "#f3a8c4" : BRAND,
+            color: "white",
+            fontWeight: 600,
+            fontSize: 14,
+            cursor: loading || !q.trim() ? "not-allowed" : "pointer",
+          }}
+        >
+          {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+          {loading ? "…" : "Lancer"}
+        </button>
+      </form>
+
+      {/* Chips d'exemples */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20 }}>
+        <span style={{ fontSize: 12, color: "#9ca3af", alignSelf: "center" }}>Exemples :</span>
+        {current.examples.map((ex) => (
+          <button
+            key={ex}
+            type="button"
+            onClick={() => !loading && run(ex)}
+            style={{
+              fontSize: 12,
+              padding: "4px 10px",
+              borderRadius: 999,
+              border: "1px solid #e5e7eb",
+              background: "#fafafa",
+              color: "#374151",
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
+          >
+            {ex}
+          </button>
+        ))}
+      </div>
+
+      {error && (
+        <div style={{ background: "#fef2f2", color: "#b91c1c", padding: "12px 16px", borderRadius: 8, fontSize: 14, marginBottom: 16 }}>
+          {error}
+        </div>
+      )}
+
+      {resp && <SerpResult resp={resp} />}
+    </div>
+  );
+}
+
+// ── Rendu d'une réponse SERP : parsé + inspecteur + JSON brut ──────────────
+function SerpResult({ resp }: { resp: SerpResponse }) {
+  return (
+    <div>
+      {/* Bandeau méta */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, fontSize: 12, flexWrap: "wrap" }}>
+        <span
+          style={{
+            padding: "2px 8px",
+            borderRadius: 999,
+            background: resp.ok ? "#ecfdf5" : "#fef2f2",
+            color: resp.ok ? "#059669" : "#dc2626",
+            fontWeight: 600,
+          }}
+        >
+          HTTP {resp.status}
+        </span>
+        <span style={{ color: "#6b7280" }}>{resp.ms} ms</span>
+        {!resp.isJson && <span style={{ color: "#b45309" }}>réponse non-JSON (affichée en brut)</span>}
+      </div>
+
+      {/* Bloc parsé lisible */}
+      <ParsedView engine={resp.engine} parsed={resp.parsed} />
+
+      {/* Inspecteur de requête */}
+      <details open style={{ marginTop: 18 }}>
+        <summary style={{ cursor: "pointer", fontSize: 13, color: "#6b7280", fontWeight: 500 }}>Inspecteur de requête</summary>
+        <div style={{ marginTop: 8, fontSize: 12, color: "#374151" }}>
+          <div style={{ marginBottom: 6 }}>
+            <strong>Zone :</strong> <code>{resp.request.zone}</code>
+          </div>
+          <div style={{ marginBottom: 6 }}>
+            <strong>URL Google :</strong>{" "}
+            <a href={resp.request.googleUrl} target="_blank" rel="noopener noreferrer" style={{ color: BRAND, wordBreak: "break-all" }}>
+              {resp.request.googleUrl}
+            </a>
+          </div>
+          <div>
+            <strong>Body envoyé à /request :</strong>
+            <pre style={preStyle}>{JSON.stringify(resp.request.sentBody, null, 2)}</pre>
+          </div>
+        </div>
+      </details>
+
+      {/* JSON brut complet */}
+      <details style={{ marginTop: 12 }}>
+        <summary style={{ cursor: "pointer", fontSize: 13, color: "#6b7280", fontWeight: 500 }}>Réponse brute (JSON complet)</summary>
+        <pre style={preStyle}>
+          {typeof resp.raw === "string" ? resp.raw : JSON.stringify(resp.raw, null, 2)}
+        </pre>
+      </details>
+    </div>
+  );
+}
+
+// ── Renderers dédiés par moteur (fallback générique sinon) ─────────────────
+function ParsedView({ engine, parsed }: { engine: Engine; parsed: Record<string, unknown> | null }) {
+  if (!parsed || Object.keys(parsed).length === 0) {
+    return <div style={{ color: "#6b7280", fontSize: 14 }}>Aucun champ structuré reconnu — voir la réponse brute ci-dessous.</div>;
+  }
+
+  const asArr = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
+  const str = (v: unknown): string => (typeof v === "string" ? v : v == null ? "" : String(v));
+
+  if (engine === "web") {
+    const organic = asArr(parsed.organic);
+    const knowledge = parsed.knowledge as Record<string, unknown> | undefined;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {knowledge && (
+          <div style={{ ...cardStyle, background: "#fff9fb", borderColor: "#fde8ef" }}>
+            <div style={{ fontSize: 11, color: BRAND, fontWeight: 600, marginBottom: 4 }}>KNOWLEDGE GRAPH</div>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>{str(knowledge.name) || str(knowledge.title)}</div>
+            {!!str(knowledge.description) && <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>{str(knowledge.description)}</div>}
+            <details style={{ marginTop: 6 }}>
+              <summary style={{ cursor: "pointer", fontSize: 12, color: "#6b7280" }}>tous les champs</summary>
+              <pre style={preStyle}>{JSON.stringify(knowledge, null, 2)}</pre>
+            </details>
+          </div>
+        )}
+        {organic.map((o, i) => (
+          <ResultCard
+            key={i}
+            title={str(o.title)}
+            link={str(o.link) || str(o.url)}
+            subtitle={str(o.display_link) || str(o.link)}
+            snippet={str(o.description) || str(o.snippet)}
+          />
+        ))}
+        <CountNote n={organic.length} label="résultats organiques" />
+      </div>
+    );
+  }
+
+  if (engine === "news") {
+    const news = asArr(parsed.news).length ? asArr(parsed.news) : asArr(parsed.organic);
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {news.map((n, i) => (
+          <ResultCard
+            key={i}
+            title={str(n.title)}
+            link={str(n.link) || str(n.url)}
+            subtitle={[str(n.source), str(n.date) || str(n.time)].filter(Boolean).join(" · ")}
+            snippet={str(n.description) || str(n.snippet)}
+          />
+        ))}
+        <CountNote n={news.length} label="articles" />
+      </div>
+    );
+  }
+
+  if (engine === "maps") {
+    const local = asArr(parsed.local_results).length
+      ? asArr(parsed.local_results)
+      : asArr(parsed.local).length
+        ? asArr(parsed.local)
+        : asArr(parsed.places);
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {local.map((p, i) => (
+          <div key={i} style={cardStyle}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{str(p.name) || str(p.title)}</div>
+            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4, display: "flex", gap: 14, flexWrap: "wrap" }}>
+              {!!str(p.rating) && <span>⭐ {str(p.rating)} {str(p.reviews) && `(${str(p.reviews)})`}</span>}
+              {!!str(p.address) && <span style={{ display: "flex", alignItems: "center", gap: 4 }}><MapPin size={12} /> {str(p.address)}</span>}
+              {!!str(p.phone) && <span>{str(p.phone)}</span>}
+            </div>
+          </div>
+        ))}
+        <CountNote n={local.length} label="établissements" />
+      </div>
+    );
+  }
+
+  if (engine === "shopping") {
+    const items = asArr(parsed.shopping).length ? asArr(parsed.shopping) : asArr(parsed.shopping_results).length ? asArr(parsed.shopping_results) : asArr(parsed.pla);
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {items.map((p, i) => (
+          <div key={i} style={cardStyle}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{str(p.title) || str(p.name)}</div>
+            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4, display: "flex", gap: 14, flexWrap: "wrap" }}>
+              {!!str(p.price) && <span style={{ color: "#059669", fontWeight: 600 }}>{str(p.price)}</span>}
+              {!!str(p.source) && <span>{str(p.source)}</span>}
+              {!!str(p.rating) && <span>⭐ {str(p.rating)}</span>}
+            </div>
+          </div>
+        ))}
+        <CountNote n={items.length} label="produits" />
+      </div>
+    );
+  }
+
+  if (engine === "images") {
+    const imgs = asArr(parsed.images).length ? asArr(parsed.images) : asArr(parsed.image);
+    return (
+      <div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 8 }}>
+          {imgs.slice(0, 24).map((im, i) => {
+            const src = str(im.image) || str(im.thumbnail) || str(im.src) || str(im.link);
+            if (!src) return null;
+            return (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={i} src={src} alt="" style={{ width: "100%", height: 90, objectFit: "cover", borderRadius: 8, border: "1px solid #eee" }} />
+            );
+          })}
+        </div>
+        <CountNote n={imgs.length} label="images" />
+      </div>
+    );
+  }
+
+  // Trends + fallback : afficher le JSON parsé
+  return <pre style={preStyle}>{JSON.stringify(parsed, null, 2)}</pre>;
+}
+
+function ResultCard({ title, link, subtitle, snippet }: { title: string; link: string; subtitle?: string; snippet?: string }) {
+  return (
+    <div style={cardStyle}>
+      {link ? (
+        <a href={link} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 600, fontSize: 14, color: BRAND, textDecoration: "none" }}>
+          {title || link}
+        </a>
+      ) : (
+        <div style={{ fontWeight: 600, fontSize: 14 }}>{title}</div>
+      )}
+      {subtitle && <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{subtitle}</div>}
+      {snippet && <div style={{ fontSize: 13, color: "#374151", marginTop: 6 }}>{snippet}</div>}
+    </div>
+  );
+}
+
+function CountNote({ n, label }: { n: number; label: string }) {
+  return <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{n} {label}</div>;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  Onglet LinkedIn — flux existant (recherche + scrape async + polling)
+// ════════════════════════════════════════════════════════════════════════
 interface Profile {
   name?: string;
   first_name?: string;
@@ -20,7 +522,6 @@ interface Profile {
   [key: string]: unknown;
 }
 
-const BRAND = "#f01563";
 const POLL_INTERVAL = 4000; // 4s
 const MAX_POLLS = 60; // ~4 min
 
@@ -30,13 +531,15 @@ function companyName(p: Profile): string {
   return p.current_company_name ?? "";
 }
 
-export default function ScrapeTestPage() {
+function LinkedInTab() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [company, setCompany] = useState("");
+  const [linkedinUrl, setLinkedinUrl] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
+  const [resolvedUrl, setResolvedUrl] = useState("");
   const [error, setError] = useState("");
   const [profiles, setProfiles] = useState<Profile[] | null>(null);
   const cancelRef = useRef(false);
@@ -45,6 +548,7 @@ export default function ScrapeTestPage() {
     setError("");
     setProfiles(null);
     setStatusMsg("");
+    setResolvedUrl("");
   }
 
   async function poll(snapshotId: string): Promise<Profile[]> {
@@ -60,36 +564,34 @@ export default function ScrapeTestPage() {
     throw new Error("Délai dépassé : le scrape prend trop de temps");
   }
 
+  const canSubmit = linkedinUrl.trim() ? true : !!(firstName.trim() && lastName.trim());
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!firstName.trim() || !lastName.trim() || loading) return;
+    if (!canSubmit || loading) return;
     reset();
     setLoading(true);
     cancelRef.current = false;
     try {
-      setStatusMsg("Déclenchement du scrape…");
+      setStatusMsg(linkedinUrl.trim() ? "Déclenchement du scrape…" : "Recherche du profil LinkedIn…");
       const res = await fetch("/api/brightdata/scrape", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
+          firstName: firstName.trim() || undefined,
+          lastName: lastName.trim() || undefined,
           company: company.trim() || undefined,
+          linkedinUrl: linkedinUrl.trim() || undefined,
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || `Erreur ${res.status}`);
 
-      let results = await poll(json.snapshotId);
-
-      // Company optionnelle : on filtre / priorise côté client si renseignée.
-      const c = company.trim().toLowerCase();
-      if (c && results.length > 1) {
-        const matched = results.filter((p) => companyName(p).toLowerCase().includes(c));
-        if (matched.length) results = matched;
-      }
+      if (json.count) setResolvedUrl(`${json.count} profil(s) trouvé(s), scraping en cours…`);
+      const results = await poll(json.snapshotId);
       setProfiles(results);
       setStatusMsg("");
+      setResolvedUrl("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur inconnue");
       setStatusMsg("");
@@ -99,34 +601,20 @@ export default function ScrapeTestPage() {
   }
 
   return (
-    <div style={{ maxWidth: 820, margin: "0 auto", padding: "32px 20px" }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>Bright Data · Scrape test</h1>
-      <p style={{ color: "#6b7280", fontSize: 14, marginBottom: 24 }}>
-        Recherche un profil LinkedIn par nom (discover by name). La société est optionnelle et sert à filtrer les résultats.
+    <div>
+      <p style={{ color: "#6b7280", fontSize: 14, marginBottom: 20 }}>
+        Renseigne un nom (+ société optionnelle) : on retrouve <strong>tous</strong> les profils LinkedIn correspondants
+        via la SERP API Bright Data (Google), puis on les scrape. Tu peux aussi coller directement une URL{" "}
+        <code>linkedin.com/in/…</code>.
       </p>
 
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 24 }}>
-        <input
-          value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
-          placeholder="Prénom *"
-          style={inputStyle}
-        />
-        <input
-          value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
-          placeholder="Nom *"
-          style={inputStyle}
-        />
-        <input
-          value={company}
-          onChange={(e) => setCompany(e.target.value)}
-          placeholder="Société (optionnel)"
-          style={inputStyle}
-        />
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>
+        <input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Prénom *" style={inputStyle} disabled={!!linkedinUrl.trim()} />
+        <input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Nom *" style={inputStyle} disabled={!!linkedinUrl.trim()} />
+        <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Société (optionnel)" style={inputStyle} disabled={!!linkedinUrl.trim()} />
         <button
           type="submit"
-          disabled={loading || !firstName.trim() || !lastName.trim()}
+          disabled={loading || !canSubmit}
           style={{
             display: "flex",
             alignItems: "center",
@@ -135,11 +623,11 @@ export default function ScrapeTestPage() {
             height: 42,
             borderRadius: 8,
             border: "none",
-            background: loading || !firstName.trim() || !lastName.trim() ? "#f3a8c4" : BRAND,
+            background: loading || !canSubmit ? "#f3a8c4" : BRAND,
             color: "white",
             fontWeight: 600,
             fontSize: 14,
-            cursor: loading || !firstName.trim() || !lastName.trim() ? "not-allowed" : "pointer",
+            cursor: loading || !canSubmit ? "not-allowed" : "pointer",
           }}
         >
           {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
@@ -147,28 +635,28 @@ export default function ScrapeTestPage() {
         </button>
       </form>
 
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
+        <Linkedin size={14} color="#9ca3af" />
+        <input value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)} placeholder="… ou URL LinkedIn directe (https://www.linkedin.com/in/…)" style={{ ...inputStyle, flex: 1 }} />
+      </div>
+
+      {resolvedUrl && <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 12 }}>{resolvedUrl}</div>}
+
       {loading && statusMsg && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#6b7280", fontSize: 14, marginBottom: 16 }}>
           <Loader2 size={14} className="animate-spin" />
           {statusMsg}
-          <button
-            onClick={() => { cancelRef.current = true; }}
-            style={{ marginLeft: 8, color: BRAND, background: "none", border: "none", cursor: "pointer", fontSize: 13 }}
-          >
+          <button onClick={() => { cancelRef.current = true; }} style={{ marginLeft: 8, color: BRAND, background: "none", border: "none", cursor: "pointer", fontSize: 13 }}>
             <X size={13} style={{ display: "inline", verticalAlign: "middle" }} /> Annuler
           </button>
         </div>
       )}
 
       {error && (
-        <div style={{ background: "#fef2f2", color: "#b91c1c", padding: "12px 16px", borderRadius: 8, fontSize: 14, marginBottom: 16 }}>
-          {error}
-        </div>
+        <div style={{ background: "#fef2f2", color: "#b91c1c", padding: "12px 16px", borderRadius: 8, fontSize: 14, marginBottom: 16 }}>{error}</div>
       )}
 
-      {profiles && profiles.length === 0 && (
-        <div style={{ color: "#6b7280", fontSize: 14 }}>Aucun profil trouvé.</div>
-      )}
+      {profiles && profiles.length === 0 && <div style={{ color: "#6b7280", fontSize: 14 }}>Aucun profil trouvé.</div>}
 
       {profiles && profiles.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -194,12 +682,7 @@ export default function ScrapeTestPage() {
                     {loc && <span style={{ display: "flex", alignItems: "center", gap: 4 }}><MapPin size={12} /> {loc}</span>}
                   </div>
                   {(p.url || p.input_url) && (
-                    <a
-                      href={p.url || p.input_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 8, fontSize: 13, color: BRAND, textDecoration: "none" }}
-                    >
+                    <a href={p.url || p.input_url} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 8, fontSize: 13, color: BRAND, textDecoration: "none" }}>
                       <Linkedin size={13} /> Voir le profil
                     </a>
                   )}
@@ -213,13 +696,28 @@ export default function ScrapeTestPage() {
       {profiles && profiles.length > 0 && (
         <details style={{ marginTop: 20 }}>
           <summary style={{ cursor: "pointer", fontSize: 13, color: "#6b7280" }}>Données brutes (JSON)</summary>
-          <pre style={{ background: "#f9fafb", padding: 12, borderRadius: 8, fontSize: 11, overflow: "auto", marginTop: 8 }}>
-            {JSON.stringify(profiles, null, 2)}
-          </pre>
+          <pre style={preStyle}>{JSON.stringify(profiles, null, 2)}</pre>
         </details>
       )}
     </div>
   );
+}
+
+// ── Styles partagés ────────────────────────────────────────────────────────
+function tabBtn(active: boolean): React.CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "6px 14px",
+    fontSize: 13,
+    borderRadius: 6,
+    border: "none",
+    cursor: "pointer",
+    background: active ? BRAND : "transparent",
+    color: active ? "white" : "#666",
+    fontWeight: 500,
+  };
 }
 
 const inputStyle: React.CSSProperties = {
@@ -231,4 +729,30 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid #d1d5db",
   fontSize: 14,
   outline: "none",
+};
+
+const selectStyle: React.CSSProperties = {
+  height: 42,
+  padding: "0 10px",
+  borderRadius: 8,
+  border: "1px solid #d1d5db",
+  fontSize: 14,
+  background: "white",
+  cursor: "pointer",
+};
+
+const cardStyle: React.CSSProperties = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 10,
+  padding: 14,
+};
+
+const preStyle: React.CSSProperties = {
+  background: "#f9fafb",
+  padding: 12,
+  borderRadius: 8,
+  fontSize: 11,
+  overflow: "auto",
+  marginTop: 8,
+  maxHeight: 480,
 };

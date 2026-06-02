@@ -53,6 +53,7 @@ export default function IntelligencePage() {
   const [streamingText, setStreamingText] = useState("");
   const [toolSteps, setToolSteps] = useState<string[]>([]);
   const [costWarning, setCostWarning] = useState<number | null>(null);
+  const [betterThinking, setBetterThinking] = useState(false);
   const [activeTab, setActiveTab] = useState<ChatTabKey>("conversation");
   const router = useRouter();
 
@@ -195,7 +196,7 @@ export default function IntelligencePage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: apiMessages }),
+        body: JSON.stringify({ messages: apiMessages, betterThinking }),
       });
 
       const reader = res.body!.getReader();
@@ -432,6 +433,8 @@ export default function IntelligencePage() {
             onChange={setInput}
             onSend={send}
             loading={loading}
+            betterThinking={betterThinking}
+            onToggleBetterThinking={() => setBetterThinking((v) => !v)}
           />
           <p
             style={{
@@ -468,7 +471,7 @@ function ConnectorsTabPlaceholder() {
     { icon: Mail, name: "Gmail", desc: "Recherche et lecture d'emails" },
     { icon: MessageSquare, name: "Slack", desc: "Recherche, lecture de canaux, envoi de message" },
     { icon: FolderOpen, name: "Google Drive", desc: "Recherche, lecture de fichiers" },
-    { icon: Linkedin, name: "LinkedIn", desc: "Profils, entreprises, posts, email finder (via Netrows)" },
+    { icon: Linkedin, name: "LinkedIn", desc: "Profils, entreprises, posts (via Bright Data)" },
     { icon: Globe, name: "Web", desc: "Recherche web temps réel" },
   ];
   return (

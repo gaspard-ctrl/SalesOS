@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
     const emails = externalAttendees.map((a) => a.email);
 
     // ── Parallel data fetching ────────────────────────────────────────────────
-    const [hsResult, gmailResult, slackResult, tavilyResult, linkedinResult, linkedinCompanyResult] = await Promise.allSettled([
+    const [hsResult, gmailResult, slackResult, tavilyResult] = await Promise.allSettled([
 
       // HubSpot: contacts + deals + engagements
       (async () => {
@@ -398,81 +398,10 @@ export async function POST(req: NextRequest) {
         return { webResults, companyProfileResults, strategicResults: [] };
       })(),
 
-      // LinkedIn: enrich attendee profiles via Netrows (search by name)
-      (async () => {
-        const profiles: unknown[] = [];
-        if (!process.env.NETROWS_API_KEY) return profiles;
-        const { searchPeople, getProfile } = await import("@/lib/netrows");
-        for (const attendee of externalAttendees.slice(0, 2)) {
-          const name = attendee.displayName?.trim();
-          if (!name) continue;
-          const parts = name.split(/\s+/);
-          const firstName = parts[0];
-          const lastName = parts.slice(1).join(" ");
-          if (!firstName || !lastName) continue;
-          try {
-            const result = await searchPeople({ firstName, lastName });
-            const found = result.data?.items?.[0];
-            if (found?.username) {
-              const full = await getProfile(found.username);
-              profiles.push({
-                ...full,
-                username: found.username,
-                profileUrl: `https://www.linkedin.com/in/${found.username}/`,
-              });
-            }
-          } catch { /* ignore */ }
-        }
-        return profiles;
-      })(),
-
-      // LinkedIn: enrich the COMPANY (details + last posts) via Netrows
-      (async () => {
-        if (!process.env.NETROWS_API_KEY || !company) return null;
-        const { searchCompanies, getCompanyDetails, getCompanyPosts, slugifyCompany } = await import("@/lib/netrows");
-        try {
-          const directSlug = slugifyCompany(company);
-          let username: string | null = null;
-          let details: Awaited<ReturnType<typeof getCompanyDetails>> | null = null;
-
-          try {
-            details = await getCompanyDetails(directSlug);
-            username = directSlug;
-          } catch {
-            // Fall back to search
-            try {
-              const search = await searchCompanies({ keyword: company });
-              const first = search.data?.items?.[0];
-              if (first?.username) {
-                username = first.username;
-                details = await getCompanyDetails(username);
-              }
-            } catch { /* nothing else */ }
-          }
-
-          if (!username || !details) return null;
-
-          let posts: { postUrl: string; text: string; postedAt: string; likes: number; comments: number }[] = [];
-          try {
-            const postsRes = await getCompanyPosts(username);
-            posts = (postsRes.data ?? []).slice(0, 5);
-          } catch { /* posts optional */ }
-
-          return {
-            username,
-            details,
-            recentPosts: posts.map((p) => ({
-              text: (p.text ?? "").slice(0, 400),
-              postedAt: p.postedAt,
-              likes: p.likes,
-              comments: p.comments,
-              url: p.postUrl,
-            })),
-          };
-        } catch {
-          return null;
-        }
-      })(),
+      // LinkedIn : plus de scrape automatique ici (économie de crédits Bright
+      // Data). L'enrichissement de l'interlocuteur se fait à la demande côté UI
+      // (bouton "Enrichir LinkedIn" → /api/linkedin/enrich). La fiche LinkedIn
+      // entreprise a été retirée du briefing (peu utile).
     ]);
 
     const tavilyData = tavilyResult.status === "fulfilled" ? tavilyResult.value : { webResults: [], companyProfileResults: [], strategicResults: [] };
@@ -487,8 +416,6 @@ export async function POST(req: NextRequest) {
       webResults: tavilyData.webResults ?? [],
       companyProfileResults: tavilyData.companyProfileResults ?? [],
       strategicResults: tavilyData.strategicResults ?? [],
-      linkedinProfiles: linkedinResult.status === "fulfilled" ? linkedinResult.value : [],
-      linkedinCompany: linkedinCompanyResult.status === "fulfilled" ? linkedinCompanyResult.value : null,
       errors: {
         hubspot: hsResult.status === "rejected" ? String(hsResult.reason) : null,
         gmail: gmailResult.status === "rejected" ? String(gmailResult.reason) : null,

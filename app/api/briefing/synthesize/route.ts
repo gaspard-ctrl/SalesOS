@@ -416,7 +416,7 @@ Génère le briefing pour cette réunion.`;
     const toolBlock = message.content.find((b) => b.type === "tool_use");
     const briefing = (toolBlock && "input" in toolBlock ? toolBlock.input : { error: "no_tool_response" }) as Record<string, unknown>;
 
-    // Garde-fou : ne garder linkedinInsights que si des profils LinkedIn ont réellement été récupérés via Netrows.
+    // Garde-fou : ne garder linkedinInsights que si des profils LinkedIn ont réellement été récupérés via Bright Data.
     // Sinon le LLM peut halluciner un profil "LinkedIn" à partir des données HubSpot/Gmail.
     if (!rawData.linkedinProfiles || rawData.linkedinProfiles.length === 0) {
       delete briefing.linkedinInsights;

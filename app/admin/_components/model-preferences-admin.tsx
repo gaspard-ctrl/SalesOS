@@ -3,9 +3,10 @@
 import { useState } from "react";
 
 const MODELS = [
-  { id: "claude-haiku-4-5-20251001", label: "Haiku — rapide, économique" },
-  { id: "claude-sonnet-4-6", label: "Sonnet — équilibré" },
-  { id: "claude-opus-4-6", label: "Opus — le plus puissant" },
+  { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5 — rapide, économique" },
+  { id: "claude-sonnet-4-6", label: "Sonnet 4.6 — équilibré" },
+  { id: "claude-opus-4-6", label: "Opus 4.6" },
+  { id: "claude-opus-4-8", label: "Opus 4.8 — le plus puissant" },
 ];
 
 const FEATURES = [
@@ -16,8 +17,10 @@ const FEATURES = [
   { key: "deals_score",    label: "Scoring des deals",                  defaultModel: "claude-haiku-4-5-20251001" },
   { key: "deals_analyze",  label: "Analyse approfondie des deals",      defaultModel: "claude-sonnet-4-6" },
   { key: "deals_email",    label: "Email de suivi deal",                defaultModel: "claude-haiku-4-5-20251001" },
-  { key: "market",         label: "Scan & signaux marché",              defaultModel: "claude-haiku-4-5-20251001" },
   { key: "sales_coach",    label: "Sales Coach (debrief meetings)",     defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "meeting_recap",  label: "Sales Coach — recap meeting",        defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "clients",        label: "Clients — fiches & recaps",          defaultModel: "claude-sonnet-4-6" },
+  { key: "marketing",      label: "Marketing — articles & LinkedIn",    defaultModel: "claude-sonnet-4-6" },
 ];
 
 export function ModelPreferencesAdmin({ initialPreferences }: { initialPreferences: Record<string, string> }) {

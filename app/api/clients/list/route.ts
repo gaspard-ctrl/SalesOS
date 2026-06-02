@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   let query = db
     .from("clients")
     .select(
-      "id, hubspot_deal_id, hubspot_company_id, company_name, owner_email, owner_name, closedwon_at, deal_amount, health, enrichment_status, enrichment_error, last_enriched_at, created_at",
+      "id, hubspot_deal_id, hubspot_company_id, company_name, owner_email, owner_name, closedwon_at, deal_amount, health, enrichment_status, enrichment_error, last_enriched_at, am_cs_notified_at, created_at",
     )
     .order("closedwon_at", { ascending: false, nullsFirst: false });
 

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Sparkles } from "lucide-react";
 import { COLORS } from "@/lib/design/tokens";
 
 export const ChatInputBar = React.forwardRef<
@@ -12,8 +12,13 @@ export const ChatInputBar = React.forwardRef<
     onSend: () => void;
     loading: boolean;
     placeholder?: string;
+    betterThinking?: boolean;
+    onToggleBetterThinking?: () => void;
   }
->(function ChatInputBar({ value, onChange, onSend, loading, placeholder }, ref) {
+>(function ChatInputBar(
+  { value, onChange, onSend, loading, placeholder, betterThinking = false, onToggleBetterThinking },
+  ref
+) {
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -62,10 +67,39 @@ export const ChatInputBar = React.forwardRef<
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "flex-end",
+          justifyContent: "space-between",
           gap: 8,
         }}
       >
+        {onToggleBetterThinking ? (
+          <button
+            type="button"
+            onClick={onToggleBetterThinking}
+            aria-pressed={betterThinking}
+            title="Réflexion approfondie : le modèle est plus rigoureux, fouille toutes les données disponibles et répond en détail."
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              height: 30,
+              padding: "0 10px",
+              borderRadius: 10,
+              fontSize: 12,
+              fontWeight: 600,
+              lineHeight: 1,
+              cursor: "pointer",
+              transition: "background 0.15s, color 0.15s, border-color 0.15s",
+              border: `1px solid ${betterThinking ? COLORS.brand : COLORS.lineStrong}`,
+              background: betterThinking ? COLORS.brandTint : COLORS.bgCard,
+              color: betterThinking ? COLORS.brand : COLORS.ink2,
+            }}
+          >
+            <Sparkles size={14} />
+            Better thinking
+          </button>
+        ) : (
+          <span />
+        )}
         <button
           onClick={onSend}
           disabled={!canSend}

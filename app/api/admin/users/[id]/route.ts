@@ -10,12 +10,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
-  const { slack_display_name } = await req.json() as { slack_display_name: string };
+  const body = await req.json() as { slack_display_name?: string; is_sales?: boolean };
 
-  const { error } = await db
-    .from("users")
-    .update({ slack_display_name: slack_display_name || null })
-    .eq("id", id);
+  const update: Record<string, unknown> = {};
+  if ("slack_display_name" in body) update.slack_display_name = body.slack_display_name || null;
+  if (typeof body.is_sales === "boolean") update.is_sales = body.is_sales;
+
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: "Aucun champ à mettre à jour" }, { status: 400 });
+  }
+
+  const { error } = await db.from("users").update(update).eq("id", id);
 
   if (error) return NextResponse.json({ error: "Erreur lors de la mise à jour" }, { status: 500 });
 

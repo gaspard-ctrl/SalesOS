@@ -7,7 +7,7 @@ import { COLORS } from "@/lib/design/tokens";
 import { CompanyAvatar } from "@/components/ui/company-avatar";
 import type { WatchAccount } from "@/app/api/watchlist/accounts/route";
 
-type SortKey = "name" | "sector" | "platform" | "signals_30d";
+type SortKey = "name" | "sector" | "platform";
 
 export function AccountsTable({
   accounts,
@@ -20,8 +20,8 @@ export function AccountsTable({
   const [query, setQuery] = React.useState("");
   const [sectorFilter, setSectorFilter] = React.useState<string>("");
   const [platformFilter, setPlatformFilter] = React.useState<string>("");
-  const [sortKey, setSortKey] = React.useState<SortKey>("signals_30d");
-  const [sortDir, setSortDir] = React.useState<"asc" | "desc">("desc");
+  const [sortKey, setSortKey] = React.useState<SortKey>("name");
+  const [sortDir, setSortDir] = React.useState<"asc" | "desc">("asc");
 
   const sectors = React.useMemo(
     () => Array.from(new Set(accounts.map((a) => a.sector?.trim()).filter((s): s is string => Boolean(s)))).sort(),
@@ -60,8 +60,6 @@ export function AccountsTable({
           return (a.sector ?? "").localeCompare(b.sector ?? "") * mul;
         case "platform":
           return (a.current_coaching_platform ?? "").localeCompare(b.current_coaching_platform ?? "") * mul;
-        case "signals_30d":
-          return (a.signals_30d - b.signals_30d) * mul;
         default:
           return 0;
       }
@@ -157,7 +155,6 @@ export function AccountsTable({
                 <th style={th()} onClick={() => toggleSort("name")}>Entreprise {sortIndicator(sortKey === "name", sortDir)}</th>
                 <th style={th(120)} onClick={() => toggleSort("sector")}>Secteur {sortIndicator(sortKey === "sector", sortDir)}</th>
                 <th style={th(140)} onClick={() => toggleSort("platform")}>Plateforme {sortIndicator(sortKey === "platform", sortDir)}</th>
-                <th style={th(80, "right")} onClick={() => toggleSort("signals_30d")}>Signaux 30j {sortIndicator(sortKey === "signals_30d", sortDir)}</th>
                 <th style={th(80, "right")}>Owner</th>
                 <th style={th(140, "right")}></th>
               </tr>
@@ -182,7 +179,6 @@ export function AccountsTable({
                   </td>
                   <td style={td()}>{a.sector ?? "—"}</td>
                   <td style={td()}>{a.current_coaching_platform ?? "—"}</td>
-                  <td style={{ ...td(), textAlign: "right" }}>{a.signals_30d}</td>
                   <td style={{ ...td(), textAlign: "right", color: COLORS.ink2 }}>{a.owner ?? "—"}</td>
                   <td style={{ ...td(), textAlign: "right", whiteSpace: "nowrap" }}>
                     <button

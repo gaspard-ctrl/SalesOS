@@ -145,8 +145,18 @@ const FEATURE_TO_PREF: Record<string, string> = {
   deals_analyze:           "deals_analyze",
   deals_email:             "deals_email",
   prospection_generate:    "prospection",
-  market_scan:             "market",
-  market_signals:          "market",
+  sales_coach_analyze:        "sales_coach",
+  sales_coach_analyze_client: "sales_coach",
+  sales_coach_email_draft:    "sales_coach",
+  sales_coach_recap:          "meeting_recap",
+  clients_enrich_fields:      "clients",
+  clients_refresh_fields:     "clients",
+  clients_health_summary:     "clients",
+  clients_coach_brief:        "clients",
+  clients_deal_recap:         "clients",
+  marketing_content_analyze:  "marketing",
+  marketing_content_theme:    "marketing",
+  marketing_linkedin_analyze: "marketing",
 };
 
 // Default model per admin pref key (matches model-preferences-admin.tsx)
@@ -157,7 +167,10 @@ const PREF_DEFAULTS: Record<string, string> = {
   deals_analyze:  "claude-sonnet-4-6",
   deals_email:    "claude-haiku-4-5-20251001",
   prospection:    "claude-haiku-4-5-20251001",
-  market:         "claude-haiku-4-5-20251001",
+  sales_coach:    "claude-haiku-4-5-20251001",
+  meeting_recap:  "claude-haiku-4-5-20251001",
+  clients:        "claude-sonnet-4-6",
+  marketing:      "claude-sonnet-4-6",
 };
 
 export function UsageTabs({

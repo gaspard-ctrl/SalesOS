@@ -13,7 +13,6 @@ import {
 } from "@/lib/watchlist/briefs";
 
 const MODEL = "claude-sonnet-4-6";
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 const SYSTEM_PROMPT = `Tu es un Account Executive sénior. Tu prépares la prospection d'un compte cible (Watch List).
 À partir du contexte fourni (emails échangés avec les contacts du compte, contacts HubSpot, deals, news récentes, secteur),
@@ -102,43 +101,28 @@ export async function runAeAnalysis(input: {
       throw new Error("Compte introuvable");
     }
 
-    // Contexte HubSpot (emails/contacts/deals) + brief news + signaux marché.
-    const [hubspot, briefsRes, signalsRes] = await Promise.all([
+    // Contexte HubSpot (emails/contacts/deals) + brief news.
+    const [hubspot, briefsRes] = await Promise.all([
       loadCompanyHubspotContext(scopeCompanyId),
       db
         .from("watchlist_company_briefs")
         .select("*")
         .eq("scope_company_id", scopeCompanyId)
         .eq("kind", "news"),
-      db
-        .from("market_signals")
-        .select("signal_type, title, summary, created_at")
-        .eq("user_id", userId)
-        .ilike("company_name", company.name)
-        .eq("archived", false)
-        .gte("created_at", new Date(Date.now() - THIRTY_DAYS_MS).toISOString())
-        .order("created_at", { ascending: false })
-        .limit(15),
     ]);
 
     const newsBrief =
       ((briefsRes.data ?? [])[0] as BriefRow<NewsContent> | undefined) ?? null;
     const news = newsBrief?.content ?? null;
-    const signals = (signalsRes.data ?? []) as Array<{
-      signal_type: string;
-      title: string;
-      summary: string | null;
-      created_at: string;
-    }>;
 
     const emailEngagements = hubspot.engagements.filter((e) => e.type === "email");
     const sourcesUsed = {
       emails: emailEngagements.length > 0,
-      news: !!(news?.posts?.length || news?.signals?.length || signals.length),
+      news: !!(news?.posts?.length || news?.signals?.length),
       sector: !!company.sector,
     };
 
-    const userPrompt = buildPrompt({ company, hubspot, news, signals });
+    const userPrompt = buildPrompt({ company, hubspot, news });
 
     const client = new Anthropic({ timeout: 120_000, maxRetries: 1 });
     const message = await client.messages.create({
@@ -202,9 +186,8 @@ function buildPrompt(input: {
   company: ScopeCompanyRow;
   hubspot: HubspotRecapContent;
   news: NewsContent | null;
-  signals: Array<{ signal_type: string; title: string; summary: string | null; created_at: string }>;
 }): string {
-  const { company, hubspot, news, signals } = input;
+  const { company, hubspot, news } = input;
   const lines: string[] = [];
 
   lines.push(`# Compte cible : ${company.name}`);
@@ -292,25 +275,9 @@ function buildPrompt(input: {
         lines.push(`- [${date}] ${p.text.slice(0, 250)}`);
       }
     }
-    if (news.signals.length > 0) {
-      hasNews = true;
-      lines.push(`### Signaux intel (${news.signals.length})`);
-      for (const s of news.signals.slice(0, 6)) {
-        const date = new Date(s.created_at).toLocaleDateString("fr-FR");
-        lines.push(`- [${date}] (${s.type}) ${s.title}${s.excerpt ? ` -- ${s.excerpt.slice(0, 150)}` : ""}`);
-      }
-    }
-  }
-  if (signals.length > 0) {
-    hasNews = true;
-    lines.push(`### Signaux marché (30j)`);
-    for (const s of signals.slice(0, 10)) {
-      const date = new Date(s.created_at).toLocaleDateString("fr-FR");
-      lines.push(`- [${date}] (${s.signal_type}) ${s.title}${s.summary ? ` -- ${s.summary.slice(0, 150)}` : ""}`);
-    }
   }
   if (!hasNews) {
-    lines.push("Aucune news ni signal récent.");
+    lines.push("Aucune news récente.");
   }
 
   return lines.join("\n");

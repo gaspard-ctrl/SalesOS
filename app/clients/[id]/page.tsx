@@ -18,6 +18,9 @@ import { NewsPanel } from "./_components/news-panel";
 import { RefreshReportPanel } from "./_components/refresh-report-panel";
 import { BillingPanel } from "./_components/billing-panel";
 import { MeetingConfirmationModal } from "./_components/meeting-confirmation-modal";
+import { HandoverPanel } from "./_components/handover-panel";
+
+const HUBSPOT_PORTAL_ID = process.env.NEXT_PUBLIC_HUBSPOT_PORTAL_ID;
 
 async function fetcher<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -384,25 +387,27 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               {refreshing ? "Refreshing…" : "Refresh"}
             </button>
           )}
-          <a
-            href={`https://app.hubspot.com/contacts/_/deal/${client.hubspot_deal_id}`}
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              fontSize: 12,
-              padding: "6px 10px",
-              borderRadius: 8,
-              border: `1px solid ${COLORS.line}`,
-              color: COLORS.ink2,
-              textDecoration: "none",
-            }}
-          >
-            HubSpot deal
-            <ExternalLink size={12} />
-          </a>
+          {HUBSPOT_PORTAL_ID && (
+            <a
+              href={`https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/deal/${client.hubspot_deal_id}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 12,
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: `1px solid ${COLORS.line}`,
+                color: COLORS.ink2,
+                textDecoration: "none",
+              }}
+            >
+              HubSpot deal
+              <ExternalLink size={12} />
+            </a>
+          )}
           {isAdmin && (
             <button
               type="button"
@@ -447,6 +452,9 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 1100, margin: "0 auto" }}>
           <StatusBanner client={client} onConfirmMeetings={() => setConfirmOpen(true)} />
+
+          {/* Handover : assigner AM/CS, valider les champs requis, les notifier sur Slack */}
+          <HandoverPanel client={client} fields={client.fields_json ?? {}} onUpdated={() => void mutate()} />
 
           {/* Petit point du dernier refresh incrémental (bouton Actualiser / cron) */}
           <RefreshReportPanel report={client.last_refresh_report} />

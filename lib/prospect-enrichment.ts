@@ -1,5 +1,14 @@
 import { searchTavily } from "./tavily";
-import { getCompanyDetails, getProfile, resolveUsername, slugifyCompany, type LinkedInProfile } from "./netrows";
+import { getCompanyDetails, getProfile, resolveUsername, slugifyCompany, type LinkedInProfile } from "./brightdata/linkedin";
+import { BRIGHTDATA_API_KEY } from "./brightdata/serp";
+
+// Le scrape de profil/entreprise Bright Data est asynchrone (10-60s).
+// - Défaut COURT (~15s) : sûr pour les routes synchrones (prospection/generate,
+//   regenerate single-email) qui doivent rester sous la limite Netlify ~26s.
+//   Best-effort : si le scrape n'est pas prêt à temps, on dégrade sans LinkedIn.
+// - Les contextes background (mass-prospection generate) passent un timeout long.
+const DEFAULT_PROFILE_TIMEOUT_MS = 15_000;
+const DEFAULT_COMPANY_TIMEOUT_MS = 15_000;
 
 function usernameFromLinkedInUrl(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -12,14 +21,17 @@ export interface LinkedInContextResult {
   currentCompanyUsername: string | null;
 }
 
-export async function fetchLinkedInContext(params: {
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  company?: string;
-  linkedinUrl?: string | null;
-}): Promise<LinkedInContextResult> {
-  if (!process.env.NETROWS_API_KEY) return { text: "", currentCompanyUsername: null };
+export async function fetchLinkedInContext(
+  params: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    company?: string;
+    linkedinUrl?: string | null;
+  },
+  opts: { profileTimeoutMs?: number } = {},
+): Promise<LinkedInContextResult> {
+  if (!BRIGHTDATA_API_KEY) return { text: "", currentCompanyUsername: null };
   try {
     const username = await resolveUsername({
       username: usernameFromLinkedInUrl(params.linkedinUrl) ?? undefined,
@@ -29,7 +41,9 @@ export async function fetchLinkedInContext(params: {
       email: params.email,
     });
     if (!username) return { text: "", currentCompanyUsername: null };
-    const profile: LinkedInProfile = await getProfile(username);
+    const profile: LinkedInProfile = await getProfile(username, {
+      timeoutMs: opts.profileTimeoutMs ?? DEFAULT_PROFILE_TIMEOUT_MS,
+    });
     const positions = (profile.position ?? []).slice(0, 5).map((p) => {
       const start = p.start ? `${p.start.month ? p.start.month + "/" : ""}${p.start.year}` : "";
       const end = p.end?.year ? `${p.end.month ? p.end.month + "/" : ""}${p.end.year}` : "présent";
@@ -92,13 +106,14 @@ export function createCompanyContextCache() {
 export async function fetchCompanyLinkedInContext(
   company: string | null | undefined,
   hintedUsername: string | null = null,
+  opts: { companyTimeoutMs?: number } = {},
 ): Promise<string> {
-  if (!process.env.NETROWS_API_KEY) return "";
+  if (!BRIGHTDATA_API_KEY) return "";
   const name = company?.trim();
   const slug = hintedUsername?.trim() || (name ? slugifyCompany(name) : "");
   if (!slug) return "";
   try {
-    const d = await getCompanyDetails(slug);
+    const d = await getCompanyDetails(slug, { timeoutMs: opts.companyTimeoutMs ?? DEFAULT_COMPANY_TIMEOUT_MS });
     return [
       d.name ? `Nom officiel : ${d.name}` : "",
       d.industry ? `Secteur : ${d.industry}` : "",
@@ -114,7 +129,7 @@ export async function fetchCompanyLinkedInContext(
   }
 }
 
-export function createCompanyLinkedInCache() {
+export function createCompanyLinkedInCache(companyTimeoutMs?: number) {
   const cache = new Map<string, Promise<string>>();
   return (company: string | null | undefined, hintedUsername: string | null = null): Promise<string> => {
     const name = company?.trim();
@@ -122,7 +137,7 @@ export function createCompanyLinkedInCache() {
     if (!slug) return Promise.resolve("");
     const existing = cache.get(slug);
     if (existing) return existing;
-    const p = fetchCompanyLinkedInContext(name, hintedUsername);
+    const p = fetchCompanyLinkedInContext(name, hintedUsername, { companyTimeoutMs });
     cache.set(slug, p);
     return p;
   };

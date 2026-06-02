@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { getCompanyDetails, getCompanyPosts } from "@/lib/netrows";
+import { getCompanyDetails, getCompanyPosts } from "@/lib/brightdata/linkedin";
+import { BRIGHTDATA_API_KEY } from "@/lib/brightdata/serp";
 
 export const dynamic = "force-dynamic";
 
@@ -8,8 +9,8 @@ export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  if (!process.env.NETROWS_API_KEY) {
-    return NextResponse.json({ error: "Netrows non configuré" }, { status: 500 });
+  if (!BRIGHTDATA_API_KEY) {
+    return NextResponse.json({ error: "Bright Data non configuré" }, { status: 500 });
   }
 
   const username = req.nextUrl.searchParams.get("username");
@@ -17,8 +18,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const [details, postsRes] = await Promise.allSettled([
-      getCompanyDetails(username),
-      getCompanyPosts(username),
+      getCompanyDetails(username, { timeoutMs: 18_000 }),
+      getCompanyPosts(username, { timeoutMs: 18_000 }),
     ]);
 
     return NextResponse.json({

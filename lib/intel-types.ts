@@ -1,6 +1,6 @@
 // ── Listes / enrichissement HubSpot — types partagés ─────────────────────────
 
-export type EnrichmentSource = "netrows" | "hubspot" | "mixed";
+export type EnrichmentSource = "brightdata" | "hubspot" | "mixed";
 
 export type ProfileSource =
   | "manual"

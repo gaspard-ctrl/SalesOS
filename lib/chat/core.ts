@@ -5,7 +5,7 @@
  *  - la Background Function Netlify slack-chat-background (DMs/mentions Slack)
  *
  * Boucle agentic Claude + ~30 outils (HubSpot, Slack, Gmail, Drive, LinkedIn
- * via Netrows, Tavily). Chaque appel charge :
+ * via Bright Data, Tavily). Chaque appel charge :
  *  - la clé Claude chiffrée du user (table user_keys)
  *  - son user_prompt perso + le guide global bot + le mapping owners HubSpot
  *
@@ -33,20 +33,13 @@ const PUBLIC_EMAIL_DOMAINS = new Set([
 import {
   getProfile,
   searchPeople,
-  reverseLookup,
   resolveUsername,
-  getPeopleLikes,
   getPeopleActivity,
-  getSimilarProfiles,
   getCompanyDetails,
   getCompanyPosts,
   getCompanyJobs,
   searchCompanies,
-  searchPosts as netrowsSearchPosts,
-  getPostReactions,
-  findEmailByLinkedInCached,
-  findDecisionMakerEmail,
-} from "@/lib/netrows";
+} from "@/lib/brightdata/linkedin";
 import * as XLSX from "xlsx";
 
 // ── Types publics ────────────────────────────────────────────────────────────
@@ -321,12 +314,12 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "get_slack_channel_history",
-    description: "Récupère les derniers messages d'un canal Slack.",
+    description: "Récupère l'historique COMPLET d'un canal Slack (toutes les pages via pagination, pas seulement les 100 derniers messages). Par défaut, remonte tout l'historique accessible.",
     input_schema: {
       type: "object" as const,
       properties: {
         channel_name: { type: "string", description: "Nom du canal sans #" },
-        limit: { type: "number", description: "Nombre de messages (défaut : 20)" },
+        limit: { type: "number", description: "Plafond optionnel sur le nombre total de messages. Si omis, remonte TOUT l'historique du canal." },
       },
       required: ["channel_name"],
     },
@@ -456,44 +449,17 @@ export const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: "get_linkedin_profile_by_email",
-    description: "Trouve un profil LinkedIn à partir d'un email pro.",
-    input_schema: {
-      type: "object" as const,
-      properties: { email: { type: "string" } },
-      required: ["email"],
-    },
-  },
-  {
     name: "get_linkedin_activity",
-    description: "Récupère la dernière activité d'un profil LinkedIn.",
+    description: "Récupère les derniers posts publiés par un profil LinkedIn (best-effort, scrape pouvant prendre quelques secondes).",
     input_schema: {
       type: "object" as const,
       properties: { username: { type: "string" } },
-      required: ["username"],
-    },
-  },
-  {
-    name: "get_linkedin_likes",
-    description: "Liste les posts récemment likés par un profil LinkedIn.",
-    input_schema: {
-      type: "object" as const,
-      properties: { username: { type: "string" }, start: { type: "number" } },
       required: ["username"],
     },
   },
   {
     name: "get_linkedin_posts",
-    description: "Liste les derniers posts publiés par un profil LinkedIn.",
-    input_schema: {
-      type: "object" as const,
-      properties: { username: { type: "string" } },
-      required: ["username"],
-    },
-  },
-  {
-    name: "get_linkedin_similar_profiles",
-    description: "Trouve des profils LinkedIn similaires à un profil donné.",
+    description: "Liste les derniers posts publiés par un profil LinkedIn (best-effort).",
     input_schema: {
       type: "object" as const,
       properties: { username: { type: "string" } },
@@ -502,7 +468,7 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "get_linkedin_company",
-    description: "Détails d'une entreprise LinkedIn (effectifs, secteur, siège, followers).",
+    description: "Détails d'une entreprise LinkedIn (effectifs, secteur, siège, followers). Best-effort, scrape pouvant prendre quelques secondes.",
     input_schema: {
       type: "object" as const,
       properties: { username: { type: "string" } },
@@ -511,7 +477,7 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "get_linkedin_company_posts",
-    description: "Derniers posts publiés par une page entreprise LinkedIn.",
+    description: "Derniers posts publiés par une page entreprise LinkedIn (best-effort).",
     input_schema: {
       type: "object" as const,
       properties: { username: { type: "string" }, start: { type: "number" } },
@@ -520,11 +486,11 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "get_linkedin_company_jobs",
-    description: "Offres d'emploi actives publiées par une entreprise sur LinkedIn.",
+    description: "Offres d'emploi publiées par une entreprise sur LinkedIn (best-effort).",
     input_schema: {
       type: "object" as const,
-      properties: { company_id: { type: "string" }, page: { type: "number" } },
-      required: ["company_id"],
+      properties: { company: { type: "string" } },
+      required: ["company"],
     },
   },
   {
@@ -534,46 +500,6 @@ export const TOOLS: Anthropic.Tool[] = [
       type: "object" as const,
       properties: { keyword: { type: "string" }, industry: { type: "string" }, size: { type: "string" } },
       required: ["keyword"],
-    },
-  },
-  {
-    name: "search_linkedin_posts",
-    description: "Recherche de posts LinkedIn par mot-clé.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        keyword: { type: "string" },
-        sortBy: { type: "string" },
-        datePosted: { type: "string" },
-      },
-      required: ["keyword"],
-    },
-  },
-  {
-    name: "get_linkedin_post_reactions",
-    description: "Liste les profils LinkedIn qui ont réagi à un post donné.",
-    input_schema: {
-      type: "object" as const,
-      properties: { post_url: { type: "string" }, start: { type: "number" } },
-      required: ["post_url"],
-    },
-  },
-  {
-    name: "find_email_by_linkedin",
-    description: "Trouve l'email pro d'une personne via son username LinkedIn (5 crédits).",
-    input_schema: {
-      type: "object" as const,
-      properties: { username: { type: "string" } },
-      required: ["username"],
-    },
-  },
-  {
-    name: "find_decision_maker_email",
-    description: "Trouve l'email du décideur d'une entreprise donnée (10 crédits).",
-    input_schema: {
-      type: "object" as const,
-      properties: { company: { type: "string" }, title: { type: "string" } },
-      required: ["company", "title"],
     },
   },
   {
@@ -846,11 +772,23 @@ async function executeTool(
         const available = allChannels.map((c) => c.name).sort().join(", ");
         return `Canal "${searched}" introuvable. Canaux accessibles : ${available}`;
       }
-      const histData = await slack("/conversations.history", {
-        channel: channel.id,
-        limit: String(input.limit ?? 20),
-      });
-      const userIds = [...new Set((histData.messages ?? []).map((m: { user?: string }) => m.user).filter(Boolean))] as string[];
+      // On remonte TOUT l'historique du canal via pagination cursor (pas seulement la dernière page).
+      // `limit` (optionnel) plafonne le nombre total de messages ; sinon on remonte tout.
+      const cap = typeof input.limit === "number" && input.limit > 0 ? input.limit : Infinity;
+      const deadline = Date.now() + 45_000; // garde-fou anti-timeout
+      const rawMessages: { text: string; ts: string; user?: string }[] = [];
+      let cursor: string | undefined;
+      let truncated = false;
+      do {
+        const params: Record<string, string> = { channel: channel.id, limit: "200" };
+        if (cursor) params.cursor = cursor;
+        const histData = await slack("/conversations.history", params);
+        rawMessages.push(...((histData.messages ?? []) as { text: string; ts: string; user?: string }[]));
+        cursor = histData.response_metadata?.next_cursor || undefined;
+        if (cursor && Date.now() >= deadline) { truncated = true; break; }
+      } while (cursor && rawMessages.length < cap);
+      const trimmed = cap === Infinity ? rawMessages : rawMessages.slice(0, cap);
+      const userIds = [...new Set(trimmed.map((m) => m.user).filter(Boolean))] as string[];
       const userMap: Record<string, string> = {};
       await Promise.all(userIds.map(async (uid) => {
         try {
@@ -858,12 +796,12 @@ async function executeTool(
           userMap[uid] = u.user?.real_name ?? u.user?.name ?? uid;
         } catch { userMap[uid] = uid; }
       }));
-      const messages = (histData.messages ?? []).map((m: { text: string; ts: string; user?: string }) => ({
+      const messages = trimmed.map((m) => ({
         text: m.text,
         user: m.user ? (userMap[m.user] ?? m.user) : "bot",
         timestamp: new Date(parseFloat(m.ts) * 1000).toISOString(),
       }));
-      return JSON.stringify({ channel: channel.name, messages });
+      return JSON.stringify({ channel: channel.name, total: messages.length, truncated, messages });
     }
     case "send_slack_message": {
       const target = input.channel as string;
@@ -1072,41 +1010,21 @@ async function executeTool(
         return `Erreur LinkedIn profile : ${e instanceof Error ? e.message : "inconnue"}`;
       }
     }
-    case "get_linkedin_profile_by_email": {
-      try {
-        const r = await reverseLookup(input.email as string);
-        if (!r.found) return "Aucun profil LinkedIn associé à cet email.";
-        return JSON.stringify(r.profile);
-      } catch (e) {
-        return `Erreur LinkedIn reverse lookup : ${e instanceof Error ? e.message : "inconnue"}`;
-      }
-    }
-    case "get_linkedin_activity": {
-      try { const r = await getPeopleActivity(input.username as string); return JSON.stringify(r.data ?? []); }
-      catch (e) { return `Erreur LinkedIn activity : ${e instanceof Error ? e.message : "inconnue"}`; }
-    }
-    case "get_linkedin_likes": {
-      try { const r = await getPeopleLikes(input.username as string, (input.start as number | undefined) ?? 0); return JSON.stringify((r.data ?? []).slice(0, 15)); }
-      catch (e) { return `Erreur LinkedIn likes : ${e instanceof Error ? e.message : "inconnue"}`; }
-    }
+    case "get_linkedin_activity":
     case "get_linkedin_posts": {
-      try { const r = await getPeopleActivity(input.username as string); return JSON.stringify(r.data ?? []); }
+      try { const r = await getPeopleActivity(input.username as string, { timeoutMs: 18_000 }); return JSON.stringify((r.data ?? []).slice(0, 15)); }
       catch (e) { return `Erreur LinkedIn posts : ${e instanceof Error ? e.message : "inconnue"}`; }
     }
-    case "get_linkedin_similar_profiles": {
-      try { const r = await getSimilarProfiles(input.username as string); return JSON.stringify((r.data ?? []).slice(0, 15)); }
-      catch (e) { return `Erreur LinkedIn similar : ${e instanceof Error ? e.message : "inconnue"}`; }
-    }
     case "get_linkedin_company": {
-      try { const c = await getCompanyDetails(input.username as string); return JSON.stringify(c); }
+      try { const c = await getCompanyDetails(input.username as string, { timeoutMs: 18_000 }); return c.name ? JSON.stringify(c) : "Fiche entreprise non disponible (scrape trop lent ou introuvable)."; }
       catch (e) { return `Erreur LinkedIn company : ${e instanceof Error ? e.message : "inconnue"}`; }
     }
     case "get_linkedin_company_posts": {
-      try { const r = await getCompanyPosts(input.username as string, (input.start as number | undefined) ?? 0); return JSON.stringify((r.data ?? []).slice(0, 10)); }
+      try { const r = await getCompanyPosts(input.username as string, { timeoutMs: 18_000 }); return JSON.stringify((r.data ?? []).slice(0, 10)); }
       catch (e) { return `Erreur LinkedIn company posts : ${e instanceof Error ? e.message : "inconnue"}`; }
     }
     case "get_linkedin_company_jobs": {
-      try { const r = await getCompanyJobs(input.company_id as string, (input.page as number | undefined) ?? 1); return JSON.stringify(r.data ?? []); }
+      try { const r = await getCompanyJobs(input.company as string, { timeoutMs: 18_000 }); return JSON.stringify((r.data ?? []).slice(0, 20)); }
       catch (e) { return `Erreur LinkedIn jobs : ${e instanceof Error ? e.message : "inconnue"}`; }
     }
     case "search_linkedin_companies": {
@@ -1118,35 +1036,6 @@ async function executeTool(
         });
         return JSON.stringify((r.data?.items ?? []).slice(0, 20));
       } catch (e) { return `Erreur LinkedIn search companies : ${e instanceof Error ? e.message : "inconnue"}`; }
-    }
-    case "search_linkedin_posts": {
-      try {
-        const r = await netrowsSearchPosts(
-          input.keyword as string,
-          (input.sortBy as string | undefined) ?? "date_posted",
-          (input.datePosted as string | undefined) ?? ""
-        );
-        return JSON.stringify((r.data ?? []).slice(0, 15).map((p) => ({
-          author: p.author?.name,
-          headline: p.author?.headline,
-          posted: p.postedAt,
-          text: (p.text ?? "").slice(0, 400),
-          url: p.postUrl,
-          stats: { likes: p.likes, comments: p.comments },
-        })));
-      } catch (e) { return `Erreur LinkedIn search posts : ${e instanceof Error ? e.message : "inconnue"}`; }
-    }
-    case "get_linkedin_post_reactions": {
-      try { const r = await getPostReactions(input.post_url as string, (input.start as number | undefined) ?? 0); return JSON.stringify((r.data ?? []).slice(0, 30)); }
-      catch (e) { return `Erreur LinkedIn reactions : ${e instanceof Error ? e.message : "inconnue"}`; }
-    }
-    case "find_email_by_linkedin": {
-      try { const r = await findEmailByLinkedInCached(input.username as string); return JSON.stringify({ email: r.email, confidence: r.confidence }); }
-      catch (e) { return `Erreur email finder : ${e instanceof Error ? e.message : "inconnue"}`; }
-    }
-    case "find_decision_maker_email": {
-      try { const r = await findDecisionMakerEmail({ company: input.company as string, title: input.title as string }); return JSON.stringify(r.data ?? { email: null }); }
-      catch (e) { return `Erreur decision maker : ${e instanceof Error ? e.message : "inconnue"}`; }
     }
     case "search_claap_meetings": {
       if (!process.env.CLAAP_API_TOKEN) {
@@ -1254,8 +1143,15 @@ export async function runChat(args: {
    * le précise pas (ex: question posée dans #engie → compte Engie).
    */
   channelName?: string;
+  /**
+   * Mode "réflexion approfondie" déclenché depuis la barre de chat de la webapp.
+   * Quand `true`, on demande au modèle d'être extrêmement rigoureux, de mobiliser
+   * tous ses outils, de croiser toutes les données disponibles et de produire une
+   * réponse très détaillée et sourcée (cf. bloc ajouté au system prompt plus bas).
+   */
+  betterThinking?: boolean;
 }): Promise<ChatResult> {
-  const { userId, messages, onEvent, channelName } = args;
+  const { userId, messages, onEvent, channelName, betterThinking } = args;
   const emit = onEvent ?? (() => {});
 
   // 1) Charger la clé Claude chiffrée (ou fallback .env en dev)
@@ -1319,7 +1215,7 @@ export async function runChat(args: {
   const teamLines = ownersMap.map((o) => `- ${o.name} (owner_id: ${o.id}, ${o.email})`).join("\n");
   systemPrompt += `\n\nCONTEXTE UTILISATEUR\nL'utilisateur connecté est ${userDisplay}${userOwnerId ? ` (HubSpot owner ID : ${userOwnerId})` : ""}.\nQuand il dit "mes deals" → utilise my_deals_only: true.\nQuand il dit "les deals de [prénom]" → résous le prénom ci-dessous et utilise owner_id.\n\nÉQUIPE COMMERCIALE (owners HubSpot) :\n${teamLines || "Aucun owner trouvé"}\n\nRÈGLES IMPORTANTES :\n- "les deals de Quentin" → trouver l'owner_id de Quentin dans la liste ci-dessus, puis get_deals avec owner_id\n- "deals perdu" ou "deals lost" = stage closedlost\n- "deals gagné" ou "deals won" = stage closedwon\n- Ne JAMAIS chercher un commercial comme un contact — ce sont des owners\n- Ne pose AUCUNE question de clarification — déduis du contexte`;
 
-  systemPrompt += `\n\nCAPACITÉS LINKEDIN (Netrows)\nTu as accès à l'API LinkedIn pour enrichir tes réponses :\n\n• Profils :\n  - search_linkedin_people : trouver une personne par entreprise + titre\n  - get_linkedin_profile : profil complet — fallback automatique nom+entreprise si pas d'username\n  - get_linkedin_profile_by_email : reverse lookup email → profil\n  - get_linkedin_activity / get_linkedin_likes / get_linkedin_posts\n  - get_linkedin_similar_profiles\n\n• Entreprises :\n  - get_linkedin_company / get_linkedin_company_posts / get_linkedin_company_jobs\n  - search_linkedin_companies\n\n• Posts :\n  - search_linkedin_posts / get_linkedin_post_reactions\n\n• Emails :\n  - find_email_by_linkedin (5 crédits) / find_decision_maker_email (10 crédits)`;
+  systemPrompt += `\n\nCAPACITÉS LINKEDIN (Bright Data)\nTu as accès à LinkedIn pour enrichir tes réponses. La recherche est instantanée ; les fiches détaillées sont scrapées (quelques secondes, best-effort — si ça échoue, dis-le simplement).\n\n• Profils :\n  - search_linkedin_people : trouver une personne par entreprise + titre (rapide)\n  - get_linkedin_profile : profil complet — fallback automatique nom+entreprise si pas d'username\n  - get_linkedin_activity / get_linkedin_posts : derniers posts publiés par un profil\n\n• Entreprises :\n  - get_linkedin_company / get_linkedin_company_posts / get_linkedin_company_jobs\n  - search_linkedin_companies\n\nPas de recherche d'email LinkedIn : pour un email, appuie-toi sur les données HubSpot (CRM).`;
 
   // Langue : on répond toujours dans la langue de la question, sans traduire.
   // S'applique aussi à la question de périmètre canal ci-dessous.
@@ -1332,6 +1228,13 @@ export async function runChat(args: {
   // Seule exception à la règle "ne pose aucune question de clarification".
   if (channelName) {
     systemPrompt += `\n\nCONTEXTE CANAL SLACK\nCette conversation a lieu dans le canal Slack #${channelName}. Tu sais donc toujours où tu te trouves : sers-toi de ce nom dans ta question.\nSi ce canal semble dédié à un client ou un compte précis (ex: #engie → Engie, #adyen → Adyen, #salomon → Salomon) et que la question ne précise pas le périmètre, NE déduis PAS le compte tout seul : pose d'abord une question courte qui cite le canal, du type « Je dois baser ma réponse seulement sur le canal #${channelName} (compte associé) ou chercher partout, avec tous mes outils (HubSpot, Slack, Drive, LinkedIn…) ? » (exemple en français, à formuler dans la langue de l'utilisateur), puis attends la réponse avant de lancer tes recherches. C'est la SEULE question de clarification autorisée (elle prime sur la règle "ne pose aucune question").\nLe périmètre est considéré comme "précisé" si l'utilisateur nomme un client, dit "partout" / "tous les outils" / "ce canal", ou a déjà répondu à cette question plus haut dans le fil : dans ce cas, respecte-le sans reposer la question. Un client explicitement nommé prime toujours sur le canal.\nPour un canal générique (ex: #general, #11-everything-prospects), ne déduis aucun compte et ne pose pas la question : réponds normalement.`;
+  }
+
+  // Mode "réflexion approfondie" (toggle "Better thinking" dans la barre de chat).
+  // On renforce la consigne : rigueur maximale, exhaustivité des sources, réponse
+  // très détaillée et sourcée. Ce bloc est ajouté en dernier pour primer (récence).
+  if (betterThinking) {
+    systemPrompt += `\n\nMODE RÉFLEXION APPROFONDIE (BETTER THINKING) ACTIVÉ\nL'utilisateur a activé le mode "réflexion approfondie" pour cette réponse. Tu dois :\n- Être extrêmement rigoureux et précis : raisonne étape par étape avant de conclure, vérifie chaque affirmation et ne fais aucune supposition non étayée.\n- Être exhaustif sur les données : ne te contente jamais de la première source. Mobilise TOUS tes outils pertinents (HubSpot, Slack, Google Drive, Gmail, LinkedIn, recherche web) et croise les informations pour ne rien manquer.\n- Aller au bout des recherches : enchaîne autant d'appels d'outils que nécessaire, explore les pistes connexes, et confronte les sources entre elles quand elles divergent.\n- Produire une réponse très détaillée et structurée : contexte, éléments factuels (avec leur source), analyse, puis conclusion et recommandations concrètes. Indique systématiquement d'où vient chaque information.\n- Si une donnée reste introuvable ou incertaine après recherche, dis-le explicitement plutôt que de l'inventer.\nCe mode prime sur toute consigne de concision : privilégie la complétude et la fiabilité, même si la réponse est longue.`;
   }
 
   // 4) Boucle agentic

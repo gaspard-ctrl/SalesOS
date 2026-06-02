@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { withAnthropicRetry } from "../anthropic-retry";
 import { logUsage } from "../log-usage";
+import { getModelPreference } from "../models/get-model-preference";
 import type { ClientEnrichmentContext } from "./context";
 import type { Health } from "./types";
 
@@ -21,6 +22,8 @@ export async function generateHealthSummary(
   userId: string | null = null,
 ): Promise<string | null> {
   if (!process.env.ANTHROPIC_API_KEY) return null;
+
+  const model = await getModelPreference("clients", HEALTH_SUMMARY_MODEL);
 
   const recentMeetings = [...(ctx.meetings ?? [])]
     .filter((m) => m.meeting_started_at)
@@ -54,14 +57,14 @@ ${recentMeetings || "(aucun meeting récent analysé)"}
   const msg = await withAnthropicRetry(
     () =>
       client.messages.create({
-        model: HEALTH_SUMMARY_MODEL,
+        model,
         max_tokens: 200,
         messages: [{ role: "user", content: prompt }],
       }),
     { label: "clients/health-summary" },
   );
 
-  logUsage(userId, HEALTH_SUMMARY_MODEL, msg.usage.input_tokens, msg.usage.output_tokens, "clients_health_summary");
+  logUsage(userId, model, msg.usage.input_tokens, msg.usage.output_tokens, "clients_health_summary");
 
   const block = msg.content.find((b) => b.type === "text");
   const text = block && "text" in block ? block.text.trim() : "";

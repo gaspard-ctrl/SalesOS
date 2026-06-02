@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, ExternalLink, Linkedin } from "lucide-react";
 import { COLORS } from "@/lib/design/tokens";
 import { CompanyAvatar } from "@/components/ui/company-avatar";
-import { slugifyCompany } from "@/lib/netrows";
+import { slugifyCompany } from "@/lib/slugify-company";
 import type { WatchCompanyDetail } from "@/app/api/watchlist/companies/[id]/route";
 
 export function DetailHeader({ company }: { company: WatchCompanyDetail }) {

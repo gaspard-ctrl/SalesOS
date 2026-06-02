@@ -4,7 +4,10 @@ import { logUsage } from "@/lib/log-usage";
 import { fetchTopPages } from "@/lib/google-analytics";
 import { fetchKeywords } from "@/lib/google-search-console";
 import { fetchAllArticles, hydrateArticleBodies } from "@/lib/wordpress";
+import { getModelPreference } from "@/lib/models/get-model-preference";
 import type { ArticleDraft, ArticleRecommendation, InternalLink } from "@/lib/marketing-types";
+
+const ARTICLE_MODEL_DEFAULT = "claude-sonnet-4-6";
 
 const REC_SELECT =
   "id, user_id, topic, target_keyword, justification, estimated_traffic, difficulty, priority, status, relevance_score, relevance_reason, created_at";
@@ -340,6 +343,7 @@ STRICT RULES:
     };
 
     const client = new Anthropic();
+    const articleModel = await getModelPreference("marketing", ARTICLE_MODEL_DEFAULT);
 
     async function writeLanguage(lang: "fr" | "en"): Promise<{
       content: string;
@@ -361,14 +365,14 @@ ${sharedContext}
 Call the \`write_article_language\` tool with your complete output.`;
 
       const response = await client.messages.create({
-        model: "claude-sonnet-4-6",
+        model: articleModel,
         max_tokens: 16000,
         tools: [writeLanguageTool],
         tool_choice: { type: "tool", name: "write_article_language" },
         messages: [{ role: "user", content: langPrompt }],
       });
 
-      logUsage(userId, "claude-sonnet-4-6", response.usage.input_tokens, response.usage.output_tokens, `marketing_content_generate_${lang}`);
+      logUsage(userId, articleModel, response.usage.input_tokens, response.usage.output_tokens, `marketing_content_generate_${lang}`);
 
       if (response.stop_reason === "max_tokens") {
         throw new Error(`${lang.toUpperCase()}: Claude hit max_tokens limit. Try a shorter topic or reduce reference article length.`);

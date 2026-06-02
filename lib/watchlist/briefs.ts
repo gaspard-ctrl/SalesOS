@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import type { CompanyPost } from "@/lib/netrows";
+import type { CompanyPost } from "@/lib/brightdata/linkedin";
 
 // `hubspot_recap` n'est plus un brief affiché : la donnée HubSpot est désormais
 // un input interne de l'Analyse AE. On garde ses types (plus bas) car le fetch
@@ -59,8 +59,10 @@ export interface NewsSignalSnapshot {
 export interface NewsContent {
   posts: CompanyPost[];
   signals: NewsSignalSnapshot[];
+  /** Synthèse Claude du momentum marché (veille Bright Data). Null si rien d'exploitable. */
+  intel_summary?: string | null;
   fetched_at: string;
-  netrows_credits_used: number;
+  credits_used: number;
 }
 
 export interface HubspotCompanySnapshot {

@@ -18,6 +18,7 @@ export type ClientListItem = {
   enrichment_status: "pending" | "awaiting_meetings" | "running" | "done" | "error";
   enrichment_error: string | null;
   last_enriched_at: string | null;
+  am_cs_notified_at: string | null;
 };
 
 function fmtAmount(n: number | null): string {
@@ -30,15 +31,29 @@ function fmtDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function StatusPill({ status }: { status: ClientListItem["enrichment_status"] }) {
+function StatusPill({
+  status,
+  amCsNotifiedAt,
+}: {
+  status: ClientListItem["enrichment_status"];
+  amCsNotifiedAt: string | null;
+}) {
   const map: Record<ClientListItem["enrichment_status"], { fg: string; bg: string; label: string }> = {
     pending: { fg: COLORS.ink2, bg: COLORS.bgSoft, label: "En attente" },
     awaiting_meetings: { fg: COLORS.brand, bg: COLORS.brandTint, label: "Meetings à confirmer" },
     running: { fg: COLORS.info, bg: COLORS.infoBg, label: "Enrichissement…" },
+    // Une fois enrichi, l'étape suivante est la validation par l'AE (remplir les
+    // champs requis + assigner/notifier l'AM et le CS). On reflète ce sous-état :
+    // "À valider" tant que l'AM/CS ne sont pas notifiés, "Transmis AM/CS" ensuite.
     done: { fg: COLORS.ok, bg: COLORS.okBg, label: "Enrichi" },
     error: { fg: COLORS.err, bg: COLORS.errBg, label: "Erreur" },
   };
-  const s = map[status];
+  const s =
+    status === "done"
+      ? amCsNotifiedAt
+        ? { fg: COLORS.ok, bg: COLORS.okBg, label: "Transmis AM/CS" }
+        : { fg: COLORS.warn, bg: COLORS.warnBg, label: "À valider" }
+      : map[status];
   return (
     <span
       style={{
@@ -164,7 +179,7 @@ export function ClientsTable({ clients }: { clients: ClientListItem[] }) {
             <HealthBadge health={c.health} compact />
           </div>
           <div>
-            <StatusPill status={c.enrichment_status} />
+            <StatusPill status={c.enrichment_status} amCsNotifiedAt={c.am_cs_notified_at} />
           </div>
         </Link>
       ))}

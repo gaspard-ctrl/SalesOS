@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
   const senderName = user.name?.trim() || "L'équipe Coachello";
 
   // ── Enrichissement (best-effort, parallèle) ──────────────────────────────
-  // 1) Profil LinkedIn du prospect (Netrows)
+  // 1) Profil LinkedIn du prospect (Bright Data)
   // 2) Recherche web entreprise (Tavily, dernières actus / actualité RH)
   // Le LinkedIn entreprise dépend du profil (on récupère le slug exact depuis
   // la position courante), donc il est lancé séquentiellement après.

@@ -99,8 +99,8 @@ export function parseClientFieldsFromClaude(raw: unknown): Partial<ClientFields>
 
   mapSection("general_info", [
     "entreprise_compte", "contact_signataire", "contact_principal_rh",
-    "contact_rh_operationnel", "autres_parties_prenantes",
-    "langues_requises", "zones_geographiques",
+    "contact_rh_operationnel", "contact_facturation", "contact_it",
+    "autres_parties_prenantes", "langues_requises", "zones_geographiques",
   ]);
   mapSection("program_scope", [
     "type_coaching", "nom_programme", "population_accompagnee", "nb_coaches_estime",

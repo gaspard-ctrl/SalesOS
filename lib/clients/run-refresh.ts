@@ -8,6 +8,7 @@ import {
   CLIENT_EXTRACTION_SYSTEM_PROMPT,
   CLIENT_FIELDS_TOOL,
 } from "./prompt";
+import { getModelPreference } from "../models/get-model-preference";
 import { parseClientFieldsFromClaude } from "./parse-output";
 import { fetchClientNews } from "./news";
 import { rankClientNews } from "./rank-news";
@@ -137,6 +138,7 @@ export async function runClientRefresh(
 
   try {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY missing");
+    const clientsModel = await getModelPreference("clients", CLIENT_EXTRACTION_MODEL);
 
     const ctx = await loadClientContext(row.hubspot_deal_id);
 
@@ -159,7 +161,7 @@ export async function runClientRefresh(
       const msg = await withAnthropicRetry(
         () =>
           client.messages.create({
-            model: CLIENT_EXTRACTION_MODEL,
+            model: clientsModel,
             max_tokens: 8000,
             system: CLIENT_EXTRACTION_SYSTEM_PROMPT,
             messages: [{ role: "user", content: contextPrompt }],
@@ -168,7 +170,7 @@ export async function runClientRefresh(
           }),
         { label: `clients/refresh/${clientId}` },
       );
-      logUsage(userId, CLIENT_EXTRACTION_MODEL, msg.usage.input_tokens, msg.usage.output_tokens, "clients_refresh_fields");
+      logUsage(userId, clientsModel, msg.usage.input_tokens, msg.usage.output_tokens, "clients_refresh_fields");
 
       const toolBlock = msg.content.find((b) => b.type === "tool_use");
       if (toolBlock && "input" in toolBlock) {

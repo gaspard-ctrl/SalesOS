@@ -1,15 +1,8 @@
-import { db } from "@/lib/db";
-import {
-  getCompanyPosts,
-  slugifyCompany,
-  NetrowsNotFoundError,
-  NetrowsAuthError,
-  NetrowsCreditsError,
-  NetrowsRateLimitError,
-} from "@/lib/netrows";
-import type { NewsContent, NewsSignalSnapshot } from "@/lib/watchlist/briefs";
-
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+import { getCompanyPosts } from "@/lib/brightdata/linkedin";
+import { slugifyCompany } from "@/lib/slugify-company";
+import { fetchCompanyMarketNews } from "@/lib/brightdata/serp";
+import { analyzeMarketNews } from "@/lib/watchlist/analyze-market-news";
+import type { NewsContent } from "@/lib/watchlist/briefs";
 
 interface FetchNewsInput {
   scopeCompanyId: string;
@@ -17,69 +10,42 @@ interface FetchNewsInput {
   companyName: string;
 }
 
+// Posts LinkedIn via Bright Data (dataset posts, discover by company URL).
+// Best-effort : renvoie [] si l'entreprise est introuvable ou si le scrape
+// n'aboutit pas à temps (ne lève pas).
+async function fetchLinkedInPosts(slug: string): Promise<{ posts: NewsContent["posts"]; creditsUsed: number }> {
+  if (!slug) return { posts: [], creditsUsed: 0 };
+  const res = await getCompanyPosts(slug, { timeoutMs: 25_000 });
+  const posts = res.data ?? [];
+  return { posts, creditsUsed: posts.length > 0 ? 1 : 0 };
+}
+
 /**
  * Fetch des news pour un compte Watch List :
- * - posts LinkedIn récents via Netrows getCompanyPosts (1 seul page, pas de pagination)
- * - signaux intel (market_signals) des 30 derniers jours filtrés par nom de compagnie
+ * - posts LinkedIn récents via Bright Data getCompanyPosts (dataset, discover by URL)
+ * - veille marché (presse) via la SERP API Bright Data (Google News), catégorisée
+ *   et synthétisée par Claude → `signals` + `intel_summary`.
  *
- * En cas de NetrowsNotFoundError ou si le slug heuristique ne correspond pas,
- * on renvoie posts: [] sans planter (les signaux restent disponibles).
+ * Les deux sources tournent en parallèle. La veille Bright Data est best-effort :
+ * un échec (zone/credits/API) ne fait pas planter la brief, on garde les posts.
  */
 export async function fetchWatchlistNews(input: FetchNewsInput): Promise<NewsContent> {
-  const { userId, companyName } = input;
-
+  const { companyName, userId } = input;
   const slug = slugifyCompany(companyName);
 
-  // ── Netrows posts ────────────────────────────────────────────────────────
-  let posts: NewsContent["posts"] = [];
-  let creditsUsed = 0;
+  // Veille marché (SERP) et posts LinkedIn (dataset) en parallèle, tous deux
+  // best-effort via Bright Data (ne lèvent pas).
+  const marketPromise = fetchCompanyMarketNews(companyName).catch(() => []);
+  const { posts, creditsUsed } = await fetchLinkedInPosts(slug);
 
-  if (slug) {
-    try {
-      const res = await getCompanyPosts(slug, 0);
-      posts = res.data ?? [];
-      creditsUsed = 1;
-    } catch (e) {
-      if (
-        e instanceof NetrowsAuthError ||
-        e instanceof NetrowsCreditsError ||
-        e instanceof NetrowsRateLimitError
-      ) {
-        throw e;
-      }
-      if (e instanceof NetrowsNotFoundError) {
-        posts = [];
-      } else {
-        throw e;
-      }
-    }
-  }
-
-  // ── Intel signals (market_signals) ───────────────────────────────────────
-  const sinceIso = new Date(Date.now() - THIRTY_DAYS_MS).toISOString();
-  const { data: signalsData } = await db
-    .from("market_signals")
-    .select("id, signal_type, title, summary, source_url, created_at")
-    .eq("user_id", userId)
-    .ilike("company_name", companyName)
-    .eq("archived", false)
-    .gte("created_at", sinceIso)
-    .order("created_at", { ascending: false })
-    .limit(30);
-
-  const signals: NewsSignalSnapshot[] = (signalsData ?? []).map((s) => ({
-    id: s.id,
-    type: s.signal_type,
-    title: s.title,
-    url: s.source_url,
-    created_at: s.created_at,
-    excerpt: s.summary,
-  }));
+  const articles = await marketPromise;
+  const intel = await analyzeMarketNews(articles, { companyName, userId });
 
   return {
     posts,
-    signals,
+    signals: intel.signals,
+    intel_summary: intel.summary,
     fetched_at: new Date().toISOString(),
-    netrows_credits_used: creditsUsed,
+    credits_used: creditsUsed,
   };
 }
