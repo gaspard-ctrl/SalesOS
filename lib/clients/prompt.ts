@@ -39,7 +39,7 @@ Règles ABSOLUES :
 
 Sections à remplir :
 1. general_info : qui est le client (entreprise, signataire, RH principal et opérationnel,
-   parties prenantes additionnelles, langues, zones géographiques).
+   contact facturation, contact IT, parties prenantes additionnelles, langues, zones géographiques).
 2. program_scope : périmètre du programme acheté (type coaching, nom du programme,
    population, nb coachés estimé, format cohortes, options activées comme auto-assessment,
    flash feedback, tripartite, quadripartite, offres associées).
@@ -148,14 +148,16 @@ export const CLIENT_FIELDS_TOOL: Anthropic.Tool = {
           contact_signataire: field({ type: "contact", description: "Personne ayant signé le contrat" }),
           contact_principal_rh: field({ type: "contact", description: "Référent RH principal côté client" }),
           contact_rh_operationnel: field({ type: "contact", description: "Contact opérationnel RH (différent du signataire ou décideur)" }),
+          contact_facturation: field({ type: "contact", description: "Contact facturation / finance côté client (à qui envoyer les factures)" }),
+          contact_it: field({ type: "contact", description: "Contact IT / technique côté client (SSO, SIRH, intégrations)" }),
           autres_parties_prenantes: field({ type: "array_contact", description: "Autres décideurs / sponsors mentionnés" }),
           langues_requises: field({ type: "array_string", description: "Langues nécessaires pour le coaching (FR, EN, ES…)" }),
           zones_geographiques: field({ type: "array_string", description: "Pays / zones où des bénéficiaires sont attendus" }),
         },
         required: [
           "entreprise_compte", "contact_signataire", "contact_principal_rh",
-          "contact_rh_operationnel", "autres_parties_prenantes",
-          "langues_requises", "zones_geographiques",
+          "contact_rh_operationnel", "contact_facturation", "contact_it",
+          "autres_parties_prenantes", "langues_requises", "zones_geographiques",
         ],
       },
       program_scope: {

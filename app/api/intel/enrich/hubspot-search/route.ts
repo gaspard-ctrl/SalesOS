@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hubspotFetch, hubspotSearchAll } from "@/lib/hubspot";
-import { resolveUsername } from "@/lib/netrows";
+import { resolveUsername } from "@/lib/brightdata/linkedin";
+import { BRIGHTDATA_API_KEY } from "@/lib/brightdata/serp";
 import { resolveWatchlistCompanyContactIds } from "@/lib/intel/company-contact-ids";
 import type { EnrichmentProfile, HubspotCriteria } from "@/lib/intel-types";
 
@@ -441,7 +442,7 @@ export async function POST(req: NextRequest) {
     });
 
     // ── 10. Auto-resolve LinkedIn (best-effort, costly) — opt-in
-    if (c.autoResolveLinkedin && process.env.NETROWS_API_KEY) {
+    if (c.autoResolveLinkedin && BRIGHTDATA_API_KEY) {
       const targets = profiles.filter((p) => !p.username);
       const MAX_AUTO = 30;
       for (const p of targets.slice(0, MAX_AUTO)) {

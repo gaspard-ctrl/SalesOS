@@ -24,6 +24,8 @@ export type GeneralInfoFields = {
   contact_signataire: ClientFieldValue<{ name: string; email?: string; role?: string }>;
   contact_principal_rh: ClientFieldValue<{ name: string; email?: string; role?: string }>;
   contact_rh_operationnel: ClientFieldValue<{ name: string; email?: string; role?: string }>;
+  contact_facturation: ClientFieldValue<{ name: string; email?: string; role?: string }>;
+  contact_it: ClientFieldValue<{ name: string; email?: string; role?: string }>;
   autres_parties_prenantes: ClientFieldValue<Array<{ name: string; email?: string; role?: string }>>;
   langues_requises: ClientFieldValue<string[]>;
   zones_geographiques: ClientFieldValue<string[]>;
@@ -98,6 +100,12 @@ export type FieldDefinition = {
   // (FR) — seul l'affichage est traduit, pour ne pas casser les données ni le
   // prompt d'extraction.
   optionLabels?: Record<string, string>;
+  // Champ obligatoire avant que l'AE puisse notifier l'AM/CS (handover). Vide ->
+  // surligné en ambre sur la fiche + envoi bloqué.
+  required?: boolean;
+  // Champ recommandé pour le handover (non bloquant). Vide -> indice discret +
+  // popup de confirmation avant l'envoi (l'AE peut valider quand même).
+  recommended?: boolean;
 };
 
 export const SECTION_DEFINITIONS: ReadonlyArray<{
@@ -110,11 +118,13 @@ export const SECTION_DEFINITIONS: ReadonlyArray<{
     label: "General information",
     fields: [
       { key: "entreprise_compte", label: "Company / account", kind: "text" },
-      { key: "contact_signataire", label: "Signatory contact", kind: "contact" },
-      { key: "contact_principal_rh", label: "Primary HR contact", kind: "contact" },
+      { key: "contact_signataire", label: "Signatory contact", kind: "contact", required: true },
+      { key: "contact_principal_rh", label: "Primary HR contact", kind: "contact", required: true },
       { key: "contact_rh_operationnel", label: "Operational HR contact", kind: "contact" },
-      { key: "autres_parties_prenantes", label: "Other stakeholders", kind: "array_contact" },
-      { key: "langues_requises", label: "Required languages", kind: "array_string" },
+      { key: "contact_facturation", label: "Billing contact", kind: "contact", required: true },
+      { key: "contact_it", label: "IT contact", kind: "contact", required: true },
+      { key: "autres_parties_prenantes", label: "Other stakeholders", kind: "array_contact", recommended: true },
+      { key: "langues_requises", label: "Required languages", kind: "array_string", recommended: true },
       { key: "zones_geographiques", label: "Geographic regions", kind: "array_string" },
     ],
   },
@@ -122,11 +132,11 @@ export const SECTION_DEFINITIONS: ReadonlyArray<{
     key: "program_scope",
     label: "Program scope",
     fields: [
-      { key: "type_coaching", label: "Coaching type", kind: "enum", options: ["humain", "ia", "hybride"] as const, optionLabels: { humain: "Human", ia: "AI", hybride: "Hybrid" } },
-      { key: "nom_programme", label: "Program name", kind: "text" },
-      { key: "population_accompagnee", label: "Target population", kind: "text" },
-      { key: "nb_coaches_estime", label: "Estimated number of coachees", kind: "number" },
-      { key: "cohortes_format", label: "Cohorts / format", kind: "text" },
+      { key: "type_coaching", label: "Coaching type", kind: "enum", options: ["humain", "ia", "hybride"] as const, optionLabels: { humain: "Human", ia: "AI", hybride: "Hybrid" }, required: true },
+      { key: "nom_programme", label: "Program name", kind: "text", required: true },
+      { key: "population_accompagnee", label: "Target population", kind: "text", required: true },
+      { key: "nb_coaches_estime", label: "Estimated number of coachees", kind: "number", recommended: true },
+      { key: "cohortes_format", label: "Cohorts / format", kind: "text", recommended: true },
       { key: "auto_assessment", label: "Auto-assessment", kind: "bool_with_details" },
       { key: "flash_feedback", label: "Flash feedback", kind: "bool_with_details" },
       { key: "tripartite", label: "Tripartite", kind: "bool_with_details" },
@@ -138,8 +148,8 @@ export const SECTION_DEFINITIONS: ReadonlyArray<{
     key: "goals",
     label: "Goals & expectations",
     fields: [
-      { key: "objectifs_business_rh", label: "Business / HR goals", kind: "array_string" },
-      { key: "kpis_cles", label: "Key KPIs", kind: "array_string" },
+      { key: "objectifs_business_rh", label: "Business / HR goals", kind: "array_string", recommended: true },
+      { key: "kpis_cles", label: "Key KPIs", kind: "array_string", recommended: true },
       { key: "attentes_specifiques", label: "Specific expectations", kind: "long_text" },
     ],
   },
@@ -147,7 +157,7 @@ export const SECTION_DEFINITIONS: ReadonlyArray<{
     key: "org",
     label: "Organization & integration",
     fields: [
-      { key: "integration_it", label: "IT integration (SSO, HRIS, Slack, …)", kind: "long_text" },
+      { key: "integration_it", label: "IT integration (SSO, HRIS, Slack, …)", kind: "long_text", recommended: true },
       { key: "referentiels_documents", label: "References & documents", kind: "array_doc" },
       { key: "contraintes_organisationnelles", label: "Organizational constraints", kind: "long_text" },
     ],
@@ -165,8 +175,8 @@ export const SECTION_DEFINITIONS: ReadonlyArray<{
     key: "planning",
     label: "Planning & next steps",
     fields: [
-      { key: "kickoff_envisage_le", label: "Planned kickoff date", kind: "date" },
-      { key: "suivi_cs_attendu", label: "Expected CS follow-up", kind: "array_string" },
+      { key: "kickoff_envisage_le", label: "Planned kickoff date", kind: "date", required: true },
+      { key: "suivi_cs_attendu", label: "Expected CS follow-up", kind: "array_string", recommended: true },
       { key: "engagements_sales", label: "Sales commitments", kind: "array_string" },
     ],
   },
@@ -369,6 +379,13 @@ export type ClientRow = {
   last_refreshed_at: string | null;
   last_refresh_report: RefreshReport | null;
   owner_notified_at: string | null;
+  // Handover AM/CS : l'AE assigne un Account Manager et un Customer Success et
+  // les notifie sur Slack une fois la fiche complète. Cf. notify-handover.ts.
+  am_email: string | null;
+  am_name: string | null;
+  cs_email: string | null;
+  cs_name: string | null;
+  am_cs_notified_at: string | null;
   billing: Billing | null;
   billing_refreshed_at: string | null;
   created_at: string;
@@ -385,4 +402,46 @@ export function emptyField<T>(): ClientFieldValue<T> {
     source: null,
     updated_at: new Date().toISOString(),
   };
+}
+
+// ── Champs requis / recommandés (handover AM/CS) ──────────────────────────
+// Source de vérité = flags `required`/`recommended` dans SECTION_DEFINITIONS.
+// Réutilisé côté client (panneau handover + surlignage) et serveur (garde-fou
+// de la route notify-handover).
+
+export type MissingFieldRef = { section: SectionKey; key: string; label: string };
+
+// Une valeur de field est "vide" si null/undefined, array vide, ou string vide.
+// Même logique que renderValue() dans field-display.tsx.
+function isFieldEmpty(field: unknown): boolean {
+  const value = (field as ClientFieldValue | undefined)?.value;
+  if (value === null || value === undefined) return true;
+  if (Array.isArray(value) && value.length === 0) return true;
+  if (typeof value === "string" && !value.trim()) return true;
+  return false;
+}
+
+function missingFieldsByFlag(
+  fields: Partial<ClientFields>,
+  flag: "required" | "recommended",
+): MissingFieldRef[] {
+  const missing: MissingFieldRef[] = [];
+  for (const section of SECTION_DEFINITIONS) {
+    const sectionData = (fields[section.key] ?? {}) as Record<string, unknown>;
+    for (const fieldDef of section.fields) {
+      if (!fieldDef[flag]) continue;
+      if (isFieldEmpty(sectionData[fieldDef.key])) {
+        missing.push({ section: section.key, key: fieldDef.key, label: fieldDef.label });
+      }
+    }
+  }
+  return missing;
+}
+
+export function getMissingRequiredFields(fields: Partial<ClientFields>): MissingFieldRef[] {
+  return missingFieldsByFlag(fields, "required");
+}
+
+export function getMissingRecommendedFields(fields: Partial<ClientFields>): MissingFieldRef[] {
+  return missingFieldsByFlag(fields, "recommended");
 }

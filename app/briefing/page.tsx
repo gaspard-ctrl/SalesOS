@@ -26,7 +26,6 @@ import { BriefingContext } from "./_components/briefing-context";
 import { BriefingDealSummary } from "./_components/briefing-deal-summary";
 import { BriefingTakeaways } from "./_components/briefing-takeaways";
 import { BriefingCompanyProfile } from "./_components/briefing-company-profile";
-import { BriefingCompanyLinkedin } from "./_components/briefing-company-linkedin";
 import { BriefingNews } from "./_components/briefing-news";
 import { BriefingPerson } from "./_components/briefing-person";
 
@@ -317,10 +316,6 @@ export default function BriefingPage() {
                       { label: `${rawData.gmailMessages.length} email${rawData.gmailMessages.length > 1 ? "s" : ""}`, active: rawData.gmailMessages.length > 0 },
                       { label: `${rawData.slackMessages.length} Slack`, active: rawData.slackMessages.length > 0 },
                       { label: `${rawData.webResults.length} web`, active: rawData.webResults.length > 0 },
-                      {
-                        label: `${(rawData.linkedinProfiles?.length ?? 0) + (rawData.linkedinCompany ? 1 : 0)} LinkedIn`,
-                        active: (rawData.linkedinProfiles?.length ?? 0) > 0 || !!rawData.linkedinCompany,
-                      },
                     ].map(({ label, active }) => (
                       <span
                         key={label}
@@ -370,7 +365,6 @@ export default function BriefingPage() {
                       <BriefingTakeaways takeaways={briefing!.meetingTakeaways} />
                     )}
                     <BriefingCompanyProfile briefing={briefing!} />
-                    <BriefingCompanyLinkedin briefing={briefing!} />
                     <BriefingNews briefing={briefing!} />
                     <div id="briefing-person-section">
                       <BriefingPerson briefing={briefing!} />

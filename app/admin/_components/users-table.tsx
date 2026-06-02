@@ -28,6 +28,7 @@ interface User {
   name: string | null;
   created_at: string;
   is_admin: boolean;
+  is_sales: boolean;
   claude_key_active: boolean;
   usageTotal: UsageStat;
   usageMonth: UsageStat;
@@ -36,6 +37,7 @@ interface User {
 export function UsersTable({ users }: { users: User[] }) {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [localUsers, setLocalUsers] = useState(users);
+  const [savingSales, setSavingSales] = useState<string | null>(null);
 
   const handleKeySaved = (userId: string) => {
     setLocalUsers((prev) =>
@@ -44,6 +46,25 @@ export function UsersTable({ users }: { users: User[] }) {
       )
     );
     setSelectedUser(null);
+  };
+
+  const toggleSales = async (user: User) => {
+    const next = !user.is_sales;
+    setSavingSales(user.id);
+    // Optimiste : on bascule tout de suite, on rollback si l'API échoue.
+    setLocalUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, is_sales: next } : u)));
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_sales: next }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      setLocalUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, is_sales: !next } : u)));
+    } finally {
+      setSavingSales(null);
+    }
   };
 
   return (
@@ -77,6 +98,13 @@ export function UsersTable({ users }: { users: User[] }) {
                 style={{ color: "#888" }}
               >
                 Clé Claude
+              </th>
+              <th
+                className="text-left px-4 py-3 font-medium"
+                style={{ color: "#888" }}
+                title="Reçoit le deal digest par AE sur Slack"
+              >
+                Sales
               </th>
               <th
                 className="text-left px-4 py-3 font-medium"
@@ -134,6 +162,37 @@ export function UsersTable({ users }: { users: User[] }) {
                   )}
                 </td>
                 <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleSales(user)}
+                    disabled={savingSales === user.id}
+                    role="switch"
+                    aria-checked={user.is_sales}
+                    title={user.is_sales ? "Reçoit le deal digest" : "Ne reçoit pas le deal digest"}
+                    className="inline-flex items-center transition-colors"
+                    style={{
+                      width: 38,
+                      height: 22,
+                      borderRadius: 999,
+                      padding: 2,
+                      background: user.is_sales ? "#16a34a" : "#e5e5e5",
+                      cursor: savingSales === user.id ? "wait" : "pointer",
+                      justifyContent: user.is_sales ? "flex-end" : "flex-start",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: 999,
+                        background: "#fff",
+                        display: "block",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+                      }}
+                    />
+                  </button>
+                </td>
+                <td className="px-4 py-3">
                   <span className="text-xs" style={{ color: "#555" }}>
                     {formatTokens(user.usageMonth.input + user.usageMonth.output)}
                   </span>
@@ -171,7 +230,7 @@ export function UsersTable({ users }: { users: User[] }) {
             {localUsers.length === 0 && (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="px-4 py-8 text-center text-sm"
                   style={{ color: "#aaa" }}
                 >

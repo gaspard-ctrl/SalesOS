@@ -17,7 +17,6 @@ export function useWatchCompanyDetail(id: string | null) {
     company: data?.company ?? null,
     prospects: data?.prospects ?? [],
     briefs: data?.briefs ?? EMPTY_BRIEFS,
-    signals_30d: data?.signals_30d ?? { count: 0, last_at: null },
     outreach_count: data?.outreach_count ?? 0,
     isLoading,
     error: data?.error ?? (fetchError instanceof Error ? fetchError.message : null),

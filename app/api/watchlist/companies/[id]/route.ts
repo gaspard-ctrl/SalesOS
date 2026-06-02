@@ -29,18 +29,14 @@ export interface WatchCompanyDetailResponse {
     ae_analysis: BriefRow<AeAnalysisContent> | null;
     news: BriefRow<NewsContent> | null;
   };
-  signals_30d: { count: number; last_at: string | null };
   outreach_count: number;
   error?: string;
 }
-
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 const EMPTY: Omit<WatchCompanyDetailResponse, "error"> = {
   company: null,
   prospects: [],
   briefs: { ae_analysis: null, news: null },
-  signals_30d: { count: 0, last_at: null },
   outreach_count: 0,
 };
 
@@ -69,33 +65,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ ...EMPTY, error: "Compte introuvable" }, { status: 404 });
   }
 
-  const sinceIso = new Date(Date.now() - THIRTY_DAYS_MS).toISOString();
-
-  const [briefs, signalsRes] = await Promise.all([
-    getBriefs(company.id),
-    db
-      .from("market_signals")
-      .select("created_at")
-      .eq("user_id", user.id)
-      .ilike("company_name", company.name)
-      .eq("archived", false)
-      .gte("created_at", sinceIso),
-  ]);
-
-  const signals = signalsRes.data ?? [];
-  const signals_30d = {
-    count: signals.length,
-    last_at: signals.reduce<string | null>(
-      (acc, s) => (acc == null || s.created_at > acc ? s.created_at : acc),
-      null,
-    ),
-  };
+  const briefs = await getBriefs(company.id);
 
   const response: WatchCompanyDetailResponse = {
     company,
     prospects: [],
     briefs,
-    signals_30d,
     outreach_count: 0,
   };
 

@@ -1,8 +1,8 @@
 import { searchTavily } from "../tavily";
 import type { News } from "./types";
 
-// News entreprise via Tavily — simple, agnostic, pas de dépendance Netrows
-// ni d'enrichissement Watchlist. On cherche les actualités récentes sur le
+// News entreprise via Tavily — simple, agnostic, pas d'enrichissement
+// Watchlist. On cherche les actualités récentes sur le
 // nom de la company + son industrie (si dispo) sur les 90 derniers jours.
 
 const MAX_RESULTS = 8;

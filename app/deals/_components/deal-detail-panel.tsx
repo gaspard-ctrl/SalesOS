@@ -956,7 +956,7 @@ export function DealDetailPanel({
             </Card>
           )}
 
-          {/* LinkedIn enrichment (Netrows) */}
+          {/* LinkedIn enrichment (Bright Data) */}
           {details.contacts.length > 0 && details.id && <DealLinkedinCard dealId={details.id} />}
 
           {/* News Tavily (signaux business) */}

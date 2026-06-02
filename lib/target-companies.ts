@@ -25,14 +25,6 @@ export async function getTargetRoles(): Promise<string[]> {
   return TARGET_ROLES;
 }
 
-export async function getAlertConfig(): Promise<{ enabled: boolean; slack_channel: string; min_score: number }> {
-  try {
-    const { data } = await db.from("guide_defaults").select("content").eq("key", "alert_config").single();
-    if (data?.content) return JSON.parse(data.content as string);
-  } catch { /* fallback */ }
-  return { enabled: true, slack_channel: "", min_score: 70 };
-}
-
 // ── Valeurs par défaut (fallback si DB vide) ──────────────────────────────
 
 export const TARGET_COMPANIES: string[] = [

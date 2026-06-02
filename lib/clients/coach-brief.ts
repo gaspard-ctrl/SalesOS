@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { logUsage } from "../log-usage";
 import { withAnthropicRetry } from "../anthropic-retry";
+import { getModelPreference } from "../models/get-model-preference";
 import { renderClientContextForPrompt, type ClientEnrichmentContext } from "./context";
 import type { CoachBrief } from "./types";
 
@@ -128,13 +129,14 @@ export async function generateCoachBrief(
 ): Promise<CoachBrief | null> {
   if (!process.env.ANTHROPIC_API_KEY) return null;
 
+  const model = await getModelPreference("clients", COACH_BRIEF_MODEL);
   const prompt = renderClientContextForPrompt(ctx);
 
   const client = new Anthropic({ timeout: 600_000 });
   const msg = await withAnthropicRetry(
     () =>
       client.messages.create({
-        model: COACH_BRIEF_MODEL,
+        model,
         max_tokens: 4000,
         system: COACH_BRIEF_SYSTEM_PROMPT,
         messages: [{ role: "user", content: prompt }],
@@ -144,7 +146,7 @@ export async function generateCoachBrief(
     { label: "clients/coach-brief" },
   );
 
-  logUsage(userId, COACH_BRIEF_MODEL, msg.usage.input_tokens, msg.usage.output_tokens, "clients_coach_brief");
+  logUsage(userId, model, msg.usage.input_tokens, msg.usage.output_tokens, "clients_coach_brief");
 
   const block = msg.content.find((b) => b.type === "tool_use");
   if (!block || !("input" in block)) return null;

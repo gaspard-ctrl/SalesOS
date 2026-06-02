@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { searchPeople } from "@/lib/netrows";
+import { searchPeople } from "@/lib/brightdata/linkedin";
+import { BRIGHTDATA_API_KEY } from "@/lib/brightdata/serp";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-interface NetrowsSearchBody {
+interface PeopleSearchBody {
   companies?: string[];
   jobTitles?: string[];
   count?: number;
 }
 
-interface NetrowsResultItem {
+interface PeopleResultItem {
   fullName: string;
   headline: string;
   username: string;
@@ -42,11 +43,11 @@ export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  if (!process.env.NETROWS_API_KEY) {
-    return NextResponse.json({ error: "Netrows non configuré" }, { status: 500 });
+  if (!BRIGHTDATA_API_KEY) {
+    return NextResponse.json({ error: "Bright Data non configuré" }, { status: 500 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as NetrowsSearchBody;
+  const body = (await req.json().catch(() => ({}))) as PeopleSearchBody;
   const companies = (body.companies ?? []).map((c) => c.trim()).filter(Boolean);
   const jobTitles = (body.jobTitles ?? []).map((t) => t.trim()).filter(Boolean);
   const targetCount = Math.max(1, Math.min(200, body.count ?? 30));
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest) {
         company: combo.company,
         keywordTitle: combo.keywordTitle,
       });
-      const items = (r.data?.items ?? []) as NetrowsResultItem[];
+      const items = (r.data?.items ?? []) as PeopleResultItem[];
       for (const item of items) {
         if (results.length >= targetCount) break;
         if (!item.username || seen.has(item.username)) continue;
@@ -98,10 +99,10 @@ export async function POST(req: NextRequest) {
         }
 
         results.push({
-          id: `netrows-${item.username}`,
+          id: `brightdata-${item.username}`,
           firstName,
           lastName,
-          email: "", // Netrows ne fournit pas d'email gratuitement
+          email: "", // La recherche LinkedIn ne fournit pas d'email — enrichir via HubSpot
           jobTitle: combo.keywordTitle ?? item.headline ?? "",
           company: extractedCompany,
           industry: "",
@@ -111,13 +112,11 @@ export async function POST(req: NextRequest) {
           lastContacted: "",
           leadStatus: "",
           employees: "",
-          source: "netrows",
+          source: "brightdata",
           linkedinUrl: item.profileURL ?? `https://www.linkedin.com/in/${item.username}/`,
           createdAt: "",
         });
       }
-      // Rate limit Netrows : ~1 req / 1.2s
-      await new Promise((r) => setTimeout(r, 1200));
     } catch (e) {
       errors.push({
         company: combo.company,

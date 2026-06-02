@@ -20,10 +20,18 @@
 // Rédaction : la catégorisation est déterministe (code), une couche LLM (Haiku)
 // par AE écrit juste l'intro et l'action courte de chaque deal (cf. polishWithAi).
 //
+// Périmètre deals : UNIQUEMENT le pipeline sales (1er pipeline HubSpot = celui du
+// Kanban /deals, surchargeable via DEALS_SALES_PIPELINE_ID). Les deals du pipeline
+// CS / onboarding sont exclus.
+//
+// Destinataires : UNIQUEMENT les users de la table `users` marqués is_sales=true
+// (toggle Sales dans /admin). Un owner HubSpot sans user sales actif est ignoré.
+//
 // Mode via env DÉDIÉ DEALS_AE_DIGEST_MODE (indépendant de SLACK_MODE) :
-//   - "test" (défaut) : tous les DM partent chez Arthur (CLAAP_NOTE_SLACK_TEST_USER),
-//     préfixés d'un header montrant l'AE qui recevrait en prod ;
-//   - "prod" : DM au vrai AE (users.slack_user_id -> email -> nom -> fallback Arthur).
+//   - "test" (défaut) : tous les DM (des owners sales) partent chez Arthur
+//     (CLAAP_NOTE_SLACK_TEST_USER), préfixés d'un header montrant l'AE cible ;
+//   - "prod" : DM au vrai AE (users.slack_user_id -> lookup par son email).
+//     Aucun fallback par nom ni vers Arthur en prod.
 //
 // Idempotence : on stamp (owner_id, run_date) dans deal_ae_digest_log et on ne
 // re-DM jamais un AE déjà notifié le même jour (un retour du cron ne double pas).
@@ -35,7 +43,6 @@ import { DEFAULT_SCORE_MODEL } from "../deal-scoring";
 import {
   dmRecipient,
   findArthurFallbackRecipient,
-  findSlackIdByDisplayName,
   lookupSlackIdByEmail,
 } from "../slack/lookup";
 
@@ -84,9 +91,27 @@ async function hubspot(path: string, method = "GET", body?: unknown) {
 
 type HsDeal = { id: string; properties: Record<string, string | null> };
 
-async function fetchOpenDeals(): Promise<HsDeal[]> {
+// Pipeline "sales" : on ne veut QUE les deals du pipeline sales (pas CS /
+// onboarding). Par défaut le 1er pipeline HubSpot (= celui du Kanban /deals),
+// surchargeable via DEALS_SALES_PIPELINE_ID.
+async function fetchSalesPipelineId(): Promise<string | null> {
+  if (process.env.DEALS_SALES_PIPELINE_ID) return process.env.DEALS_SALES_PIPELINE_ID;
+  try {
+    const data = await hubspot("/crm/v3/pipelines/deals");
+    return (data.results ?? [])[0]?.id ?? null;
+  } catch (e) {
+    console.warn("[ae-digest] fetchSalesPipelineId failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+async function fetchOpenDeals(pipelineId: string | null): Promise<HsDeal[]> {
   const deals: HsDeal[] = [];
   let after: string | undefined;
+  const filters: { propertyName: string; operator: string; value: string }[] = [
+    { propertyName: "hs_is_closed", operator: "EQ", value: "false" },
+  ];
+  if (pipelineId) filters.push({ propertyName: "pipeline", operator: "EQ", value: pipelineId });
   while (true) {
     const data = await hubspot("/crm/v3/objects/deals/search", "POST", {
       limit: 200,
@@ -99,7 +124,7 @@ async function fetchOpenDeals(): Promise<HsDeal[]> {
         "notes_last_contacted",
         "hs_lastmodifieddate",
       ],
-      filterGroups: [{ filters: [{ propertyName: "hs_is_closed", operator: "EQ", value: "false" }] }],
+      filterGroups: [{ filters }],
       sorts: [{ propertyName: "amount", direction: "DESCENDING" }],
     });
     for (const d of data.results ?? []) deals.push(d as HsDeal);
@@ -339,6 +364,10 @@ function renderMessage(args: {
 }
 
 // ─── Résolution du destinataire ───────────────────────────────────────────────
+// Strict : on n'envoie QU'À un user présent dans la table `users` ET marqué
+// `is_sales = true` (toggle Sales dans l'admin). Pas de fallback sur un lookup
+// par nom ni sur Arthur en prod : un owner HubSpot sans user sales actif est
+// ignoré (évite les DM aux gens partis / non-sales). cf [[project_hosting_netlify]]
 async function resolveRecipient(
   ownerId: string,
   owner: Owner | undefined,
@@ -346,27 +375,32 @@ async function resolveRecipient(
 ): Promise<{ memberId: string; label: string; firstName: string } | null> {
   const { data: u } = await db
     .from("users")
-    .select("slack_user_id, email, name")
+    .select("slack_user_id, email, name, is_sales")
     .eq("hubspot_owner_id", ownerId)
     .maybeSingle();
 
-  const email = owner?.email ?? (u?.email as string | null) ?? null;
-  const fullName = [owner?.firstName, owner?.lastName].filter(Boolean).join(" ").trim() || (u?.name as string | null) || null;
+  // Filtre dur : doit être un user sales actif.
+  if (!u || u.is_sales !== true) return null;
+
+  const email = (u.email as string | null) ?? owner?.email ?? null;
+  const fullName =
+    (u.name as string | null) ||
+    [owner?.firstName, owner?.lastName].filter(Boolean).join(" ").trim() ||
+    null;
   const firstName = owner?.firstName?.trim() || (fullName ? fullName.split(" ")[0] : null) || "there";
   const label = email || fullName || ownerId;
 
+  // En test, tout part chez Arthur (mais seulement pour les owners qui passent
+  // le filtre sales ci-dessus).
   if (mode === "test") {
     const arthur = await findArthurFallbackRecipient();
     return arthur ? { memberId: arthur.memberId, label, firstName } : null;
   }
 
-  let memberId: string | null = (u?.slack_user_id as string | null) ?? null;
+  // En prod : slack_user_id en cache, sinon lookup par l'email du user sales
+  // lui-même (sûr, ce n'est pas une heuristique de nom). Aucun fallback Arthur.
+  let memberId: string | null = (u.slack_user_id as string | null) ?? null;
   if (!memberId && email) memberId = await lookupSlackIdByEmail(email);
-  if (!memberId && fullName) memberId = await findSlackIdByDisplayName(fullName);
-  if (!memberId) {
-    const arthur = await findArthurFallbackRecipient();
-    memberId = arthur?.memberId ?? null;
-  }
   return memberId ? { memberId, label, firstName } : null;
 }
 
@@ -392,7 +426,12 @@ export async function buildAndSendAeDigests(): Promise<AeDigestResult> {
   const runDate = now.toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
   const dateLabel = now.toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
 
-  const [hsDeals, owners, stageLabels] = await Promise.all([fetchOpenDeals(), fetchOwners(), fetchStageLabels()]);
+  const salesPipelineId = await fetchSalesPipelineId();
+  const [hsDeals, owners, stageLabels] = await Promise.all([
+    fetchOpenDeals(salesPipelineId),
+    fetchOwners(),
+    fetchStageLabels(),
+  ]);
   const scores = await fetchScores(hsDeals.map((d) => d.id));
 
   // JOIN deals HubSpot × scores -> deals actionnables, groupés par owner.
@@ -449,8 +488,10 @@ export async function buildAndSendAeDigests(): Promise<AeDigestResult> {
     try {
       const recipient = await resolveRecipient(ownerId, owners.get(ownerId), mode);
       if (!recipient) {
-        errors++;
-        console.warn(`[ae-digest] no Slack recipient for owner ${ownerId}`);
+        // Owner non rattaché à un user sales actif (ou Slack introuvable) : on
+        // ignore silencieusement, ce n'est pas une erreur. cf flag is_sales.
+        skipped++;
+        console.log(`[ae-digest] owner ${ownerId} skipped (pas de user sales actif / Slack)`);
         continue;
       }
 

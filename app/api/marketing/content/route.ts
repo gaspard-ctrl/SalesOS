@@ -9,6 +9,7 @@ import { fetchAllArticles } from "@/lib/wordpress";
 import { classifyKeywords } from "@/lib/keyword-relevance";
 import { BUSINESS_CONTEXT_PROMPT_BLOCK } from "@/lib/business-context";
 import { runArticleGeneration } from "@/lib/marketing/generate-article";
+import { getModelPreference } from "@/lib/models/get-model-preference";
 import type { Keyword, KeywordRelevance } from "@/lib/marketing-types";
 
 const ANALYSIS_MODEL = "claude-haiku-4-5-20251001";
@@ -536,16 +537,17 @@ Rules:
 
 Call \`propose_content_gaps\`.`;
 
+  const model = await getModelPreference("marketing", ANALYSIS_MODEL);
   const client = new Anthropic();
   const message = await client.messages.create({
-    model: ANALYSIS_MODEL,
+    model,
     max_tokens: 2000,
     tools: [analysisTool],
     tool_choice: { type: "tool", name: "propose_content_gaps" },
     messages: [{ role: "user", content: prompt }],
   });
 
-  logUsage(userId, ANALYSIS_MODEL, message.usage.input_tokens, message.usage.output_tokens, "marketing_content_analyze");
+  logUsage(userId, model, message.usage.input_tokens, message.usage.output_tokens, "marketing_content_analyze");
 
   const toolUse = message.content.find((c) => c.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") {
@@ -704,16 +706,17 @@ ${keywordsText}
 
 Call the \`suggest_articles_on_theme\` tool with your output.`;
 
+  const model = await getModelPreference("marketing", ANALYSIS_MODEL);
   const client = new Anthropic();
   const message = await client.messages.create({
-    model: ANALYSIS_MODEL,
+    model,
     max_tokens: 3000,
     tools: [themeTool],
     tool_choice: { type: "tool", name: "suggest_articles_on_theme" },
     messages: [{ role: "user", content: prompt }],
   });
 
-  logUsage(userId, ANALYSIS_MODEL, message.usage.input_tokens, message.usage.output_tokens, "marketing_content_theme");
+  logUsage(userId, model, message.usage.input_tokens, message.usage.output_tokens, "marketing_content_theme");
 
   const toolUse = message.content.find((c) => c.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") {

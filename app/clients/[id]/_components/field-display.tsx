@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Pencil, Check, X } from "lucide-react";
+import { Pencil, Check, X, AlertTriangle } from "lucide-react";
 import { COLORS } from "@/lib/design/tokens";
 import type { ClientFieldSource, ClientFieldValue, FieldDefinition } from "@/lib/clients/types";
 
@@ -50,6 +50,27 @@ function renderSourceLabel(source: ClientFieldSource | null): string {
 
 function MissingValue() {
   return <span style={{ color: COLORS.ink4, fontStyle: "italic", fontSize: 13 }}>Not set</span>;
+}
+
+// Field clé vide (handover AM/CS) : ligne surlignée en jaune pour attirer l'œil,
+// mais non bloquant — l'AE peut notifier l'AM/CS sans l'avoir rempli.
+function HighlightedMissing() {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: COLORS.warn }}>
+      <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+      <span style={{ fontStyle: "italic", color: COLORS.ink4 }}>Not set</span>
+    </span>
+  );
+}
+
+// Field recommandé vide : indice discret, non bloquant.
+function RecommendedMissing() {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+      <span style={{ fontStyle: "italic", color: COLORS.ink4 }}>Not set</span>
+      <span style={{ fontSize: 11, color: COLORS.ink3 }}>· Recommended</span>
+    </span>
+  );
 }
 
 // ── Read-only rendering ──────────────────────────────────────────────────
@@ -594,6 +615,10 @@ export function FieldDisplay({
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canEdit = !!clientId && !!sectionKey && EDITABLE_KINDS.has(definition.kind);
+  // `required` ne bloque plus rien : c'est juste un champ clé qu'on surligne en
+  // jaune tant qu'il est vide (cf. handover). `recommended` = indice discret.
+  const isMissingHighlighted = !!definition.required && !hasValue;
+  const isMissingRecommended = !!definition.recommended && !hasValue;
 
   async function save(newValue: unknown) {
     if (!clientId || !sectionKey) return;
@@ -621,8 +646,12 @@ export function FieldDisplay({
         display: "grid",
         gridTemplateColumns: "200px 1fr auto",
         gap: 16,
-        padding: "10px 0",
+        padding: "10px 12px",
+        margin: "0 -12px",
         borderBottom: `1px solid ${COLORS.line}`,
+        borderLeft: isMissingHighlighted && !editing ? `3px solid ${COLORS.warn}` : "3px solid transparent",
+        background: isMissingHighlighted && !editing ? COLORS.warnBg : undefined,
+        borderRadius: isMissingHighlighted && !editing ? 6 : 0,
         alignItems: "flex-start",
       }}
       onDoubleClick={() => {
@@ -643,6 +672,10 @@ export function FieldDisplay({
               setError(null);
             }}
           />
+        ) : isMissingHighlighted ? (
+          <HighlightedMissing />
+        ) : isMissingRecommended ? (
+          <RecommendedMissing />
         ) : (
           renderValue(value, definition)
         )}

@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { withAnthropicRetry } from "../anthropic-retry";
 import { logUsage } from "../log-usage";
+import { getModelPreference } from "../models/get-model-preference";
 import type { News, NewsCategory } from "./types";
 
 // Tri/filtrage des news par Claude Haiku. Tavily renvoie jusqu'à 8 résultats
@@ -66,6 +67,8 @@ export async function rankClientNews(
 ): Promise<News["items"]> {
   if (items.length === 0 || !process.env.ANTHROPIC_API_KEY) return items;
 
+  const model = await getModelPreference("clients", NEWS_RANK_MODEL);
+
   const list = items
     .map((it, i) => {
       let host = "";
@@ -89,7 +92,7 @@ ${list}`;
     const msg = await withAnthropicRetry(
       () =>
         client.messages.create({
-          model: NEWS_RANK_MODEL,
+          model,
           max_tokens: 1500,
           messages: [{ role: "user", content: prompt }],
           tools: [RANK_NEWS_TOOL],
@@ -99,7 +102,7 @@ ${list}`;
     );
     logUsage(
       opts.userId ?? null,
-      NEWS_RANK_MODEL,
+      model,
       msg.usage.input_tokens,
       msg.usage.output_tokens,
       opts.feature ?? "clients_news_rank",

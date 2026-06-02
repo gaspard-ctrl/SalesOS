@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { logUsage } from "../log-usage";
 import { withAnthropicRetry } from "../anthropic-retry";
+import { getModelPreference } from "../models/get-model-preference";
 import { renderClientContextForPrompt, type ClientEnrichmentContext } from "./context";
 import type { DealRecap } from "./types";
 
@@ -123,13 +124,14 @@ export async function generateDealRecap(
 ): Promise<DealRecap | null> {
   if (!process.env.ANTHROPIC_API_KEY) return null;
 
+  const model = await getModelPreference("clients", DEAL_RECAP_MODEL);
   const prompt = renderClientContextForPrompt(ctx);
 
   const client = new Anthropic({ timeout: 600_000 });
   const msg = await withAnthropicRetry(
     () =>
       client.messages.create({
-        model: DEAL_RECAP_MODEL,
+        model,
         max_tokens: 4000,
         system: DEAL_RECAP_SYSTEM_PROMPT,
         messages: [{ role: "user", content: prompt }],
@@ -139,7 +141,7 @@ export async function generateDealRecap(
     { label: "clients/deal-recap" },
   );
 
-  logUsage(userId, DEAL_RECAP_MODEL, msg.usage.input_tokens, msg.usage.output_tokens, "clients_deal_recap");
+  logUsage(userId, model, msg.usage.input_tokens, msg.usage.output_tokens, "clients_deal_recap");
 
   const block = msg.content.find((b) => b.type === "tool_use");
   if (!block || !("input" in block)) return null;

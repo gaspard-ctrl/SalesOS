@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { getCompanyPosts } from "@/lib/netrows";
+import { getCompanyPosts } from "@/lib/brightdata/linkedin";
+import { BRIGHTDATA_API_KEY } from "@/lib/brightdata/serp";
 import { logUsage } from "@/lib/log-usage";
+import { getModelPreference } from "@/lib/models/get-model-preference";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -11,15 +13,15 @@ export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  if (!process.env.NETROWS_API_KEY) {
-    return NextResponse.json({ error: "Netrows non configuré" }, { status: 500 });
+  if (!BRIGHTDATA_API_KEY) {
+    return NextResponse.json({ error: "Bright Data non configuré" }, { status: 500 });
   }
 
   const body = (await req.json().catch(() => ({}))) as { username?: string; name?: string };
   if (!body.username) return NextResponse.json({ error: "username requis" }, { status: 400 });
 
   try {
-    const postsRes = await getCompanyPosts(body.username);
+    const postsRes = await getCompanyPosts(body.username, { timeoutMs: 18_000 });
     const posts = (postsRes.data ?? []).slice(0, 10);
     if (posts.length === 0) {
       return NextResponse.json({ error: "Aucun post à analyser" }, { status: 400 });
@@ -30,7 +32,7 @@ export async function POST(req: NextRequest) {
       .join("\n\n---\n\n");
 
     const client = new Anthropic();
-    const model = "claude-haiku-4-5-20251001";
+    const model = await getModelPreference("marketing", "claude-haiku-4-5-20251001");
     const message = await client.messages.create({
       model,
       max_tokens: 1500,

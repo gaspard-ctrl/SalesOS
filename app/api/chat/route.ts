@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { messages } = await req.json();
+  const { messages, betterThinking } = await req.json();
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
           userId: user.id,
           messages,
           onEvent: send,
+          betterThinking: betterThinking === true,
         });
       } catch (error) {
         if (error instanceof ChatAuthError) {
