@@ -14,6 +14,7 @@ import { fetchClientNews } from "./news";
 import { rankClientNews } from "./rank-news";
 import { computeHealth, computeInsights } from "./health";
 import { generateHealthSummary } from "./health-summary";
+import { generateInsightsAI } from "./insights-ai";
 import {
   SECTION_DEFINITIONS,
   type ClientFields,
@@ -203,7 +204,14 @@ export async function runClientRefresh(
 
     // ── Health : toujours recalculé ───────────────────────────────────────────
     const health = computeHealth(ctx, prevScore);
-    const insights = computeInsights(ctx, health);
+    // Reco IA (anglais, orientée closed-won), best-effort -> fallback règles EN.
+    const fieldsForInsights =
+      (updatePayload.fields_json as Partial<ClientFields>) ?? (row.fields_json ?? {});
+    const insights =
+      (await generateInsightsAI(ctx, health, fieldsForInsights, userId).catch((e) => {
+        console.warn(`[clients/refresh/${clientId}] AI insights failed:`, e instanceof Error ? e.message : e);
+        return null;
+      })) ?? computeInsights(ctx, health);
     health.summary = await generateHealthSummary(ctx, health, userId).catch((e) => {
       console.warn(`[clients/refresh/${clientId}] health summary failed:`, e instanceof Error ? e.message : e);
       return null;

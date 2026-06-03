@@ -7,9 +7,9 @@ export const dynamic = "force-dynamic";
 // GET /api/clients/list?owner=<email|all>
 //
 // Liste tous les clients (closed-won) connus de SalesOS. Par défaut on filtre
-// sur les clients dont l'owner_email matche l'email du user connecté ; pass
-// `owner=all` pour voir tout. La page UI utilise un toggle "Mes clients /
-// Tout le monde" en s'appuyant sur ça.
+// sur les clients "qui me concernent" : owner du deal OU AM/CS assigné lors du
+// handover. Pass `owner=all` pour voir tout. La page UI utilise un toggle
+// "Mes clients / Tout le monde" en s'appuyant sur ça.
 export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
@@ -20,15 +20,20 @@ export async function GET(req: NextRequest) {
   let query = db
     .from("clients")
     .select(
-      "id, hubspot_deal_id, hubspot_company_id, company_name, owner_email, owner_name, closedwon_at, deal_amount, health, enrichment_status, enrichment_error, last_enriched_at, am_cs_notified_at, created_at",
+      "id, hubspot_deal_id, hubspot_company_id, company_name, owner_email, owner_name, am_email, am_name, cs_email, cs_name, closedwon_at, deal_amount, billing, health, enrichment_status, enrichment_error, last_enriched_at, am_cs_notified_at, created_at",
     )
     .order("closedwon_at", { ascending: false, nullsFirst: false });
 
   if (ownerParam !== "all") {
-    // Owner par défaut : l'utilisateur connecté (filtre sur owner_email).
-    // Si owner=<email> est passé explicitement, on l'utilise tel quel.
+    // Email de référence : l'utilisateur connecté par défaut, ou owner=<email>
+    // s'il est passé explicitement. On inclut un client si cet email est soit
+    // l'owner du deal, soit l'AM, soit le CS assigné lors du handover.
     const ownerEmail = ownerParam || user.email;
-    if (ownerEmail) query = query.eq("owner_email", ownerEmail);
+    if (ownerEmail) {
+      query = query.or(
+        `owner_email.eq.${ownerEmail},am_email.eq.${ownerEmail},cs_email.eq.${ownerEmail}`,
+      );
+    }
   }
 
   const { data, error } = await query;

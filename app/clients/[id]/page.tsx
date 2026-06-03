@@ -4,9 +4,9 @@ import { use, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ExternalLink, AlertTriangle, Loader2, Sparkles, Clock, Trash2, RefreshCw, Search, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, AlertTriangle, Loader2, Sparkles, Clock, Trash2, RefreshCw, Search, CheckCircle2, MailPlus, ListChecks } from "lucide-react";
 import { COLORS } from "@/lib/design/tokens";
-import type { ClientRow } from "@/lib/clients/types";
+import { getMissingHubspotFields, mergeOnboardingItems, type ClientRow } from "@/lib/clients/types";
 import { useUserMe } from "@/lib/hooks/use-user-me";
 import { HealthBadge } from "../_components/health-badge";
 import { FieldsSection } from "./_components/fields-section";
@@ -19,6 +19,9 @@ import { RefreshReportPanel } from "./_components/refresh-report-panel";
 import { BillingPanel } from "./_components/billing-panel";
 import { MeetingConfirmationModal } from "./_components/meeting-confirmation-modal";
 import { HandoverPanel } from "./_components/handover-panel";
+import { HubspotChecklistPanel } from "./_components/hubspot-checklist-panel";
+import { OnboardingChecklistPanel } from "./_components/onboarding-checklist-panel";
+import { MissingInfoEmailModal } from "./_components/missing-info-email-modal";
 
 const HUBSPOT_PORTAL_ID = process.env.NEXT_PUBLIC_HUBSPOT_PORTAL_ID;
 
@@ -43,6 +46,9 @@ function fmtAmount(n: number | null): string {
   return `€${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k`;
 }
 
+// Destinataire de l'email "infos manquantes" : signataire en priorite, sinon
+// contact RH principal / operationnel. Meme logique que la route draft (cf.
+// draft-missing-info-email/route.ts pickContact). Nom prefere, sinon email.
 function StatusBanner({ client, onConfirmMeetings }: { client: ClientRow; onConfirmMeetings: () => void }) {
   if (client.enrichment_status === "awaiting_meetings") {
     return (
@@ -159,6 +165,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   const [deleting, setDeleting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
   // Distingue une fermeture "confirmée" (on reste sur la fiche, l'enrichissement
   // démarre) d'une fermeture "abandon" (on renvoie vers la liste, cf. gate).
   const confirmedMeetings = useRef(false);
@@ -220,6 +227,23 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       setTriggerError(e instanceof Error ? e.message : "Error");
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  async function restoreOnboarding() {
+    try {
+      const res = await fetch(`/api/clients/${id}/onboarding`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dismissed: false }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      await mutate();
+    } catch (e) {
+      setTriggerError(e instanceof Error ? e.message : "Error");
     }
   }
 
@@ -366,6 +390,52 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           {client.enrichment_status === "done" && (
             <button
               type="button"
+              onClick={() => setEmailModalOpen(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 12,
+                fontWeight: 500,
+                padding: "6px 12px",
+                borderRadius: 8,
+                border: `1px solid ${COLORS.line}`,
+                background: COLORS.bgCard,
+                color: COLORS.ink1,
+                cursor: "pointer",
+              }}
+              title="Draft an email asking the contact for the missing info (review before sending)."
+            >
+              <MailPlus size={12} />
+              Draft a mail to request missing info
+            </button>
+          )}
+          {client.enrichment_status === "done" && client.onboarding_checklist?.dismissed && (
+            <button
+              type="button"
+              onClick={restoreOnboarding}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 12,
+                fontWeight: 500,
+                padding: "6px 12px",
+                borderRadius: 8,
+                border: `1px solid ${COLORS.line}`,
+                background: COLORS.bgCard,
+                color: COLORS.ink1,
+                cursor: "pointer",
+              }}
+              title="Bring back the onboarding checklist for this account."
+            >
+              <ListChecks size={12} />
+              Show onboarding
+            </button>
+          )}
+          {client.enrichment_status === "done" && (
+            <button
+              type="button"
               onClick={triggerRefresh}
               disabled={refreshing}
               style={{
@@ -450,55 +520,15 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       )}
 
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 1100, margin: "0 auto" }}>
-          <StatusBanner client={client} onConfirmMeetings={() => setConfirmOpen(true)} />
-
-          {/* Handover : assigner AM/CS, valider les champs requis, les notifier sur Slack */}
-          <HandoverPanel client={client} fields={client.fields_json ?? {}} onUpdated={() => void mutate()} />
-
-          {/* Petit point du dernier refresh incrémental (bouton Actualiser / cron) */}
-          <RefreshReportPanel report={client.last_refresh_report} />
-
-          {/* Recap deal — comment ce deal a été signé */}
-          <DealRecapPanel recap={client.deal_recap} clientId={client.id} onUpdated={() => void mutate()} />
-
-          {/* Brief coachs — généré pendant l'enrichissement, copy-paste vers Slack */}
-          <CoachBriefPanel
-            brief={client.coach_brief ?? null}
-            generatedAt={client.coach_brief_generated_at ?? null}
-            companyName={client.company_name}
-            clientId={client.id}
-            onUpdated={() => void mutate()}
-          />
-
-          {/* Health + Actions priorisées */}
-          <HealthPanel health={client.health} insights={client.insights} clientId={client.id} onUpdated={() => void mutate()} />
-
-          {/* Contexte facturation (onglet Historique du fichier revenue) */}
-          <BillingPanel
-            billing={client.billing}
-            refreshedAt={client.billing_refreshed_at}
-            clientId={client.id}
-            onUpdated={() => void mutate()}
-          />
-
-          {/* Sections de fields — éditables inline (double-clic ou icône crayon) */}
-          <FieldsSection
-            fields={client.fields_json ?? {}}
-            clientId={client.id}
-            onUpdated={() => void mutate()}
-          />
-
-          {/* News entreprise (Tavily, 90 derniers jours) */}
-          <NewsPanel news={client.news} />
-
-          {/* Timeline meetings — analysés (sales_coach_analyses) + découverts (Claap discovery) */}
-          <TimelinePanel
-            meetings={meetings}
-            discoveredRecordings={client.discovered_claap_recordings ?? []}
-          />
-        </div>
+        <ClientBody
+          client={client}
+          meetings={meetings}
+          onUpdated={() => void mutate()}
+          onConfirmMeetings={() => setConfirmOpen(true)}
+        />
       </div>
+
+      {emailModalOpen && <MissingInfoEmailModal clientId={client.id} onClose={() => setEmailModalOpen(false)} />}
 
       {confirmOpen && (
         <MeetingConfirmationModal
@@ -527,6 +557,82 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           }}
         />
       )}
+    </div>
+  );
+}
+
+// Corps de la fiche. Layout conditionnel : tant qu'une checklist d'action reste
+// à compléter (champs HubSpot manquants OU items onboarding non cochés), on
+// affiche 2 colonnes (actions à gauche, contenu à droite). Une fois les deux
+// checklists terminées, la colonne gauche disparaît et le contenu se recentre
+// en une seule colonne (layout d'origine).
+function ClientBody({
+  client,
+  meetings,
+  onUpdated,
+  onConfirmMeetings,
+}: {
+  client: ClientRow;
+  meetings: ClientMeeting[];
+  onUpdated: () => void;
+  onConfirmMeetings: () => void;
+}) {
+  // Les checklists d'action n'ont de sens qu'une fois la fiche enrichie.
+  const enriched = client.enrichment_status === "done";
+  const hasMissingHubspot = getMissingHubspotFields(client.hubspot_deal_fields).length > 0;
+  const onboardingDismissed = client.onboarding_checklist?.dismissed === true;
+  const onboardingItems = mergeOnboardingItems(client.onboarding_checklist ?? null);
+  const hasPendingOnboarding = !onboardingDismissed && onboardingItems.some((i) => !i.done);
+  const leftVisible = enriched && (hasMissingHubspot || hasPendingOnboarding);
+
+  const rightColumn = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <StatusBanner client={client} onConfirmMeetings={onConfirmMeetings} />
+      <HandoverPanel client={client} fields={client.fields_json ?? {}} onUpdated={onUpdated} />
+      <HealthPanel health={client.health} insights={client.insights} clientId={client.id} onUpdated={onUpdated} />
+      <RefreshReportPanel report={client.last_refresh_report} />
+      <DealRecapPanel recap={client.deal_recap} clientId={client.id} onUpdated={onUpdated} />
+      <CoachBriefPanel
+        brief={client.coach_brief ?? null}
+        generatedAt={client.coach_brief_generated_at ?? null}
+        companyName={client.company_name}
+        clientId={client.id}
+        onUpdated={onUpdated}
+      />
+      <BillingPanel
+        billing={client.billing}
+        refreshedAt={client.billing_refreshed_at}
+        clientId={client.id}
+        onUpdated={onUpdated}
+      />
+      <FieldsSection fields={client.fields_json ?? {}} clientId={client.id} onUpdated={onUpdated} />
+      <NewsPanel news={client.news} />
+      <TimelinePanel meetings={meetings} discoveredRecordings={client.discovered_claap_recordings ?? []} />
+    </div>
+  );
+
+  // Les deux checklists terminées : colonne unique centrée (layout d'origine).
+  if (!leftVisible) {
+    return <div style={{ maxWidth: 1100, margin: "0 auto" }}>{rightColumn}</div>;
+  }
+
+  // 2 colonnes pleine largeur : actions à gauche (colonne large mais bornée),
+  // contenu à droite qui prend tout le reste.
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(360px, 460px) minmax(0, 1fr)",
+        gap: 20,
+        width: "100%",
+        alignItems: "start",
+      }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        <OnboardingChecklistPanel client={client} onUpdated={onUpdated} />
+        <HubspotChecklistPanel client={client} onUpdated={onUpdated} />
+      </div>
+      {rightColumn}
     </div>
   );
 }

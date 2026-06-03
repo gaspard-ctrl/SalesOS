@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { fetchHubspotDealFields } from "@/lib/clients/hubspot-fields";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +79,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     recap_summary: m.meeting_recap?.summary ?? null,
     score_global: m.score_global,
   }));
+
+  // Checklist HubSpot : on lit en live les valeurs courantes des champs de
+  // qualification surveilles pour deriver "rempli vs manquant". Best-effort,
+  // uniquement une fois le client enrichi (avant, la fiche n'a pas de checklist).
+  if (data.enrichment_status === "done" && data.hubspot_deal_id) {
+    data.hubspot_deal_fields = await fetchHubspotDealFields(data.hubspot_deal_id);
+  }
 
   return NextResponse.json({ client: data, meetings: safeMeetings });
 }

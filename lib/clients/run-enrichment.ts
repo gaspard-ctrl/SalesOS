@@ -17,7 +17,10 @@ import { rankClientNews } from "./rank-news";
 import { getBillingForClient } from "../billing/google-sheet";
 import { computeHealth, computeInsights } from "./health";
 import { generateHealthSummary } from "./health-summary";
+import { generateInsightsAI } from "./insights-ai";
 import { notifyOwnerOfEnrichedClient } from "./notify-owner";
+import { generateHubspotSuggestions } from "./hubspot-suggestions";
+import type { ClientFields } from "./types";
 
 export type RunEnrichmentResult =
   | { ok: true; alreadyDone?: boolean }
@@ -153,12 +156,30 @@ export async function runClientEnrichment(
       return null;
     });
 
-    const [msg, coachBrief, dealRecap, news, billing] = await Promise.all([
+    // Suggestions de remplissage des champs HubSpot vides (checklist colonne
+    // gauche), generees d'office pour qu'elles soient pretes a l'ouverture de la
+    // fiche sans clic sur "Analyze". Best-effort : un echec ne casse pas
+    // l'enrichissement. Tourne en parallele (Haiku ~15s) -> n'ajoute pas de
+    // temps mur. On reutilise le contexte deal deja construit (HubSpot + Claap).
+    const hubspotSuggestionsPromise = generateHubspotSuggestions(
+      row.hubspot_deal_id,
+      contextPrompt,
+      userId,
+    ).catch((e) => {
+      console.warn(
+        `[clients/enrich/${clientId}] hubspot suggestions failed:`,
+        e instanceof Error ? e.message : e,
+      );
+      return null;
+    });
+
+    const [msg, coachBrief, dealRecap, news, billing, hubspotSuggestions] = await Promise.all([
       fieldsPromise,
       briefPromise,
       recapPromise,
       newsPromise,
       billingPromise,
+      hubspotSuggestionsPromise,
     ]);
 
     logUsage(userId, clientsModel, msg.usage.input_tokens, msg.usage.output_tokens, "clients_enrich_fields");
@@ -204,6 +225,11 @@ export async function runClientEnrichment(
       updatePayload.billing = billing;
       updatePayload.billing_refreshed_at = new Date().toISOString();
     }
+    // Suggestions HubSpot : persiste meme une liste vide (aucun champ manquant),
+    // ca evite de re-generer a l'ouverture et marque que la passe a eu lieu.
+    if (hubspotSuggestions) {
+      updatePayload.hubspot_field_suggestions = hubspotSuggestions.suggestions;
+    }
 
     // Persiste les recordings Claap découverts (non indexés dans
     // sales_coach_analyses) pour que la timeline UI les affiche. Sans ça
@@ -227,7 +253,16 @@ export async function runClientEnrichment(
         ? Number((row.health as { score?: unknown }).score)
         : null;
     const health = computeHealth(ctx, Number.isFinite(previousScore) ? previousScore : null);
-    const insights = computeInsights(ctx, health);
+    // Reco IA (anglais, orientée closed-won), best-effort -> fallback règles EN.
+    const fieldsForInsights = (updatePayload.fields_json as Partial<ClientFields>) ?? {};
+    const insights =
+      (await generateInsightsAI(ctx, health, fieldsForInsights, userId).catch((e) => {
+        console.warn(
+          `[clients/enrich/${clientId}] AI insights failed:`,
+          e instanceof Error ? e.message : e,
+        );
+        return null;
+      })) ?? computeInsights(ctx, health);
 
     // Phrase d'explication du score, ancrée sur les derniers échanges. Séquentiel
     // (après Promise.all) car elle a besoin du score/label déjà calculés.
