@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { db } from "@/lib/db";
 import { backfillClosedWonDeals } from "@/lib/clients/backfill";
 import { triggerPrepareMeetings } from "@/lib/clients/trigger-prepare";
 
@@ -17,11 +16,6 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-
-  const { data: userRow } = await db.from("users").select("is_admin").eq("id", user.id).single();
-  if (!userRow?.is_admin) {
-    return NextResponse.json({ error: "Admin requis" }, { status: 403 });
-  }
 
   let dealIds: string[] = [];
   try {

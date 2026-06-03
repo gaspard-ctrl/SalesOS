@@ -78,40 +78,40 @@ function scoreFromSignals(s: SignalContext): { score: number; drivers: string[] 
   if (daysSinceLastContact !== null) {
     if (daysSinceLastContact <= 14) {
       score += 20;
-      drivers.push(`Contact récent (${daysSinceLastContact}j)`);
+      drivers.push(`Recent contact (${daysSinceLastContact}d)`);
     } else if (daysSinceLastContact <= 45) {
       score += 5;
-      drivers.push(`Dernier contact il y a ${daysSinceLastContact}j`);
+      drivers.push(`Last contact ${daysSinceLastContact}d ago`);
     } else if (daysSinceLastContact <= 90) {
       score -= 10;
-      drivers.push(`Silence de ${daysSinceLastContact}j sur le compte`);
+      drivers.push(`${daysSinceLastContact}d of silence on the account`);
     } else {
       score -= 25;
-      drivers.push(`Silence prolongé (${daysSinceLastContact}j) — risque élevé`);
+      drivers.push(`Prolonged silence (${daysSinceLastContact}d) — high risk`);
     }
   } else {
     score -= 15;
-    drivers.push("Aucun engagement ni meeting connu");
+    drivers.push("No known engagement or meeting");
   }
 
   // ── Meetings dans les 90 derniers jours
   if (s.meetingsLast90 >= 3) {
     score += 15;
-    drivers.push(`${s.meetingsLast90} meetings sur 90j — engagement soutenu`);
+    drivers.push(`${s.meetingsLast90} meetings in 90d — sustained engagement`);
   } else if (s.meetingsLast90 === 2) {
     score += 5;
   } else if (s.meetingsLast90 === 1) {
     score -= 5;
-    drivers.push("Un seul meeting analysé sur 90j");
+    drivers.push("Only one meeting analyzed in 90d");
   } else {
     score -= 15;
-    drivers.push("Aucun meeting Claap sur les 90 derniers jours");
+    drivers.push("No Claap meeting in the last 90 days");
   }
 
   // ── Volume d'engagements (proxy d'activité)
   if (s.engagementsLast30 >= 5) {
     score += 10;
-    drivers.push(`${s.engagementsLast30} échanges (emails/calls/notes) sur 30j`);
+    drivers.push(`${s.engagementsLast30} interactions (emails/calls/notes) in 30d`);
   } else if (s.engagementsLast30 === 0) {
     score -= 5;
   }
@@ -119,7 +119,7 @@ function scoreFromSignals(s: SignalContext): { score: number; drivers: string[] 
   // ── Couverture contacts (champion fragile = peu de contacts mappés)
   if (s.contactsCount === 0) {
     score -= 5;
-    drivers.push("Aucun contact HubSpot associé — visibilité limitée");
+    drivers.push("No associated HubSpot contact — limited visibility");
   } else if (s.contactsCount >= 3) {
     score += 5;
   }
@@ -175,15 +175,15 @@ export function computeInsights(ctx: ClientEnrichmentContext, health: Health): I
   if (health.label === "red") {
     if (daysSinceLastContact !== null && daysSinceLastContact > 60) {
       actions.push({
-        title: "Reprendre contact immédiatement",
-        rationale: `Silence de ${daysSinceLastContact}j — risque de churn élevé.`,
+        title: "Re-engage immediately",
+        rationale: `${daysSinceLastContact}d of silence — high churn risk.`,
         priority: "high",
       });
     }
     if (s.meetingsLast90 === 0) {
       actions.push({
-        title: "Planifier un point QBR / adoption",
-        rationale: "Aucun meeting CS analysé sur les 90 derniers jours.",
+        title: "Schedule a QBR / adoption review",
+        rationale: "No CS meeting analyzed in the last 90 days.",
         priority: "high",
       });
     }
@@ -192,15 +192,15 @@ export function computeInsights(ctx: ClientEnrichmentContext, health: Health): I
   if (health.label === "yellow") {
     if (daysSinceLastContact !== null && daysSinceLastContact > 30) {
       actions.push({
-        title: "Envoyer un check-in",
-        rationale: `Dernier échange il y a ${daysSinceLastContact}j.`,
+        title: "Send a check-in",
+        rationale: `Last exchange ${daysSinceLastContact}d ago.`,
         priority: "medium",
       });
     }
     if (s.meetingsLast90 < 2) {
       actions.push({
-        title: "Planifier une session de feedback",
-        rationale: "Le rythme d'échanges baisse, capter le ressenti.",
+        title: "Schedule a feedback session",
+        rationale: "Exchange cadence is dropping — capture how they feel.",
         priority: "medium",
       });
     }
@@ -208,25 +208,25 @@ export function computeInsights(ctx: ClientEnrichmentContext, health: Health): I
 
   if (s.contactsCount <= 1) {
     actions.push({
-      title: "Identifier un sponsor de backup",
-      rationale: "Un seul contact mappé côté HubSpot — champion fragile.",
+      title: "Identify a backup sponsor",
+      rationale: "Only one contact mapped in HubSpot — fragile champion.",
       priority: "medium",
     });
   }
 
   if (s.meetingsLast90 >= 3 && health.label === "green") {
     actions.push({
-      title: "Documenter le bon pattern",
-      rationale: `${s.meetingsLast90} meetings sur 90j et compte healthy — bonne pratique à formaliser.`,
+      title: "Document the winning pattern",
+      rationale: `${s.meetingsLast90} meetings in 90d on a healthy account — best practice worth formalizing.`,
       priority: "low",
     });
   }
 
   // Observations
-  if (s.totalEngagements > 30) observations.push(`Compte mature : ${s.totalEngagements} engagements HubSpot.`);
-  if (s.totalMeetings > 5) observations.push(`${s.totalMeetings} meetings analysés sur l'historique du deal.`);
+  if (s.totalEngagements > 30) observations.push(`Mature account: ${s.totalEngagements} HubSpot engagements.`);
+  if (s.totalMeetings > 5) observations.push(`${s.totalMeetings} meetings analyzed across the deal history.`);
   if (s.daysSinceLastMeeting !== null && s.daysSinceLastMeeting < 7) {
-    observations.push(`Meeting récent (${s.daysSinceLastMeeting}j) — moment opportun pour itérer.`);
+    observations.push(`Recent meeting (${s.daysSinceLastMeeting}d ago) — good moment to iterate.`);
   }
 
   return {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { COLORS } from "@/lib/design/tokens";
 import { HealthBadge } from "./health-badge";
-import type { Health } from "@/lib/clients/types";
+import type { Health, Billing } from "@/lib/clients/types";
 
 export type ClientListItem = {
   id: string;
@@ -14,6 +14,7 @@ export type ClientListItem = {
   owner_name: string | null;
   closedwon_at: string;
   deal_amount: number | null;
+  billing: Billing | null;
   health: Health | null;
   enrichment_status: "pending" | "awaiting_meetings" | "running" | "done" | "error";
   enrichment_error: string | null;
@@ -106,7 +107,7 @@ export function ClientsTable({ clients }: { clients: ClientListItem[] }) {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(200px, 2fr) minmax(140px, 1fr) 110px 130px 140px 100px",
+          gridTemplateColumns: "minmax(200px, 2fr) minmax(140px, 1fr) 120px 120px 130px 140px 100px",
           gap: 12,
           padding: "10px 16px",
           background: COLORS.bgSoft,
@@ -120,7 +121,8 @@ export function ClientsTable({ clients }: { clients: ClientListItem[] }) {
       >
         <div>Compte</div>
         <div>Owner</div>
-        <div>Montant</div>
+        <div>Montant HubSpot</div>
+        <div>Montant billé</div>
         <div>Signé le</div>
         <div>Health</div>
         <div>Statut</div>
@@ -131,7 +133,7 @@ export function ClientsTable({ clients }: { clients: ClientListItem[] }) {
           href={`/clients/${c.id}`}
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(200px, 2fr) minmax(140px, 1fr) 110px 130px 140px 100px",
+            gridTemplateColumns: "minmax(200px, 2fr) minmax(140px, 1fr) 120px 120px 130px 140px 100px",
             gap: 12,
             padding: "12px 16px",
             borderBottom: `1px solid ${COLORS.line}`,
@@ -171,6 +173,9 @@ export function ClientsTable({ clients }: { clients: ClientListItem[] }) {
           </div>
           <div style={{ fontSize: 12, color: COLORS.ink1, fontVariantNumeric: "tabular-nums" }}>
             {fmtAmount(c.deal_amount)}
+          </div>
+          <div style={{ fontSize: 12, color: COLORS.ink1, fontVariantNumeric: "tabular-nums" }}>
+            {fmtAmount(c.billing?.total_contract_value ?? null)}
           </div>
           <div style={{ fontSize: 12, color: COLORS.ink1, fontVariantNumeric: "tabular-nums" }}>
             {fmtDate(c.closedwon_at)}

@@ -345,6 +345,219 @@ export type ConfirmedRecording = {
   added_manually: boolean;
 };
 
+// ── Checklist HubSpot (colonne gauche de la fiche) ────────────────────────
+// Champs du deal HubSpot qu'on surveille et qu'on propose de remplir quand ils
+// sont vides apres le closed-won. Source de verite unique : ajouter une entree
+// ici suffit a la faire apparaitre dans la checklist (fetch GET + suggestion IA
+// + ecriture). Les `property` / `type` / `options` proviennent directement de
+// l'API HubSpot (deal properties de ce portail) -> "Valider" ecrit une valeur
+// toujours valide (pour les enums, la valeur ecrite est une option valide).
+export type HubspotFieldType = "string" | "number" | "date" | "enumeration";
+export type HubspotFieldOption = { value: string; label: string };
+export type HubspotChecklistFieldDef = {
+  property: string;
+  label: string;
+  type: HubspotFieldType;
+  // Groupe d'affichage (calque les cards de la fiche deal HubSpot).
+  group: "qualification" | "deal_info" | "general_info" | "contract_billing";
+  options?: readonly HubspotFieldOption[];
+};
+
+// Helper : option ou value === label.
+const o = (v: string, l?: string): HubspotFieldOption => ({ value: v, label: l ?? v });
+
+export const HUBSPOT_CHECKLIST_FIELDS: readonly HubspotChecklistFieldDef[] = [
+  // ── Qualification (card "About this deal") ──
+  { property: "dealtype", label: "Deal Type", type: "enumeration", group: "qualification", options: [o("newbusiness", "New Business"), o("existingbusiness", "Existing Business")] },
+  { property: "project_type", label: "Project Type", type: "enumeration", group: "qualification", options: [o("Generic Deal"), o("Human Coaching Deal"), o("AI Coaching Deal")] },
+  { property: "amount", label: "Amount", type: "number", group: "qualification" },
+  { property: "estimated_budget", label: "Estimated budget", type: "number", group: "qualification" },
+  { property: "closedate", label: "Close Date", type: "date", group: "qualification" },
+  { property: "authority", label: "Authority", type: "enumeration", group: "qualification", options: [o("Décideur identifié et accessible"), o("Décideur identifié mais non accessible"), o("Influenceur ou prescripteur uniquement"), o("Comité de décision / plusieurs acteurs"), o("Autorité inconnue / à identifier")] },
+  { property: "champion", label: "Champion", type: "enumeration", group: "qualification", options: [o("Identified decision-maker sponsor + active internal champion"), o("Sponsor identified but low level of commitment"), o("Champion identified but no sponsor confirmed"), o("Partial authority / unmapped committee"), o("Unknown authority / unclear"), o("Executive Sponsor + HR + Early Procurement Approval"), o("HR sponsor identified"), o("Junior HR / without executive sponsorship"), o("Designated L&D or Digital Sponsor"), o("Business + IT sponsor involved"), o("Innovation only without industry sponsorship")] },
+  { property: "budget_confirmed", label: "Budget", type: "enumeration", group: "qualification", options: [o("Approved budget / existing budget line"), o("Budget identified but not approved"), o("The budget depends on a business case or pilot project"), o("Exploration without a budget"), o("Budget test / probable pilot"), o("No budget planned"), o("Approved budget + established procurement process"), o("Budget approved without a clear process"), o("Estimated budget"), o("No budget / Budget rejected"), o("Innovation budget approved")] },
+  { property: "need", label: "Need", type: "enumeration", group: "qualification", options: [o("Critical Business Need", "Quantified business pain (turnover, performance, M&A, etc.)"), o("Interest in innovation / exploration"), o("Clear but unquantified strategic pain"), o("Program related to strategic transformation (M&A, restructuring, executive alignment)"), o("Structured Leadership Program"), o("Individual request / one-time request"), o("Immediate operational use cases (feedback, performance reviews, M&A, restructuring)"), o("Need a scale post-training"), o("Interest in AI research"), o("Nice to Have / Simple curiosity")] },
+  { property: "needs", label: "Need detailed", type: "string", group: "qualification" },
+  { property: "timeline", label: "Timeline", type: "enumeration", group: "qualification", options: [o("Moins de 1 mois", "Decision confirmed by sponsor <1 month"), o("1-3 mois", "1-3 months with next step planned"), o("3-6 mois", "3-6 months structured"), o("+6 mois", ">6 months or unclear")] },
+  { property: "stategic_fit", label: "Strategic Fit", type: "enumeration", group: "qualification", options: [o("Mid-market"), o("Not ICP or weak expansion potential"), o("Single BU"), o("One shot / isolated test"), o("Enterprise multi-entity")] },
+  { property: "hs_next_step", label: "Next step", type: "string", group: "qualification" },
+  // ── Deal information ──
+  { property: "integration", label: "Integration", type: "enumeration", group: "deal_info", options: [o("Slack"), o("Teams"), o("None")] },
+  { property: "number_of_credits", label: "Number of credits", type: "number", group: "deal_info" },
+  { property: "challenges", label: "Challenges", type: "enumeration", group: "deal_info", options: [o("Development of high potentials talents"), o("Transformation of organizations"), o("Leadership Development"), o("Women Leadership"), o("Organizational transformation"), o("Development of a coaching culture"), o("Well-being and resilience"), o("IA Coaching"), o("Internal Coaching")] },
+  { property: "product", label: "Product", type: "enumeration", group: "deal_info", options: [o("Coaching"), o("IA Coaching"), o("Workshop"), o("White Label")] },
+  { property: "hs_acv", label: "Annual contract value", type: "number", group: "deal_info" },
+  { property: "origin", label: "Source", type: "enumeration", group: "deal_info", options: [o("Linkedin"), o("Cold call"), o("Email"), o("Referral"), o("Tradeshows"), o("Webinar"), o("Partnerships")] },
+  // ── General information ──
+  { property: "main_hr_contact", label: "Main HR Contact", type: "string", group: "general_info" },
+  { property: "operational_hr_contact", label: "Operational HR Contact", type: "string", group: "general_info" },
+  { property: "other_information", label: "Other information", type: "string", group: "general_info" },
+  // ── Contract & billing ──
+  { property: "contract_signatory_contact", label: "Contract Signatory Contact", type: "string", group: "contract_billing" },
+  { property: "duration_of_contract", label: "Duration of Contract", type: "enumeration", group: "contract_billing", options: [o("1 year"), o("2 years"), o("3 years")] },
+  { property: "contract_start_date", label: "Contract Start Date", type: "date", group: "contract_billing" },
+  { property: "contract_end_date", label: "Contract End Date", type: "date", group: "contract_billing" },
+  { property: "total_budget", label: "Total Budget", type: "number", group: "contract_billing" },
+  { property: "billing", label: "Billing", type: "enumeration", group: "contract_billing", options: [o("Upfront"), o("Purchase Order")] },
+  { property: "billing_contact", label: "Billing Contact", type: "string", group: "contract_billing" },
+  { property: "billing_address", label: "Billing Address", type: "string", group: "contract_billing" },
+  { property: "payment_deadline", label: "Payment Deadline", type: "date", group: "contract_billing" },
+];
+
+export function getHubspotFieldDef(property: string): HubspotChecklistFieldDef | undefined {
+  return HUBSPOT_CHECKLIST_FIELDS.find((f) => f.property === property);
+}
+
+// Valeurs courantes des champs surveilles, lues en live sur le deal HubSpot par
+// le GET /api/clients/[id] (non persiste). null si non lu (HubSpot KO ou client
+// non enrichi). Sert a deriver "rempli vs manquant".
+export type HubspotDealFields = Record<string, string | null>;
+
+// Suggestion IA de remplissage pour un champ HubSpot vide. Persiste dans
+// clients.hubspot_field_suggestions.
+export type HubspotFieldSuggestion = {
+  property: string;
+  label: string;
+  suggestion: string;
+  rationale: string;
+};
+
+export type HubspotFieldSuggestions = {
+  generated_at: string;
+  fields: HubspotFieldSuggestion[];
+};
+
+// ── Checklist onboarding (colonne gauche de la fiche) ─────────────────────
+// Un item = une tache d'onboarding, rattachee a une section. Etat coche
+// persiste dans clients.onboarding_checklist. Checklist 100 % manuelle : items
+// issus d'un template de base, coches a la main. La `section` sert au regroupe-
+// ment dans l'UI ; le `key` (stable) au merge qui preserve l'etat coche.
+export type OnboardingItem = {
+  key: string;
+  label: string;
+  category: string; // niveau 1 (ex: "Set up IT", "Onboarding client")
+  section: string; // niveau 2 (sous-categorie, ex: "Groups", "Acculturation")
+  done: boolean;
+  done_at: string | null;
+};
+
+export type OnboardingChecklist = {
+  items: OnboardingItem[];
+  // Masque la card onboarding pour ce compte (ex: client onboarde il y a
+  // longtemps, ou inutile pour le CSM). Reaffichable depuis le header de la fiche.
+  dismissed?: boolean;
+};
+
+// ── Email "demander les infos manquantes" (cache) ─────────────────────────
+// Genere une fois puis persiste (clients.missing_info_email_draft). Reutilise
+// tel quel a l'ouverture de la modal ; regenere seulement sur action explicite.
+export type MissingInfoEmailDraft = {
+  to: string;
+  subject: string;
+  body: string;
+  missing: string[];
+  generated_at: string;
+};
+
+// Template de base, sur deux niveaux : categorie (niveau 1) > sous-categorie
+// (niveau 2) > items. "Set up IT" = tout ce qui se parametre dans Coachello (avec
+// ses sous-categories), "Onboarding client" = le process cote client/CS. `key`
+// stable : sert au merge qui preserve l'etat coche. Libelles en EN (UI fiche).
+export const ONBOARDING_CHECKLIST_TEMPLATE: ReadonlyArray<{
+  category: string;
+  section: string;
+  items: ReadonlyArray<{ key: string; label: string }>;
+}> = [
+  // ── Set up IT (config Coachello, sous-categories conservees) ──
+  {
+    category: "Set up IT",
+    section: "Company creation",
+    items: [
+      { key: "company_coaching_type", label: "Coaching type: Human, AI or Hybrid?" },
+      { key: "company_support", label: "Support: Teams, Slack or Web" },
+      { key: "company_setup_app_it", label: "Set up app with IT (if Teams or Slack)" },
+      { key: "company_meeting_provider", label: "Meeting provider: Teams, Google or Custom" },
+      { key: "company_billing_method", label: "Billing / credits method (credit, license used, license type, exec or not?)" },
+      { key: "company_contract_start", label: "Contract start date" },
+    ],
+  },
+  {
+    category: "Set up IT",
+    section: "Admins",
+    items: [
+      { key: "admins_hr_global", label: "Add global HR admins" },
+      { key: "admins_it", label: "Add IT admin (optional)" },
+    ],
+  },
+  {
+    category: "Set up IT",
+    section: "Groups",
+    items: [
+      { key: "groups_or_program", label: "Groups or program" },
+      { key: "groups_create", label: "Create group / program" },
+      { key: "groups_languages", label: "Group languages" },
+      { key: "groups_admins", label: "Group admins" },
+      { key: "groups_limit_user", label: "Limit / user" },
+      { key: "groups_add_coaches", label: "Add coaches per program" },
+      { key: "groups_internal_coach", label: "Internal coach?" },
+      { key: "groups_tripartite", label: "Tripartite / quadripartite" },
+      { key: "groups_label", label: "Label" },
+    ],
+  },
+  {
+    category: "Set up IT",
+    section: "Licenses & credits",
+    items: [{ key: "licenses_add", label: "Add per group or program" }],
+  },
+  {
+    category: "Set up IT",
+    section: "Customization",
+    items: [
+      { key: "custom_email_setup", label: "Email set-up" },
+      { key: "custom_dashboard_categories", label: "Dashboard categories" },
+      { key: "custom_auto_assessment", label: "Auto assessment" },
+      { key: "custom_impact_assessment", label: "Impact assessment" },
+      { key: "custom_peer_feedback", label: "Peer feedback (360)" },
+    ],
+  },
+  // ── Onboarding client (process, sous-categories) ──
+  {
+    category: "Onboarding client",
+    section: "Handover & scoping",
+    items: [
+      { key: "contract_signature", label: "Contract signature" },
+      { key: "handover_cs_lead_coach", label: "Handover CS/Lead coach" },
+      { key: "scoping_meeting_hr_kpi", label: "Scoping meeting with HR (KPI definition)" },
+    ],
+  },
+  {
+    category: "Onboarding client",
+    section: "Communication",
+    items: [
+      { key: "slack_channel_client_brief", label: "Slack channel creation + Client brief" },
+      { key: "communication_kit", label: "Communication kit (Kick off presentation, User guide, emails)" },
+    ],
+  },
+  {
+    category: "Onboarding client",
+    section: "Acculturation",
+    items: [
+      { key: "meetings_hr_acculturation", label: "HR acculturation & onboarding" },
+      { key: "meetings_coach_acculturation", label: "Coach acculturation" },
+      { key: "company_orientation_call", label: "Orientation call" },
+    ],
+  },
+  {
+    category: "Onboarding client",
+    section: "Launch",
+    items: [
+      { key: "meetings_cohort_launch", label: "Cohort launch (coachees), or video if individual" },
+      { key: "kickoff_time_selected", label: "Kick off time selected" },
+      { key: "invoice_sent", label: "Invoice sent" },
+    ],
+  },
+] as const;
+
 // ── Row Supabase ─────────────────────────────────────────────────────────
 export type ClientRow = {
   id: string;
@@ -388,9 +601,60 @@ export type ClientRow = {
   am_cs_notified_at: string | null;
   billing: Billing | null;
   billing_refreshed_at: string | null;
+  // Checklists colonne gauche (cf. migration clients_checklists.sql).
+  hubspot_field_suggestions: HubspotFieldSuggestions | null;
+  onboarding_checklist: OnboardingChecklist | null;
+  // Brouillon (cache) de l'email "demander les infos manquantes" : on le persiste
+  // pour ne pas le regenerer a chaque ouverture de la modal (cf. migration).
+  missing_info_email_draft: MissingInfoEmailDraft | null;
+  // Valeurs courantes des champs HubSpot surveilles, injectees par le GET
+  // (best-effort, non persiste). Absent si le client n'est pas enrichi ou si
+  // HubSpot a echoue.
+  hubspot_deal_fields?: HubspotDealFields | null;
   created_at: string;
   updated_at: string;
 };
+
+// Un champ HubSpot est "vide" (a remplir) si null/undefined ou string vide.
+export function isHubspotFieldEmpty(value: string | null | undefined): boolean {
+  return value === null || value === undefined || String(value).trim() === "";
+}
+
+// Champs HubSpot surveilles actuellement vides, derives des valeurs live.
+// Renvoie les definitions completes (property/label/type/options) pour que l'UI
+// rende le bon input (dropdown enum, date, number, texte).
+export function getMissingHubspotFields(
+  dealFields: HubspotDealFields | null | undefined,
+): HubspotChecklistFieldDef[] {
+  if (!dealFields) return [];
+  return HUBSPOT_CHECKLIST_FIELDS.filter((f) => isHubspotFieldEmpty(dealFields[f.property]));
+}
+
+// Fusionne le template de base (sections aplaties) avec l'etat persiste, en
+// preservant l'etat `done` par `key`. Utilise par l'UI et la route PATCH.
+export function mergeOnboardingItems(
+  persisted: OnboardingChecklist | null | undefined,
+): OnboardingItem[] {
+  const persistedByKey = new Map((persisted?.items ?? []).map((i) => [i.key, i]));
+  const result: OnboardingItem[] = [];
+  for (const group of ONBOARDING_CHECKLIST_TEMPLATE) {
+    for (const base of group.items) {
+      const prev = persistedByKey.get(base.key);
+      result.push({
+        key: base.key,
+        label: base.label,
+        category: group.category,
+        section: group.section,
+        done: prev?.done ?? false,
+        done_at: prev?.done_at ?? null,
+      });
+    }
+  }
+  // On NE garde PAS les items persistes orphelins (anciens `key` de templates
+  // precedents) : le template est la seule source de verite, sinon ils
+  // apparaitraient dans un bucket "Other". Leur etat coche stale est ignore.
+  return result;
+}
 
 // Factory pour générer un ClientFieldValue null (utilisé quand l'IA n'a
 // pas trouvé de signal pour ce field). Garde une trace de la tentative

@@ -16,11 +16,6 @@ export async function GET(_req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  const { data: userRow } = await db.from("users").select("is_admin").eq("id", user.id).single();
-  if (!userRow?.is_admin) {
-    return NextResponse.json({ error: "Admin requis" }, { status: 403 });
-  }
-
   if (!process.env.HUBSPOT_ACCESS_TOKEN) {
     return NextResponse.json({ error: "HUBSPOT_ACCESS_TOKEN manquant" }, { status: 500 });
   }

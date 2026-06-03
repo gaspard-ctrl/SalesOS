@@ -7,7 +7,6 @@ import { COLORS } from "@/lib/design/tokens";
 import { ClientsTable, type ClientListItem } from "./_components/clients-table";
 import { BackfillModal } from "./_components/backfill-modal";
 import { StatPill } from "@/components/ui/stat-pill";
-import { useUserMe } from "@/lib/hooks/use-user-me";
 
 // Le fetcher SWR doit throw sur non-2xx, sinon le body d'erreur devient
 // `data` et l'UI affiche "Aucun client" alors qu'on a une 500. Voir mémoire
@@ -27,7 +26,6 @@ export default function ClientsPage() {
   const [ownerMode, setOwnerMode] = useState<"mine" | "all">("mine");
   const [query, setQuery] = useState("");
   const [backfillOpen, setBackfillOpen] = useState(false);
-  const { isAdmin } = useUserMe();
 
   const url = `/api/clients/list?owner=${ownerMode === "mine" ? "" : "all"}`;
   const { data, error, isLoading, mutate } = useSWR<ListResponse>(url, fetcher, {
@@ -142,29 +140,27 @@ export default function ClientsPage() {
           <RefreshCw size={14} />
         </button>
 
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={() => setBackfillOpen(true)}
-            style={{
-              padding: "7px 14px",
-              borderRadius: 8,
-              border: `1px solid ${COLORS.brand}`,
-              background: COLORS.brand,
-              color: "#ffffff",
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 12,
-              fontWeight: 600,
-            }}
-            title="Importer les closed-won historiques depuis HubSpot"
-          >
-            <UserPlus size={14} />
-            Importer un client
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setBackfillOpen(true)}
+          style={{
+            padding: "7px 14px",
+            borderRadius: 8,
+            border: `1px solid ${COLORS.brand}`,
+            background: COLORS.brand,
+            color: "#ffffff",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+          title="Importer les closed-won historiques depuis HubSpot"
+        >
+          <UserPlus size={14} />
+          Importer un client
+        </button>
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           <StatPill label="Clients" value={filtered.length} />
