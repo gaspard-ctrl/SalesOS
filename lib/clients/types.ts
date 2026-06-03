@@ -499,7 +499,7 @@ export const ONBOARDING_CHECKLIST_TEMPLATE: ReadonlyArray<{
       { key: "groups_admins", label: "Group admins" },
       { key: "groups_limit_user", label: "Limit / user" },
       { key: "groups_add_coaches", label: "Add coaches per program" },
-      { key: "groups_internal_coach", label: "Internal coach?" },
+      { key: "groups_internal_coach", label: "Internal coach" },
       { key: "groups_tripartite", label: "Tripartite / quadripartite" },
       { key: "groups_label", label: "Label" },
     ],
@@ -518,6 +518,7 @@ export const ONBOARDING_CHECKLIST_TEMPLATE: ReadonlyArray<{
       { key: "custom_auto_assessment", label: "Auto assessment" },
       { key: "custom_impact_assessment", label: "Impact assessment" },
       { key: "custom_peer_feedback", label: "Peer feedback (360)" },
+      { key: "company_orientation_call", label: "Orientation call" },
     ],
   },
   // ── Onboarding client (process, sous-categories) ──
@@ -526,7 +527,7 @@ export const ONBOARDING_CHECKLIST_TEMPLATE: ReadonlyArray<{
     section: "Handover & scoping",
     items: [
       { key: "contract_signature", label: "Contract signature" },
-      { key: "handover_cs_lead_coach", label: "Handover CS/Lead coach" },
+      { key: "handover_cs_lead_coach", label: "Handover Amélie (CS/Lead coach)" },
       { key: "scoping_meeting_hr_kpi", label: "Scoping meeting with HR (KPI definition)" },
     ],
   },
@@ -544,7 +545,6 @@ export const ONBOARDING_CHECKLIST_TEMPLATE: ReadonlyArray<{
     items: [
       { key: "meetings_hr_acculturation", label: "HR acculturation & onboarding" },
       { key: "meetings_coach_acculturation", label: "Coach acculturation" },
-      { key: "company_orientation_call", label: "Orientation call" },
     ],
   },
   {
@@ -553,7 +553,19 @@ export const ONBOARDING_CHECKLIST_TEMPLATE: ReadonlyArray<{
     items: [
       { key: "meetings_cohort_launch", label: "Cohort launch (coachees), or video if individual" },
       { key: "kickoff_time_selected", label: "Kick off time selected" },
+      { key: "send_user_guide", label: "Send user guide" },
       { key: "invoice_sent", label: "Invoice sent" },
+    ],
+  },
+  {
+    category: "Onboarding client",
+    section: "Test",
+    items: [
+      { key: "test_admin_global", label: "Test by adding yourself as global admin" },
+      { key: "test_sub_admin_group", label: "Test by adding yourself as sub-admin / group admin" },
+      { key: "test_coachee", label: "Test by adding yourself as coachee (switch to coachee)" },
+      { key: "test_group_emails", label: "Test by adding yourself to a group (to test emails)" },
+      { key: "test_live_client", label: "Live test with the client" },
     ],
   },
 ] as const;

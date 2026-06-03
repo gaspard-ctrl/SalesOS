@@ -21,6 +21,18 @@ export function OnboardingChecklistPanel({ client, onUpdated }: { client: Client
   // Masquee par le CSM pour ce compte.
   if (client.onboarding_checklist?.dismissed) return null;
 
+  // La checklist depend du coaching type du programme (champ de donnees, pas
+  // l'item de checklist). Seul "humain" a une checklist a ce jour ; "ia"/"hybride"
+  // sont a venir ; null = pas encore renseigne (la checklist en depend).
+  const coachingType = client.fields_json?.program_scope?.type_coaching?.value ?? null;
+  if (!coachingType) {
+    return <OnboardingInfoCard message="Set the program's coaching type to load the onboarding checklist." />;
+  }
+  if (coachingType !== "humain") {
+    const label = coachingType === "ia" ? "AI" : "Hybrid";
+    return <OnboardingInfoCard message={`Coming soon. The ${label} onboarding checklist is on the way.`} />;
+  }
+
   const items = mergeOnboardingItems(client.onboarding_checklist ?? null).map((i) =>
     i.key in overrides ? { ...i, done: overrides[i.key] } : i,
   );
@@ -273,6 +285,29 @@ export function OnboardingChecklistPanel({ client, onUpdated }: { client: Client
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Card simple (meme chrome que la checklist, sans dismiss) : utilisee quand il n'y
+// a pas de checklist a afficher (coaching type non renseigne, ou IA/Hybrid a venir).
+function OnboardingInfoCard({ message }: { message: string }) {
+  return (
+    <div style={{ background: COLORS.bgCard, border: `1px solid ${COLORS.line}`, borderRadius: 12, overflow: "hidden" }}>
+      <div
+        style={{
+          padding: "12px 16px",
+          borderBottom: `1px solid ${COLORS.line}`,
+          background: COLORS.bgSoft,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <ListChecks size={15} style={{ color: COLORS.brand, flexShrink: 0 }} />
+        <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: COLORS.ink0 }}>Client onboarding</h3>
+      </div>
+      <div style={{ padding: 14, fontSize: 13, color: COLORS.ink2, lineHeight: 1.5 }}>{message}</div>
     </div>
   );
 }
