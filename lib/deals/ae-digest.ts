@@ -20,9 +20,11 @@
 // Rédaction : la catégorisation est déterministe (code), une couche LLM (Haiku)
 // par AE écrit juste l'intro et l'action courte de chaque deal (cf. polishWithAi).
 //
-// Périmètre deals : UNIQUEMENT le pipeline sales (1er pipeline HubSpot = celui du
-// Kanban /deals, surchargeable via DEALS_SALES_PIPELINE_ID). Les deals du pipeline
-// CS / onboarding sont exclus.
+// Périmètre deals : UNIQUEMENT le pipeline sales (HubSpot id "default" /
+// "Sales Pipeline", surchargeable via DEALS_SALES_PIPELINE_ID). Les deals du
+// pipeline Customer Success (onboarding, suivi, renouvellement) sont exclus :
+// ce sont des clients déjà gagnés, ils n'ont rien à faire dans un digest de
+// deals à closer.
 //
 // Destinataires : UNIQUEMENT les users de la table `users` marqués is_sales=true
 // (toggle Sales dans /admin). Un owner HubSpot sans user sales actif est ignoré.
@@ -92,13 +94,22 @@ async function hubspot(path: string, method = "GET", body?: unknown) {
 type HsDeal = { id: string; properties: Record<string, string | null> };
 
 // Pipeline "sales" : on ne veut QUE les deals du pipeline sales (pas CS /
-// onboarding). Par défaut le 1er pipeline HubSpot (= celui du Kanban /deals),
-// surchargeable via DEALS_SALES_PIPELINE_ID.
+// onboarding / renouvellement). Sélection DÉTERMINISTE : id HubSpot "default"
+// (le pipeline sales standard), sinon un pipeline dont le label contient
+// "sales". Surchargeable via DEALS_SALES_PIPELINE_ID. On ne prend PLUS
+// bêtement le 1er pipeline renvoyé : l'ordre de l'API n'est pas garanti et le
+// pipeline Customer Success ne doit JAMAIS être sélectionné (sinon des clients
+// déjà gagnés remontent dans le digest).
 async function fetchSalesPipelineId(): Promise<string | null> {
   if (process.env.DEALS_SALES_PIPELINE_ID) return process.env.DEALS_SALES_PIPELINE_ID;
   try {
     const data = await hubspot("/crm/v3/pipelines/deals");
-    return (data.results ?? [])[0]?.id ?? null;
+    const pipelines: { id: string; label?: string }[] = data.results ?? [];
+    const sales =
+      pipelines.find((p) => p.id === "default") ??
+      pipelines.find((p) => /sales/i.test(p.label ?? "")) ??
+      pipelines[0];
+    return sales?.id ?? null;
   } catch (e) {
     console.warn("[ae-digest] fetchSalesPipelineId failed:", e instanceof Error ? e.message : e);
     return null;
@@ -427,6 +438,13 @@ export async function buildAndSendAeDigests(): Promise<AeDigestResult> {
   const dateLabel = now.toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
 
   const salesPipelineId = await fetchSalesPipelineId();
+  // Garde-fou : sans pipeline sales résolu, on n'envoie rien. Sinon
+  // fetchOpenDeals ramasserait TOUS les pipelines (dont Customer Success) et
+  // des clients déjà gagnés (suivi / renouvellement) repasseraient en "Hot".
+  if (!salesPipelineId) {
+    console.warn("[ae-digest] sales pipeline non résolu, digest annulé (pas de filtre = leak CS)");
+    return { ok: true, owners: 0, sent: 0, skipped: 0, errors: 0, reason: "sales_pipeline_unresolved" };
+  }
   const [hsDeals, owners, stageLabels] = await Promise.all([
     fetchOpenDeals(salesPipelineId),
     fetchOwners(),
