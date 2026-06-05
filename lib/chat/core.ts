@@ -22,6 +22,7 @@ import { DEFAULT_BOT_GUIDE } from "@/lib/guides/bot";
 import { searchGmailMessages, getGmailMessage } from "@/lib/gmail";
 import { searchClaapMeetings, fetchClaapMeetingDetail } from "@/lib/claap";
 import { fetchDealContext } from "@/lib/hubspot";
+import { fetchBillingRows, matchBillingRow } from "@/lib/billing/google-sheet";
 
 const PUBLIC_EMAIL_DOMAINS = new Set([
   "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "hotmail.fr",
@@ -383,6 +384,18 @@ export const TOOLS: Anthropic.Tool[] = [
         range: { type: "string", description: "Plage Excel optionnelle (ex: 'A1:F50')" },
       },
       required: ["file_id"],
+    },
+  },
+  {
+    name: "get_billing_revenue",
+    description:
+      "Source de vérité OFFICIELLE pour toute question de facturation et de chiffre d'affaires client : lit le sheet revenue (onglet Historique, fichier Drive dédié). Renvoie par société la valeur totale du contrat, le revenue par année, le flag RFP, et la croissance YoY. Passe 'company' (nom du client) pour cibler une société précise (matching flou sur le nom) ; sans 'company', renvoie TOUTES les sociétés du sheet. À utiliser SYSTÉMATIQUEMENT dès qu'une question porte sur le CA, la facturation, le revenue, la valeur de contrat ou les montants facturés d'un client - ne déduis jamais ces chiffres de HubSpot.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        company: { type: "string", description: "Nom de la société/client à chercher dans le sheet revenue. Omets pour lister toutes les sociétés." },
+      },
+      required: [],
     },
   },
   {
@@ -903,6 +916,39 @@ async function executeTool(
         return csv.length > cap ? csv.slice(0, cap) + `\n…(tronqué à ${cap} caractères)` : csv;
       } catch (e) {
         return `Erreur lecture Excel : ${e instanceof Error ? e.message : "inconnue"}`;
+      }
+    }
+    case "get_billing_revenue": {
+      try {
+        onProgress("Lecture du sheet revenue...");
+        const rows = await fetchBillingRows();
+        if (rows.length === 0) {
+          return "Sheet revenue indisponible ou vide (vérifier BILLING_DRIVE_FILE_ID et l'onglet Historique).";
+        }
+        const company = (input.company as string | undefined)?.trim();
+        if (company) {
+          const match = matchBillingRow(rows, company);
+          if (!match.matched) {
+            return JSON.stringify({
+              matched: false,
+              message: `Aucune ligne revenue pour "${company}" dans le sheet.`,
+              available_companies: rows.map((r) => r.company),
+            });
+          }
+          return JSON.stringify(match);
+        }
+        return JSON.stringify({
+          source: "sheet revenue (onglet Historique)",
+          count: rows.length,
+          rows: rows.map((r) => ({
+            company: r.company,
+            isRfp: r.isRfp,
+            total: r.total,
+            revenueByYear: r.revenueByYear,
+          })),
+        });
+      } catch (e) {
+        return `Erreur lecture sheet revenue : ${e instanceof Error ? e.message : "inconnue"}`;
       }
     }
     case "search_gmail": {
