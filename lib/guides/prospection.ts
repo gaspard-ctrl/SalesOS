@@ -25,16 +25,16 @@ Impact typique : jusqu'à -30 % sur les coûts de recrutement externe, x3 sur la
 
 J'ai vu [votre post / votre initiative X]. [Une phrase sincère sur pourquoi ça t'a frappé.]
 
-C'est exactement ce sur quoi on travaille chez Coachello : coaching humain + IA, aligné sur vos compétences et modèles de leadership internes.
+Ce sur quoi on travaille en ce moment chez Coachello : coaching humain + IA, aligné sur vos compétences et modèles de leadership internes.
 
-30 min pour en parler ?
+Cela vaut il le coup d'échanger 20mn sur ces sujets?
 
 [Prénom expéditeur]
 
 ### 2. Douleurs RH universelles (peu d'info sur le prospect)
 [Prénom],
 
-Quatre besoins reviennent chez les leaders RH sur l'accompagnement talents : hyper-personnalisation, impact mesurable, passage de la théorie à la pratique, scaler sans exploser les budgets.
+Quatre besoins reviennent chez les leaders RH sur l'accompagnement talents : hyper-personnalisation, impact mesurable, passage de la théorie à la pratique, passer à l'echelle tout en maitrisant les budgets.
 
 Si c'est un sujet pour vous, ravi de partager quelques succès clients.
 
@@ -43,7 +43,7 @@ Si c'est un sujet pour vous, ravi de partager quelques succès clients.
 ### 3. Pratique vs formation (EN)
 [First name],
 
-We've built a different way to help managers grow — less training, more real practice.
+We've built a different way to help managers grow — less theory, more practice.
 
 What usually takes 8-12 hours now happens in ~50 minutes. Engagement close to 80 %, outcomes 10x more effective than traditional training.
 
@@ -58,7 +58,7 @@ Attirer, engager, fidéliser : les enjeux RH n'ont jamais été aussi serrés. C
 
 Résultats observés : -30 % sur les coûts de recrutement, x3 sur la mobilité interne, montée en compétences accélérée. Déjà en place chez GRDF, Microsoft, Enedis, Salomon, Payfit, Qonto.
 
-Dispo pour échanger sur vos enjeux 2026 ? [lien agenda]
+Cela vaut il le coup d'échanger 20mn sur ces sujets?
 
 [Prénom expéditeur]
 

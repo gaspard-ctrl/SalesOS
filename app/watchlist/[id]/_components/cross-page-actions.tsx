@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { List, Send, GraduationCap, Loader2 } from "lucide-react";
+import { List, Send, Loader2 } from "lucide-react";
 import { COLORS } from "@/lib/design/tokens";
 import type { WatchCompanyDetail } from "@/app/api/watchlist/companies/[id]/route";
 import type { CompanyContactsResponse } from "@/app/api/watchlist/companies/[id]/contacts/route";
@@ -82,12 +82,6 @@ export function CrossPageActions({ company }: { company: WatchCompanyDetail }) {
           label="Mass Prospection"
           sub={loadingProspection ? "Loading contacts…" : "HubSpot contacts preselected"}
           disabled={loadingProspection}
-        />
-        <ActionLink
-          href="/sales-coach"
-          icon={<GraduationCap size={12} />}
-          label="Sales Coach"
-          sub="Analyze a deal"
         />
       </div>
     </section>

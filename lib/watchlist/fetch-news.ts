@@ -1,8 +1,11 @@
 import { getCompanyPosts } from "@/lib/brightdata/linkedin";
 import { slugifyCompany } from "@/lib/slugify-company";
-import { fetchCompanyMarketNews } from "@/lib/brightdata/serp";
+import { fetchCompanyMarketNews, parseGoogleDate } from "@/lib/brightdata/serp";
 import { analyzeMarketNews } from "@/lib/watchlist/analyze-market-news";
 import type { NewsContent } from "@/lib/watchlist/briefs";
+
+// Fenêtre de fraîcheur des news (presse + posts LinkedIn) : 90 jours.
+const FRESHNESS_DAYS = 90;
 
 interface FetchNewsInput {
   scopeCompanyId: string;
@@ -41,9 +44,25 @@ export async function fetchWatchlistNews(input: FetchNewsInput): Promise<NewsCon
   const articles = await marketPromise;
   const intel = await analyzeMarketNews(articles, { companyName, userId });
 
+  const cutoff = Date.now() - FRESHNESS_DAYS * 86_400_000;
+
+  // Posts LinkedIn : on écarte les posts plus vieux que la fenêtre (date non
+  // parseable = on garde, par prudence) et on trie du plus récent au plus ancien.
+  const freshPosts = posts
+    .filter((p) => {
+      const t = Date.parse(p.postedAt);
+      return Number.isNaN(t) || t >= cutoff;
+    })
+    .sort((a, b) => (Date.parse(b.postedAt) || 0) - (Date.parse(a.postedAt) || 0));
+
+  // Signaux presse : tri par date décroissante (les plus récents en premier).
+  const freshSignals = [...intel.signals].sort(
+    (a, b) => (parseGoogleDate(b.created_at) ?? 0) - (parseGoogleDate(a.created_at) ?? 0),
+  );
+
   return {
-    posts,
-    signals: intel.signals,
+    posts: freshPosts,
+    signals: freshSignals,
     intel_summary: intel.summary,
     fetched_at: new Date().toISOString(),
     credits_used: creditsUsed,

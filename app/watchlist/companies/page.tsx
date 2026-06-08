@@ -40,7 +40,7 @@ export default function WatchlistHubPage() {
             href="/watchlist/companies/manage"
             style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", fontSize: 12, fontWeight: 600, borderRadius: 8, border: `1px solid ${COLORS.line}`, background: COLORS.bgCard, color: COLORS.ink1, textDecoration: "none" }}
           >
-            <Cloud size={13} /> HubSpot companies
+            <Cloud size={13} /> HubSpot Sourcing
           </Link>
           <button
             type="button"

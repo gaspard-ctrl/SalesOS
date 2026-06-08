@@ -81,6 +81,67 @@ interface GoogleNewsItem {
   snippet?: string;
 }
 
+/**
+ * Convertit un libellé de date Google News en epoch ms (pour trier/filtrer).
+ * Gère le relatif FR/EN ("Il y a 3 jours", "2 weeks ago", "hier", "yesterday"),
+ * l'absolu parseable (ISO, "Oct 13, 2025") et l'absolu FR ("13 oct. 2025").
+ * Renvoie null si non interprétable.
+ */
+export function parseGoogleDate(label: string | null | undefined): number | null {
+  if (!label) return null;
+  const raw = label.trim();
+  const s = raw.toLowerCase();
+  if (!s) return null;
+
+  const now = Date.now();
+  if (s === "hier" || s === "yesterday") return now - 86_400_000;
+  if (s === "aujourd'hui" || s === "today" || s === "à l'instant" || s === "just now") return now;
+
+  // Relatif : "il y a X unité" / "X unit(s) ago".
+  if (s.includes("il y a") || s.includes("ago")) {
+    const m = s.match(/(\d+)\s*([a-zàâéèêîïôûç]+)/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      const unit = m[2];
+      const ms = relUnitMs(unit);
+      if (ms) return now - n * ms;
+    }
+  }
+
+  // Absolu standard (ISO, "Oct 13, 2025", "2025-10-13").
+  const direct = Date.parse(raw);
+  if (!Number.isNaN(direct)) return direct;
+
+  // Absolu FR "13 oct. 2025".
+  const fr = s.match(/(\d{1,2})\s+([a-zàâéèêîïôûç.]+)\.?\s+(\d{4})/);
+  if (fr) {
+    const idx = frMonthIndex(fr[2]);
+    if (idx !== undefined) return new Date(parseInt(fr[3], 10), idx, parseInt(fr[1], 10)).getTime();
+  }
+  return null;
+}
+
+function frMonthIndex(token: string): number | undefined {
+  const t = token.replace(/\./g, "");
+  const table: [string, number][] = [
+    ["janv", 0], ["fév", 1], ["fev", 1], ["mars", 2], ["avr", 3], ["mai", 4],
+    ["juin", 5], ["juil", 6], ["août", 7], ["aout", 7], ["sept", 8],
+    ["oct", 9], ["nov", 10], ["déc", 11], ["dec", 11],
+  ];
+  for (const [k, idx] of table) if (t.startsWith(k)) return idx;
+  return undefined;
+}
+
+function relUnitMs(u: string): number | null {
+  if (u.startsWith("min")) return 60_000;
+  if (u.startsWith("heure") || u.startsWith("hour")) return 3_600_000;
+  if (u.startsWith("jour") || u.startsWith("day")) return 86_400_000;
+  if (u.startsWith("semaine") || u.startsWith("week")) return 604_800_000;
+  if (u.startsWith("mois") || u.startsWith("month")) return 2_592_000_000; // ~30 j
+  if (u.startsWith("an") || u.startsWith("année") || u.startsWith("year")) return 31_536_000_000;
+  return null;
+}
+
 // Clé de dédup d'un article (hostname + titre normalisé).
 function articleKey(a: MarketArticle): string {
   let host = a.url;
@@ -106,12 +167,13 @@ export async function fetchCompanyMarketNews(
   const country = (opts.country || "fr").toLowerCase();
   const lang = (opts.lang || "fr").toLowerCase();
   const num = opts.num ?? 15;
-  // Fenêtre de fraîcheur : 12 derniers mois par défaut.
+  // Fenêtre de fraîcheur : 90 derniers jours par défaut (prospection = news
+  // fraîches). Surchargeable via opts.since (ex. "2025-01-01").
   const since =
     opts.since ||
     (() => {
       const d = new Date();
-      d.setFullYear(d.getFullYear() - 1);
+      d.setDate(d.getDate() - 90);
       return d.toISOString().slice(0, 10);
     })();
 
@@ -149,6 +211,10 @@ export async function fetchCompanyMarketNews(
       articles.push(article);
     }
   }
+
+  // Tri par date décroissante : les plus récentes d'abord (dates non
+  // interprétables reléguées en fin de liste).
+  articles.sort((a, b) => (parseGoogleDate(b.date) ?? 0) - (parseGoogleDate(a.date) ?? 0));
 
   return articles;
 }
