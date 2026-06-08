@@ -87,7 +87,7 @@ export function HubspotListBuilder({
         })
         .catch((e) => {
           if (myReq !== reqId.current) return;
-          setErr(e instanceof Error ? e.message : "Erreur HubSpot");
+          setErr(e instanceof Error ? e.message : "HubSpot error");
           setProfiles([]);
           setHasMore(false);
         })
@@ -110,7 +110,7 @@ export function HubspotListBuilder({
       setProfiles((cur) => [...cur, ...fresh]);
       setHasMore(!!r.hasMore && fresh.length > 0);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Erreur");
+      setErr(e instanceof Error ? e.message : "Error");
     } finally {
       setLoadingMore(false);
     }
@@ -176,19 +176,18 @@ export function HubspotListBuilder({
           <span style={{ fontSize: 12, color: COLORS.ink2 }}>
             {loading ? (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <Loader2 size={13} className="animate-spin" /> Chargement…
+                <Loader2 size={13} className="animate-spin" /> Loading…
               </span>
             ) : (
               <>
-                <strong style={{ color: COLORS.ink0 }}>{profiles.length}</strong> contact{profiles.length > 1 ? "s" : ""} affiché
-                {profiles.length > 1 ? "s" : ""}
-                {hasMore && <span style={{ color: COLORS.ink3 }}> · plus dispos</span>}
+                <strong style={{ color: COLORS.ink0 }}>{profiles.length}</strong> contact{profiles.length > 1 ? "s" : ""} shown
+                {hasMore && <span style={{ color: COLORS.ink3 }}> · more available</span>}
               </>
             )}
           </span>
           {profiles.length > 0 && (
             <button type="button" onClick={toggleAllVisible} style={btnSm()}>
-              {allVisibleSelected ? "Décocher visibles" : "Cocher visibles"}
+              {allVisibleSelected ? "Deselect visible" : "Select visible"}
             </button>
           )}
           <span
@@ -203,18 +202,18 @@ export function HubspotListBuilder({
             }}
           >
             <ShoppingCart size={14} />
-            {cartCount} dans le panier
+            {cartCount} in cart
           </span>
         </div>
 
         {/* Liste */}
         <div style={{ flex: 1, overflowY: "auto", minHeight: 240 }}>
           {err ? (
-            <p style={{ padding: 24, textAlign: "center", color: COLORS.err, fontSize: 13 }}>Erreur : {err}</p>
+            <p style={{ padding: 24, textAlign: "center", color: COLORS.err, fontSize: 13 }}>Error: {err}</p>
           ) : loading && profiles.length === 0 ? (
-            <p style={{ padding: 32, textAlign: "center", color: COLORS.ink3, fontSize: 13 }}>Chargement des contacts…</p>
+            <p style={{ padding: 32, textAlign: "center", color: COLORS.ink3, fontSize: 13 }}>Loading contacts…</p>
           ) : profiles.length === 0 ? (
-            <p style={{ padding: 32, textAlign: "center", color: COLORS.ink3, fontSize: 13 }}>Aucun contact ne correspond à ces filtres.</p>
+            <p style={{ padding: 32, textAlign: "center", color: COLORS.ink3, fontSize: 13 }}>No contacts match these filters.</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column" }}>
               {profiles.map((p) => {
@@ -332,11 +331,11 @@ export function HubspotListBuilder({
               >
                 {loadingMore ? (
                   <>
-                    <Loader2 size={13} className="animate-spin" /> Chargement…
+                    <Loader2 size={13} className="animate-spin" /> Loading…
                   </>
                 ) : (
                   <>
-                    <Plus size={13} /> Charger plus
+                    <Plus size={13} /> Load more
                   </>
                 )}
               </button>
@@ -357,11 +356,11 @@ export function HubspotListBuilder({
           }}
         >
           <span style={{ fontSize: 12, color: COLORS.ink2 }}>
-            <strong style={{ color: COLORS.ink0 }}>{cartCount}</strong> contact{cartCount > 1 ? "s" : ""} dans le panier
+            <strong style={{ color: COLORS.ink0 }}>{cartCount}</strong> contact{cartCount > 1 ? "s" : ""} in cart
           </span>
           {cartCount > 0 && (
             <button type="button" onClick={() => setCart(new Map())} style={{ ...btnSm(), marginLeft: 4 }}>
-              Vider le panier
+              Clear cart
             </button>
           )}
           <button
@@ -371,7 +370,7 @@ export function HubspotListBuilder({
             style={{ ...btnPrimary(), marginLeft: "auto", opacity: cartCount === 0 || isCreating ? 0.5 : 1 }}
           >
             {isCreating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-            Créer la liste ({cartCount})
+            Create list ({cartCount})
           </button>
         </div>
       </div>

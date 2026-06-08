@@ -9,6 +9,7 @@ import {
   HelpCircle,
   Loader2,
   Search,
+  Sparkles,
   Trash2,
   User,
 } from "lucide-react";
@@ -40,12 +41,12 @@ interface Props {
 
 function formatAmount(amount: number | null): string | null {
   if (amount == null) return null;
-  return `${amount.toLocaleString("fr-FR")}€`;
+  return `${amount.toLocaleString("en-GB")}€`;
 }
 
 function formatCloseDate(iso: string | null): string | null {
   if (!iso) return null;
-  return new Date(iso).toLocaleDateString("fr-FR");
+  return new Date(iso).toLocaleDateString("en-GB");
 }
 
 export function ManualDealResolution({
@@ -65,6 +66,7 @@ export function ManualDealResolution({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const { toast } = useToast();
 
@@ -116,10 +118,10 @@ export function ManualDealResolution({
         body: JSON.stringify({ dealId: selectedDeal.id }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Erreur lors de l'association du deal");
+      if (!res.ok) throw new Error(data.error ?? "Error while linking the deal");
       onResolved();
     } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : "Erreur");
+      setSubmitError(e instanceof Error ? e.message : "Error");
       setSubmitting(false);
     }
   }
@@ -129,17 +131,36 @@ export function ManualDealResolution({
     try {
       const res = await fetch(`/api/sales-coach/${analysisId}`, { method: "DELETE" });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Erreur lors de la suppression");
-      toast("Meeting supprimé.", "success");
+      if (!res.ok) throw new Error(data.error ?? "Error while deleting");
+      toast("Meeting deleted.", "success");
       onDeleted();
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Erreur", "error");
+      toast(e instanceof Error ? e.message : "Error", "error");
       setDeleting(false);
     }
   }
 
+  // Lance l'analyse sans deal HubSpot. La route passe la ligne en `pending` et
+  // déclenche l'analyse ; onResolved() revalide le SWR → l'écran bascule sur
+  // l'état analyzing/pending.
+  async function analyzeWithoutDeal() {
+    setAnalyzing(true);
+    try {
+      const res = await fetch(`/api/sales-coach/${analysisId}/analyze-without-deal`, {
+        method: "POST",
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Error while starting the analysis");
+      toast("Analysis started without a deal.", "success");
+      onResolved();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Error", "error");
+      setAnalyzing(false);
+    }
+  }
+
   const dateStr = meetingStartedAt
-    ? new Date(meetingStartedAt).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" })
+    ? new Date(meetingStartedAt).toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short" })
     : null;
 
   const participantList = (participants ?? [])
@@ -162,18 +183,18 @@ export function ManualDealResolution({
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
             <HelpCircle size={16} style={{ color: "#c2410c" }} />
             <span style={{ fontSize: 13, fontWeight: 600, color: "#9a3412" }}>
-              Aucun deal HubSpot trouvé pour ce meeting
+              No HubSpot deal found for this meeting
             </span>
           </div>
           <p style={{ fontSize: 13, color: "#7c2d12", margin: 0, lineHeight: 1.5 }}>
-            Le résolveur automatique n&apos;a pas réussi à associer ce meeting à un deal (emails participants,
-            domaine, titre, recherche sémantique : tout est vide). Indique si ce meeting est lié à un deal
-            pour lancer l&apos;analyse, ou supprime-le.
+            The automatic resolver could not link this meeting to a deal (participant emails,
+            domain, title, semantic search: all empty). Indicate whether this meeting is linked to a deal
+            to start the analysis, or delete it.
           </p>
 
           {/* Récap meeting */}
           <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #fed7aa", fontSize: 12, color: "#7c2d12", lineHeight: 1.7 }}>
-            <div style={{ fontWeight: 600 }}>{meetingTitle ?? "Sans titre"}</div>
+            <div style={{ fontWeight: 600 }}>{meetingTitle ?? "Untitled"}</div>
             {dateStr && (
               <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                 <Calendar size={11} /> {dateStr}
@@ -181,12 +202,12 @@ export function ManualDealResolution({
             )}
             {recorderEmail && (
               <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: dateStr ? 12 : 0 }}>
-                <User size={11} /> Recorder : {recorderEmail}
+                <User size={11} /> Recorder: {recorderEmail}
               </div>
             )}
             {participantList.length > 0 && (
               <div style={{ marginTop: 4 }}>
-                <strong>Participants externes :</strong> {participantList.join(", ")}
+                <strong>External participants:</strong> {participantList.join(", ")}
               </div>
             )}
           </div>
@@ -195,7 +216,7 @@ export function ManualDealResolution({
         {/* Question Oui/Non */}
         <div style={{ marginBottom: 20 }}>
           <h3 style={{ fontSize: 16, fontWeight: 600, color: COLORS.ink0, marginBottom: 12 }}>
-            Ce meeting est-il associé à un deal ?
+            Is this meeting linked to a deal?
           </h3>
           <div style={{ display: "flex", gap: 10 }}>
             <button
@@ -214,7 +235,7 @@ export function ManualDealResolution({
                 transition: "all 0.15s",
               }}
             >
-              Oui — associer un deal
+              Yes - link a deal
             </button>
             <button
               onClick={() => { setChoice("no"); confirmNoDeal(); }}
@@ -237,7 +258,35 @@ export function ManualDealResolution({
               }}
             >
               <Trash2 size={14} />
-              {deleting ? "Suppression…" : "Non — supprimer"}
+              {deleting ? "Deleting…" : "No - delete"}
+            </button>
+          </div>
+
+          {/* Alternative : analyser sans deal */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, marginTop: 14 }}>
+            <span style={{ fontSize: 12, color: COLORS.ink1 }}>or</span>
+            <button
+              onClick={analyzeWithoutDeal}
+              disabled={submitting || deleting || analyzing}
+              style={{
+                width: "100%",
+                padding: "10px 16px",
+                borderRadius: 10,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: submitting || deleting || analyzing ? "not-allowed" : "pointer",
+                background: "#fff",
+                color: COLORS.ink0,
+                border: `1px solid ${COLORS.lineStrong}`,
+                transition: "all 0.15s",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+              }}
+            >
+              {analyzing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              {analyzing ? "Starting…" : "Analyze anyway (no deal)"}
             </button>
           </div>
         </div>
@@ -246,7 +295,7 @@ export function ManualDealResolution({
         {choice === "yes" && (
           <div style={{ background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 12, padding: 16 }}>
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.ink1, display: "block", marginBottom: 8 }}>
-              Nom du deal HubSpot
+              HubSpot deal name
             </label>
             <div style={{ position: "relative", marginBottom: 12 }}>
               <Search
@@ -262,7 +311,7 @@ export function ManualDealResolution({
               />
               <input
                 type="text"
-                placeholder="Tape le nom du deal…"
+                placeholder="Type the deal name…"
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
@@ -312,7 +361,7 @@ export function ManualDealResolution({
               >
                 {!searching && results.length === 0 && (
                   <div style={{ padding: "12px 14px", fontSize: 12, color: COLORS.ink3, textAlign: "center" }}>
-                    Aucun deal trouvé pour « {query.trim()} ».
+                    No deal found for &laquo; {query.trim()} &raquo;.
                   </div>
                 )}
                 {results.map((d) => {
@@ -383,7 +432,7 @@ export function ManualDealResolution({
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <CheckCircle2 size={14} style={{ color: "#166534" }} />
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "#166534" }}>Deal sélectionné</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#166534" }}>Selected deal</span>
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.ink0, marginBottom: 4 }}>
                   {selectedDeal.name || `Deal ${selectedDeal.id}`}
@@ -416,7 +465,7 @@ export function ManualDealResolution({
                     }}
                   >
                     {submitting && <Loader2 size={13} className="animate-spin" />}
-                    {submitting ? "Association…" : "Associer et lancer l'analyse"}
+                    {submitting ? "Linking…" : "Link and start the analysis"}
                   </button>
                   <button
                     onClick={() => setSelectedDeal(null)}
@@ -432,7 +481,7 @@ export function ManualDealResolution({
                       cursor: submitting ? "not-allowed" : "pointer",
                     }}
                   >
-                    Changer
+                    Change
                   </button>
                 </div>
                 {submitError && (
@@ -446,7 +495,7 @@ export function ManualDealResolution({
 
             {query.trim().length > 0 && query.trim().length < 2 && (
               <div style={{ fontSize: 11, color: COLORS.ink3 }}>
-                Tape au moins 2 caractères pour rechercher.
+                Type at least 2 characters to search.
               </div>
             )}
           </div>

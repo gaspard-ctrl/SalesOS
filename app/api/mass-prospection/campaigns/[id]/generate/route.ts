@@ -12,7 +12,7 @@ export const maxDuration = 60;
 // tout de suite ; le front poll le statut de la campagne.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id } = await params;
 
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
-  if (!campaign) return NextResponse.json({ error: "Campagne introuvable" }, { status: 404 });
+  if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
   const onlyErrors: boolean = body.onlyErrors ?? false;
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (isNetlifyEnv && !isDev) {
     const internalSecret = process.env.INTERNAL_SECRET;
     if (!internalSecret) {
-      return NextResponse.json({ error: "INTERNAL_SECRET non configuré" }, { status: 500 });
+      return NextResponse.json({ error: "INTERNAL_SECRET not configured" }, { status: 500 });
     }
     try {
       const bgRes = await fetch(`${req.nextUrl.origin}/.netlify/functions/mass-prospection-generate-background`, {

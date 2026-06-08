@@ -6,7 +6,7 @@ import { TrendingUp } from "lucide-react";
 const AXES = [
   { key: "opening", label: "Opening" },
   { key: "discovery", label: "Discovery" },
-  { key: "active_listening", label: "Écoute" },
+  { key: "active_listening", label: "Listening" },
   { key: "value_articulation", label: "Value articulation" },
   { key: "objection_handling", label: "Objections" },
   { key: "next_steps", label: "Next steps" },
@@ -50,7 +50,7 @@ function MiniBars({ values, max = 10 }: { values: number[]; max?: number }) {
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
 
 interface Props {
@@ -67,16 +67,16 @@ export function TrendsTab({ analysisId, dealId }: Props) {
       <section>
         <div className="flex items-center gap-2 mb-3">
           <TrendingUp size={15} style={{ color: "#111" }} />
-          <h3 className="text-base font-semibold" style={{ color: "#111" }}>Tes 5 derniers meetings</h3>
+          <h3 className="text-base font-semibold" style={{ color: "#111" }}>Your last 5 meetings</h3>
         </div>
         <p className="text-xs mb-3" style={{ color: "#888" }}>
-          Évolution des 6 axes coaching sur tes meetings précédents (excluant celui-ci).
+          Evolution of the 6 coaching axes across your previous meetings (excluding this one).
         </p>
         {mine.isLoading ? (
-          <div className="text-xs" style={{ color: "#888" }}>Chargement…</div>
+          <div className="text-xs" style={{ color: "#888" }}>Loading…</div>
         ) : mine.trends.length === 0 ? (
           <div className="rounded-lg p-4 text-xs" style={{ background: "#fafafa", color: "#888", border: "1px dashed #e5e5e5" }}>
-            Pas assez de meetings analysés pour calculer une tendance.
+            Not enough analyzed meetings to compute a trend.
           </div>
         ) : (
           <AxisGrid trends={mine.trends} />
@@ -87,16 +87,16 @@ export function TrendsTab({ analysisId, dealId }: Props) {
         <section>
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp size={15} style={{ color: "#111" }} />
-            <h3 className="text-base font-semibold" style={{ color: "#111" }}>Évolution MEDDIC sur ce deal</h3>
+            <h3 className="text-base font-semibold" style={{ color: "#111" }}>MEDDIC evolution on this deal</h3>
           </div>
           <p className="text-xs mb-3" style={{ color: "#888" }}>
-            Maturité MEDDIC meeting après meeting sur le deal.
+            MEDDIC maturity meeting after meeting on the deal.
           </p>
           {onDeal.isLoading ? (
-            <div className="text-xs" style={{ color: "#888" }}>Chargement…</div>
+            <div className="text-xs" style={{ color: "#888" }}>Loading…</div>
           ) : onDeal.trends.length === 0 ? (
             <div className="rounded-lg p-4 text-xs" style={{ background: "#fafafa", color: "#888", border: "1px dashed #e5e5e5" }}>
-              Pas d&apos;autre meeting analysé sur ce deal.
+              No other meeting analyzed on this deal.
             </div>
           ) : (
             <MeddicGrid trends={onDeal.trends} />
@@ -135,7 +135,7 @@ function AxisGrid({ trends }: { trends: TrendPoint[] }) {
             </div>
           ))}
         </div>
-        <div className="w-12 text-right text-[11px]" style={{ color: "#888" }}>moy.</div>
+        <div className="w-12 text-right text-[11px]" style={{ color: "#888" }}>avg.</div>
       </div>
     </div>
   );

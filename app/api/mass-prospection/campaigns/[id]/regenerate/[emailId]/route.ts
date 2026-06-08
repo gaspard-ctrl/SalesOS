@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string; emailId: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id, emailId } = await params;
 
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
-  if (!campaign) return NextResponse.json({ error: "Campagne introuvable" }, { status: 404 });
+  if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
 
   const { data: email } = await db
     .from("mass_campaign_emails")
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .eq("id", emailId)
     .eq("campaign_id", id)
     .single();
-  if (!email) return NextResponse.json({ error: "Email introuvable" }, { status: 404 });
+  if (!email) return NextResponse.json({ error: "Email not found" }, { status: 404 });
 
   const { instructions } = await req.json();
 

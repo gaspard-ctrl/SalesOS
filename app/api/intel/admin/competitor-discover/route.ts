@@ -17,15 +17,15 @@ interface DiscoveredProfile {
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   if (!BRIGHTDATA_API_KEY) {
-    return NextResponse.json({ error: "Bright Data non configuré" }, { status: 500 });
+    return NextResponse.json({ error: "Bright Data not configured" }, { status: 500 });
   }
 
   const body = (await req.json().catch(() => ({}))) as { company?: string };
   const company = body.company?.trim();
-  if (!company) return NextResponse.json({ error: "company requis" }, { status: 400 });
+  if (!company) return NextResponse.json({ error: "company required" }, { status: 400 });
 
   try {
     const r = await searchPeople({ company, keywordTitle: ROLES });
@@ -38,6 +38,6 @@ export async function POST(req: NextRequest) {
     }));
     return NextResponse.json({ profiles, total: items.length, company });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur Bright Data" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Bright Data error" }, { status: 500 });
   }
 }

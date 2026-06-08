@@ -51,7 +51,7 @@ export function LockedGuideEditor({
             </span>
             {instructions.trim() && (
               <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "#dbeafe", color: "#1e40af" }}>
-                + Tes instructions
+                + Your instructions
               </span>
             )}
           </div>
@@ -83,7 +83,7 @@ export function LockedGuideEditor({
               >
                 <path d="M4.5 2.5l3.5 3.5-3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Guide admin (lecture seule)
+              Admin guide (read-only)
             </button>
             {showAdmin && (
               <textarea
@@ -99,15 +99,15 @@ export function LockedGuideEditor({
           {/* User instructions */}
           <div>
             <label className="text-xs font-medium" style={{ color: "#111" }}>
-              Tes instructions personnelles
+              Your personal instructions
             </label>
             <p className="text-[11px] mb-2" style={{ color: "#aaa" }}>
-              Ces instructions seront ajoutées au guide admin. Ajoute tes préférences, contexte, ou règles spécifiques.
+              These instructions will be added to the admin guide. Add your preferences, context, or specific rules.
             </p>
             <textarea
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
-              placeholder="Ex: Toujours répondre en anglais, mentionner notre offre coaching leadership..."
+              placeholder="e.g. Always reply in English, mention our leadership coaching offer..."
               rows={6}
               className="w-full text-xs px-3 py-2.5 border rounded-lg outline-none resize-y font-mono"
               style={{ borderColor: "#e5e5e5", color: "#111", lineHeight: "1.7" }}
@@ -121,7 +121,7 @@ export function LockedGuideEditor({
               className="text-xs px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
               style={{ background: saved ? "#dcfce7" : "#f01563", color: saved ? "#166534" : "#fff" }}
             >
-              {saving ? "Sauvegarde..." : saved ? "Sauvegardé !" : "Sauvegarder"}
+              {saving ? "Saving..." : saved ? "Saved!" : "Save"}
             </button>
             {instructions.trim() && (
               <button
@@ -129,7 +129,7 @@ export function LockedGuideEditor({
                 className="text-[11px]"
                 style={{ color: "#aaa" }}
               >
-                Effacer mes instructions
+                Clear my instructions
               </button>
             )}
           </div>

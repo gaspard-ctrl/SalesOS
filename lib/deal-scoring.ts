@@ -197,9 +197,9 @@ export function detectModel(dealType: string | null | undefined): DealModel {
 
 // ─── Dimension labels per model ───────────────────────────────────────────────
 const DIMENSION_NAMES: Record<DealModel, string[]> = {
-  generic: ["Authority & Buying Group", "Budget Clarity", "Timeline", "Business Need", "Engagement & Momentum", "Strategic Fit", "Compétition"],
-  human_coaching: ["Authority & Governance", "Budget", "Timeline", "Business Need", "Engagement & Momentum", "Strategic Fit", "Compétition"],
-  ai_coaching: ["Authority", "Budget", "Timeline", "Business Urgency", "Engagement & Momentum", "Strategic AI Fit", "Compétition"],
+  generic: ["Authority & Buying Group", "Budget Clarity", "Timeline", "Business Need", "Engagement & Momentum", "Strategic Fit", "Competition"],
+  human_coaching: ["Authority & Governance", "Budget", "Timeline", "Business Need", "Engagement & Momentum", "Strategic Fit", "Competition"],
+  ai_coaching: ["Authority", "Budget", "Timeline", "Business Urgency", "Engagement & Momentum", "Strategic AI Fit", "Competition"],
 };
 
 // ─── Main scoring function ────────────────────────────────────────────────────
@@ -257,16 +257,16 @@ export function calcScore(deal: DealForScoring): DealScore {
 // ─── UI helpers ───────────────────────────────────────────────────────────────
 export function scoreBadge(total: number): { label: string; color: string; bg: string } {
   if (total >= 75) return { label: "High Priority", color: "#16a34a", bg: "#dcfce7" };
-  if (total >= 55) return { label: "Avançable", color: "#ca8a04", bg: "#fef9c3" };
+  if (total >= 55) return { label: "On Track", color: "#ca8a04", bg: "#fef9c3" };
   if (total >= 35) return { label: "Fragile", color: "#ea580c", bg: "#ffedd5" };
-  return { label: "À risque", color: "#dc2626", bg: "#fee2e2" };
+  return { label: "At Risk", color: "#dc2626", bg: "#fee2e2" };
 }
 
 export function reliabilityLabel(n: number): string {
-  if (n >= 5) return "Fiable";
-  if (n >= 3) return "Partiel";
-  if (n >= 1) return "Incomplet";
-  return "Non scoré";
+  if (n >= 5) return "Reliable";
+  if (n >= 3) return "Partial";
+  if (n >= 1) return "Incomplete";
+  return "Not scored";
 }
 
 export function reliabilityColor(n: number): string {

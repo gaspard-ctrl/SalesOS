@@ -41,14 +41,14 @@ export function MeetingSidebar({
       >
         <div>
           <h2 style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink0, margin: 0, letterSpacing: "-0.01em" }}>
-            Meetings à venir
+            Upcoming meetings
           </h2>
-          <p style={{ fontSize: 11, color: COLORS.ink4, margin: 0, marginTop: 2 }}>7 prochains jours</p>
+          <p style={{ fontSize: 11, color: COLORS.ink4, margin: 0, marginTop: 2 }}>Next 7 days</p>
         </div>
         <button
           type="button"
           onClick={onBackToCalendar}
-          aria-label="Retour au calendrier"
+          aria-label="Back to calendar"
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -72,7 +72,7 @@ export function MeetingSidebar({
           }}
         >
           <ArrowLeft size={12} />
-          Calendrier
+          Calendar
         </button>
       </div>
 
@@ -89,7 +89,7 @@ export function MeetingSidebar({
       >
         {events.length === 0 && (
           <p style={{ fontSize: 11, color: COLORS.ink4, textAlign: "center", padding: 16, margin: 0 }}>
-            Aucun meeting à venir
+            No upcoming meetings
           </p>
         )}
         {events.map((event) => {
@@ -133,7 +133,7 @@ export function MeetingSidebar({
               <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                 {isInternal ? (
                   <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 999, background: "#f1f5f9", color: "#475569" }}>
-                    Interne
+                    Internal
                   </span>
                 ) : (
                   <span style={{ fontSize: 10, color: COLORS.ink4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
@@ -143,7 +143,7 @@ export function MeetingSidebar({
                 )}
                 {event.meetingLink && (
                   <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 999, background: "#eff6ff", color: "#1d4ed8" }}>
-                    Visio
+                    Video
                   </span>
                 )}
               </div>

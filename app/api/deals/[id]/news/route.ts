@@ -11,7 +11,7 @@ const STRATEGIC_QUERY_SUFFIX =
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id } = await ctx.params;
 
@@ -40,6 +40,6 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
     return NextResponse.json({ company, items });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur", items: [] }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Error", items: [] }, { status: 500 });
   }
 }

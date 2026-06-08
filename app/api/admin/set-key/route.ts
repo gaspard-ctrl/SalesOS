@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     .eq("service", "claude");
 
   if (delError) {
-    return NextResponse.json({ error: "Échec suppression ancienne clé" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to delete the old key" }, { status: 500 });
   }
 
   const { error: insError } = await db.from("user_keys").insert({
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
   });
 
   if (insError) {
-    return NextResponse.json({ error: "Échec sauvegarde clé" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to save the key" }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });

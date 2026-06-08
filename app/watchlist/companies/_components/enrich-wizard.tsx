@@ -119,10 +119,10 @@ export function EnrichWizard({
         body: JSON.stringify({ names: distinctCompanies, domains }),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error ?? "Erreur");
+      if (!r.ok) throw new Error(j.error ?? "Error");
       setResolved(j.companies ?? []);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Erreur");
+      setErr(e instanceof Error ? e.message : "Error");
     } finally {
       setResolving(false);
     }
@@ -149,7 +149,7 @@ export function EnrichWizard({
       });
       if (!r.ok && r.status !== 202) {
         const j = await r.json().catch(() => ({}));
-        throw new Error(j.error ?? "Erreur lancement");
+        throw new Error(j.error ?? "Failed to start");
       }
       setStep(3);
       setPushState({ status: "running", startedAt: new Date().toISOString() });
@@ -169,7 +169,7 @@ export function EnrichWizard({
         } catch { /* retry */ }
       }, 4000);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Erreur");
+      setErr(e instanceof Error ? e.message : "Error");
       setStep(2);
     } finally {
       setLaunching(false);
@@ -183,7 +183,7 @@ export function EnrichWizard({
   return (
     <Overlay onClose={onClose}>
       <div style={{ width: 620, maxWidth: "94vw", maxHeight: "88vh", display: "flex", flexDirection: "column" }}>
-        <Header title="Enrichir — CSV → HubSpot" onClose={onClose} />
+        <Header title="Enrich - CSV → HubSpot" onClose={onClose} />
         <Steps step={step} />
 
         {err && (
@@ -217,18 +217,18 @@ export function EnrichWizard({
                 >
                   <Upload size={26} style={{ color: COLORS.ink4 }} />
                   <span style={{ fontSize: 13, color: COLORS.ink2 }}>
-                    Glisse un CSV de contacts ou <span style={{ color: COLORS.brand }}>parcours</span>
+                    Drop a contacts CSV or <span style={{ color: COLORS.brand }}>browse</span>
                   </span>
-                  <span style={{ fontSize: 11, color: COLORS.ink4 }}>Colonnes : prénom, nom, email, entreprise, poste…</span>
+                  <span style={{ fontSize: 11, color: COLORS.ink4 }}>Columns: first name, last name, email, company, title…</span>
                 </div>
               ) : (
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                     <span style={{ fontSize: 12, color: COLORS.ink1, fontWeight: 600 }}>{fileName}</span>
-                    <span style={{ fontSize: 11, color: COLORS.ink3 }}>{parsed.rows.length} lignes · {profiles.length} exploitables</span>
-                    <button type="button" onClick={() => { setParsed(null); setFileName(null); }} style={linkBtn()}>Changer</button>
+                    <span style={{ fontSize: 11, color: COLORS.ink3 }}>{parsed.rows.length} rows · {profiles.length} usable</span>
+                    <button type="button" onClick={() => { setParsed(null); setFileName(null); }} style={linkBtn()}>Change</button>
                   </div>
-                  <div style={{ fontSize: 11, color: COLORS.ink3, marginBottom: 8 }}>Associe les colonnes :</div>
+                  <div style={{ fontSize: 11, color: COLORS.ink3, marginBottom: 8 }}>Map the columns:</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     {parsed.headers.map((h, i) => (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -254,28 +254,28 @@ export function EnrichWizard({
           {step === 2 && (
             <>
               <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-                <Stat icon={<Users size={14} />} label="Contacts" value={`${profiles.length}`} sub={`${withEmail} avec email`} />
-                <Stat icon={<Building2 size={14} />} label="Companies" value={`${distinctCompanies.length}`} sub={resolving ? "résolution…" : `${existingCount} existantes`} />
-                <Stat icon={<AlertTriangle size={14} />} label="Manquantes" value={resolving ? "…" : `${missingCount}`} sub="dans HubSpot" warn={missingCount > 0} />
+                <Stat icon={<Users size={14} />} label="Contacts" value={`${profiles.length}`} sub={`${withEmail} with email`} />
+                <Stat icon={<Building2 size={14} />} label="Companies" value={`${distinctCompanies.length}`} sub={resolving ? "resolving…" : `${existingCount} existing`} />
+                <Stat icon={<AlertTriangle size={14} />} label="Missing" value={resolving ? "…" : `${missingCount}`} sub="in HubSpot" warn={missingCount > 0} />
               </div>
 
               {resolving ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: 16, justifyContent: "center", color: COLORS.ink3, fontSize: 12 }}>
-                  <Loader2 size={16} className="animate-spin" style={{ color: COLORS.brand }} /> Résolution des companies dans HubSpot…
+                  <Loader2 size={16} className="animate-spin" style={{ color: COLORS.brand }} /> Resolving companies in HubSpot…
                 </div>
               ) : (
                 <>
                   {missingCount > 0 && (
                     <div style={{ border: `1px solid ${COLORS.warn}33`, background: COLORS.warnBg, borderRadius: RADIUS.md, padding: 12, marginBottom: 12 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: COLORS.warn, marginBottom: 6 }}>
-                        <AlertTriangle size={13} /> {missingCount} company{missingCount > 1 ? "s" : ""} absente{missingCount > 1 ? "s" : ""} de HubSpot
+                        <AlertTriangle size={13} /> {missingCount} compan{missingCount > 1 ? "ies" : "y"} missing from HubSpot
                       </div>
                       <div style={{ fontSize: 11, color: COLORS.ink2, marginBottom: 8, maxHeight: 80, overflowY: "auto" }}>
                         {resolved!.filter((c) => c.status === "missing").map((c) => c.name).join(", ")}
                       </div>
                       <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: COLORS.ink1, cursor: "pointer" }}>
                         <input type="checkbox" checked={createMissing} onChange={(e) => setCreateMissing(e.target.checked)} />
-                        Créer ces companies dans HubSpot (domaine pro inféré quand dispo)
+                        Create these companies in HubSpot (business domain inferred when available)
                       </label>
                     </div>
                   )}
@@ -283,11 +283,11 @@ export function EnrichWizard({
                   <div style={{ border: `1px solid ${COLORS.line}`, borderRadius: RADIUS.md, padding: 12 }}>
                     <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: COLORS.ink1, marginBottom: addToOwner ? 8 : 0, cursor: "pointer" }}>
                       <input type="checkbox" checked={!!addToOwner} onChange={(e) => setAddToOwner(e.target.checked ? (reps[0]?.name ?? "") : "")} />
-                      Ajouter ces companies à la watchlist d&apos;un sales
+                      Add these companies to a sales rep&apos;s watchlist
                     </label>
                     {addToOwner !== "" && (
                       <select value={addToOwner} onChange={(e) => setAddToOwner(e.target.value)} style={{ width: "100%", padding: "7px 9px", fontSize: 12, borderRadius: 7, border: `1px solid ${COLORS.line}`, background: COLORS.bgCard, color: COLORS.ink1, cursor: "pointer" }}>
-                        {reps.length === 0 && <option value="">Aucun sales (configure le roster)</option>}
+                        {reps.length === 0 && <option value="">No sales reps (configure the roster)</option>}
                         {reps.map((r) => (
                           <option key={r.id} value={r.name}>{r.name}</option>
                         ))}
@@ -308,20 +308,20 @@ export function EnrichWizard({
         {/* Footer actions */}
         <div style={{ padding: "10px 16px", borderTop: `1px solid ${COLORS.line}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <button type="button" onClick={onClose} style={ghostBtn()}>
-            {step === 3 && pushState?.status !== "running" ? "Fermer" : "Annuler"}
+            {step === 3 && pushState?.status !== "running" ? "Close" : "Cancel"}
           </button>
           <div style={{ display: "flex", gap: 8 }}>
             {step === 2 && (
-              <button type="button" onClick={() => setStep(1)} style={ghostBtn()}>Retour</button>
+              <button type="button" onClick={() => setStep(1)} style={ghostBtn()}>Back</button>
             )}
             {step === 1 && (
               <button type="button" disabled={profiles.length === 0} onClick={goReview} style={primaryBtn(profiles.length > 0)}>
-                Continuer ({profiles.length})
+                Continue ({profiles.length})
               </button>
             )}
             {step === 2 && (
               <button type="button" disabled={resolving || launching} onClick={launch} style={primaryBtn(!resolving && !launching)}>
-                {launching ? <Loader2 size={13} className="animate-spin" /> : null} Lancer l&apos;envoi
+                {launching ? <Loader2 size={13} className="animate-spin" /> : null} Start push
               </button>
             )}
           </div>
@@ -336,15 +336,15 @@ function PushResult({ state }: { state: HubspotPushState | null }) {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: 30, color: COLORS.ink2 }}>
         <Loader2 size={22} className="animate-spin" style={{ color: COLORS.brand }} />
-        <span style={{ fontSize: 13 }}>Envoi vers HubSpot en cours…</span>
-        <span style={{ fontSize: 11, color: COLORS.ink3 }}>Tu peux fermer cette fenêtre, le traitement continue côté serveur.</span>
+        <span style={{ fontSize: 13 }}>Pushing to HubSpot…</span>
+        <span style={{ fontSize: 11, color: COLORS.ink3 }}>You can close this window, processing continues on the server.</span>
       </div>
     );
   }
   if (state.status === "error") {
     return (
       <div style={{ padding: 16, background: COLORS.errBg, color: COLORS.err, borderRadius: RADIUS.md, fontSize: 12 }}>
-        Échec : {state.error ?? "erreur inconnue"}
+        Failed: {state.error ?? "unknown error"}
       </div>
     );
   }
@@ -354,16 +354,16 @@ function PushResult({ state }: { state: HubspotPushState | null }) {
       <span style={{ width: 44, height: 44, borderRadius: 999, background: COLORS.okBg, color: COLORS.ok, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
         <Check size={22} />
       </span>
-      <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.ink0 }}>Envoi terminé</span>
+      <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.ink0 }}>Push complete</span>
       {s && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, width: "100%" }}>
-          <Metric label="Contacts créés" value={s.created} />
-          <Metric label="Déjà présents" value={s.existing} />
-          <Metric label="Companies associées" value={s.companyAssociated} />
-          <Metric label="Companies créées" value={s.companyCreated} accent={COLORS.brand} />
-          <Metric label="Ajoutées au scope" value={s.scopeUpserted} />
-          <Metric label="Sans email" value={s.skippedNoEmail} />
-          {s.errors > 0 && <Metric label="Erreurs" value={s.errors} accent={COLORS.err} />}
+          <Metric label="Contacts created" value={s.created} />
+          <Metric label="Already present" value={s.existing} />
+          <Metric label="Companies associated" value={s.companyAssociated} />
+          <Metric label="Companies created" value={s.companyCreated} accent={COLORS.brand} />
+          <Metric label="Added to scope" value={s.scopeUpserted} />
+          <Metric label="No email" value={s.skippedNoEmail} />
+          {s.errors > 0 && <Metric label="Errors" value={s.errors} accent={COLORS.err} />}
         </div>
       )}
     </div>
@@ -392,7 +392,7 @@ function Stat({ icon, label, value, sub, warn }: { icon: React.ReactNode; label:
 }
 
 function Steps({ step }: { step: 1 | 2 | 3 }) {
-  const labels = ["Importer", "Vérifier", "Envoyer"];
+  const labels = ["Import", "Review", "Push"];
   return (
     <div style={{ display: "flex", gap: 6, padding: "10px 16px", borderBottom: `1px solid ${COLORS.line}` }}>
       {labels.map((l, i) => {

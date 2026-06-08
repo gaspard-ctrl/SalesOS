@@ -46,7 +46,7 @@ function CrmBodyToggle({ body }: { body: string }) {
         className="flex items-center gap-0.5 mt-1.5 text-[11px] font-medium"
         style={{ color: "#f01563" }}
       >
-        {expanded ? (<>Réduire <ChevronUp size={12} /></>) : (<>Voir plus <ChevronDown size={12} /></>)}
+        {expanded ? (<>Show less <ChevronUp size={12} /></>) : (<>Show more <ChevronDown size={12} /></>)}
       </button>
     </>
   );
@@ -55,14 +55,14 @@ function CrmBodyToggle({ body }: { body: string }) {
 // ── Lifecycle helpers ──────────────────────────────────────────────────────
 
 const LIFECYCLE_LABELS: Record<string, string> = {
-  subscriber: "Abonné",
+  subscriber: "Subscriber",
   lead: "Lead",
   marketingqualifiedlead: "MQL",
   salesqualifiedlead: "SQL",
-  opportunity: "Opportunité",
-  customer: "Client",
-  evangelist: "Évangéliste",
-  other: "Autre",
+  opportunity: "Opportunity",
+  customer: "Customer",
+  evangelist: "Evangelist",
+  other: "Other",
 };
 
 const LIFECYCLE_COLORS: Record<string, { bg: string; text: string }> = {
@@ -75,13 +75,13 @@ const LIFECYCLE_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 const CRM_TYPE_CONFIG: Record<string, { icon: typeof Mail; label: string; color: string; bg: string }> = {
-  EMAIL:          { icon: Mail,          label: "Email envoyé", color: "#2563eb", bg: "#eff6ff" },
-  INCOMING_EMAIL: { icon: MailOpen,      label: "Email reçu",   color: "#059669", bg: "#ecfdf5" },
-  CALL:           { icon: Phone,         label: "Appel",        color: "#d97706", bg: "#fffbeb" },
-  MEETING:        { icon: Calendar,      label: "Réunion",      color: "#7c3aed", bg: "#f5f3ff" },
-  NOTE:           { icon: MessageSquare, label: "Note",         color: "#6b7280", bg: "#f3f4f6" },
+  EMAIL:          { icon: Mail,          label: "Email sent",     color: "#2563eb", bg: "#eff6ff" },
+  INCOMING_EMAIL: { icon: MailOpen,      label: "Email received", color: "#059669", bg: "#ecfdf5" },
+  CALL:           { icon: Phone,         label: "Call",           color: "#d97706", bg: "#fffbeb" },
+  MEETING:        { icon: Calendar,      label: "Meeting",        color: "#7c3aed", bg: "#f5f3ff" },
+  NOTE:           { icon: MessageSquare, label: "Note",           color: "#6b7280", bg: "#f3f4f6" },
 };
-const CRM_TYPE_FALLBACK = { icon: MessageSquare, label: "Activité", color: "#6b7280", bg: "#f3f4f6" };
+const CRM_TYPE_FALLBACK = { icon: MessageSquare, label: "Activity", color: "#6b7280", bg: "#f3f4f6" };
 
 function LifecycleBadge({ stage }: { stage: string }) {
   if (!stage) return null;
@@ -309,10 +309,10 @@ function ProspectCard({ result: r, onSelect, exchanges }: { result: SearchResult
         <div className="flex flex-col items-end gap-0.5 shrink-0">
           {exchanges > 0 && <ExchangesBadge count={exchanges} />}
           {r.lastContacted && (
-            <span className="text-[9px]" style={{ color: "#bbb" }}>Dernier contact : {new Date(r.lastContacted).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}</span>
+            <span className="text-[9px]" style={{ color: "#bbb" }}>Last contact: {new Date(r.lastContacted).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
           )}
           {r.createdAt && (
-            <span className="text-[9px]" style={{ color: "#bbb" }}>Créé le : {new Date(r.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}</span>
+            <span className="text-[9px]" style={{ color: "#bbb" }}>Created on: {new Date(r.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
           )}
         </div>
       </div>
@@ -325,7 +325,7 @@ function ProspectCard({ result: r, onSelect, exchanges }: { result: SearchResult
           className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md border"
           style={{ borderColor: "#e5e5e5", color: "#374151", background: "white", cursor: "pointer" }}
         >
-          {msgState === "loading" ? <><Loader2 size={9} className="animate-spin" /> Génération…</> : <><Linkedin size={9} /> Message LinkedIn</>}
+          {msgState === "loading" ? <><Loader2 size={9} className="animate-spin" /> Generating…</> : <><Linkedin size={9} /> LinkedIn message</>}
         </button>
       )}
       {msgState === "done" && msg && (
@@ -513,10 +513,10 @@ export default function ProspectingPage() {
       const r = await fetch("/api/gmail/send", { method: "POST", body: buildFormData() });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error);
-      setSendStatus({ type: "success", msg: "Email envoyé !" });
+      setSendStatus({ type: "success", msg: "Email sent!" });
       setTo([]); setCc([]); setBcc([]); setSubject(""); setBody(""); setAttachments([]);
     } catch (e) {
-      setSendStatus({ type: "error", msg: e instanceof Error ? e.message : "Erreur" });
+      setSendStatus({ type: "error", msg: e instanceof Error ? e.message : "Error" });
     } finally {
       setSending(false);
     }
@@ -530,9 +530,9 @@ export default function ProspectingPage() {
       const r = await fetch("/api/gmail/draft", { method: "POST", body: buildFormData() });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error);
-      setSendStatus({ type: "success", msg: "Brouillon sauvegardé !" });
+      setSendStatus({ type: "success", msg: "Draft saved!" });
     } catch (e) {
-      setSendStatus({ type: "error", msg: e instanceof Error ? e.message : "Erreur" });
+      setSendStatus({ type: "error", msg: e instanceof Error ? e.message : "Error" });
     } finally {
       setDrafting(false);
     }
@@ -571,9 +571,9 @@ export default function ProspectingPage() {
       setSearchResults(data.results ?? []);
       setNextCursor(data.nextCursor ?? null);
       setTotalResults(data.total ?? null);
-      if ((data.results ?? []).length === 0) setSearchError("Aucun prospect trouvé.");
+      if ((data.results ?? []).length === 0) setSearchError("No prospect found.");
     } catch (e) {
-      setSearchError(e instanceof Error ? e.message : "Erreur de recherche");
+      setSearchError(e instanceof Error ? e.message : "Search failed");
     } finally {
       setSearching(false);
     }
@@ -609,9 +609,9 @@ export default function ProspectingPage() {
       if (!r.ok) throw new Error(data.error);
       setSearchResults(data.results ?? []);
       setAiExplanation(data.explanation ?? null);
-      if ((data.results ?? []).length === 0) setSearchError("Aucun prospect trouvé.");
+      if ((data.results ?? []).length === 0) setSearchError("No prospect found.");
     } catch (e) {
-      setSearchError(e instanceof Error ? e.message : "Erreur de recherche");
+      setSearchError(e instanceof Error ? e.message : "Search failed");
     } finally {
       setSearching(false);
     }
@@ -699,7 +699,7 @@ export default function ProspectingPage() {
       if (data.body) setBody(data.body);
       setAgentStep(3);
     } catch (e) {
-      setGenError(e instanceof Error ? e.message : "Erreur de génération");
+      setGenError(e instanceof Error ? e.message : "Generation failed");
     } finally {
       setGenerating(false);
     }
@@ -708,7 +708,7 @@ export default function ProspectingPage() {
   const generateManual = async () => {
     const hasIdentity = (manualFirstName.trim() && manualCompany.trim()) || manualLinkedinUrl.trim() || to[0];
     if (!hasIdentity) {
-      setManualError("Renseigne au minimum prénom + entreprise, ou une URL LinkedIn, ou un email destinataire.");
+      setManualError("Enter at least a first name + company, or a LinkedIn URL, or a recipient email.");
       return;
     }
     setManualGenerating(true);
@@ -741,7 +741,7 @@ export default function ProspectingPage() {
       if (data.subject) setSubject(data.subject);
       if (data.body) setBody(data.body);
     } catch (e) {
-      setManualError(e instanceof Error ? e.message : "Erreur de génération");
+      setManualError(e instanceof Error ? e.message : "Generation failed");
     } finally {
       setManualGenerating(false);
     }
@@ -805,8 +805,8 @@ export default function ProspectingPage() {
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: "#f0f0f0" }}>
         <div>
-          <h1 className="text-sm font-semibold" style={{ color: "#111" }}>Prospection</h1>
-          <p className="text-xs" style={{ color: "#aaa" }}>Génère et envoie des emails de prospection ultra-personnalisés</p>
+          <h1 className="text-sm font-semibold" style={{ color: "#111" }}>Prospecting</h1>
+          <p className="text-xs" style={{ color: "#aaa" }}>Generate and send ultra-personalized prospecting emails</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -824,13 +824,13 @@ export default function ProspectingPage() {
               className="text-xs px-3 py-1.5 rounded-lg"
               style={{ background: "#fff0f3", color: "#f01563", border: "1px solid #fecdd3" }}
             >
-              Connecter Gmail →
+              Connect Gmail →
             </Link>
           )}
           {gmailConnected === true && (
             <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full" style={{ background: "#f0fdf4", color: "#16a34a" }}>
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-              Gmail connecté
+              Gmail connected
             </span>
           )}
         </div>
@@ -847,8 +847,8 @@ export default function ProspectingPage() {
           <div className="flex flex-col rounded-2xl shadow-2xl w-full max-w-2xl mx-4" style={{ background: "#fff", maxHeight: "80vh" }}>
             <div className="flex items-center justify-between px-5 py-4 border-b shrink-0" style={{ borderColor: "#f0f0f0" }}>
               <div>
-                <p className="text-sm font-semibold" style={{ color: "#111" }}>Guide Prospection</p>
-                <p className="text-xs" style={{ color: "#aaa" }}>Claude utilise ce guide pour rédiger tes emails</p>
+                <p className="text-sm font-semibold" style={{ color: "#111" }}>Prospecting Guide</p>
+                <p className="text-xs" style={{ color: "#aaa" }}>Claude uses this guide to write your emails</p>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -858,7 +858,7 @@ export default function ProspectingPage() {
                   style={{ background: savedGuide ? "#22c55e" : "#f01563", color: "#fff", opacity: savingGuide ? 0.7 : 1 }}
                 >
                   <Save size={12} />
-                  {savedGuide ? "Sauvegardé !" : savingGuide ? "…" : "Sauvegarder"}
+                  {savedGuide ? "Saved!" : savingGuide ? "…" : "Save"}
                 </button>
                 <button onClick={() => setShowGuide(false)} style={{ color: "#aaa" }}
                   onMouseEnter={(e) => (e.currentTarget.style.color = "#111")}
@@ -870,12 +870,12 @@ export default function ProspectingPage() {
             </div>
             <div className="flex-1 p-5 overflow-y-auto">
               <p className="text-xs mb-3" style={{ color: "#aaa" }}>
-                Ajoute ici des exemples d&apos;emails, le ton à adopter, les cibles prioritaires. Ce guide est personnel et privé.
+                Add example emails, the tone to use, and priority targets here. This guide is personal and private.
               </p>
               <textarea
                 value={guideContent}
                 onChange={(e) => setGuideContent(e.target.value)}
-                placeholder="Ex : Toujours commencer par une accroche personnalisée. Voici un exemple d'email réussi…"
+                placeholder="e.g. Always start with a personalized hook. Here is an example of a successful email…"
                 className="w-full rounded-xl border p-4 text-sm font-mono resize-none outline-none transition-all"
                 style={{ borderColor: "#e5e5e5", color: "#111", background: "#fafafa", minHeight: "50vh", lineHeight: 1.7 }}
                 onFocus={(e) => (e.currentTarget.style.borderColor = "#f01563")}
@@ -898,7 +898,7 @@ export default function ProspectingPage() {
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: "#f0f0f0" }}>
               <div>
-                <p className="text-[15px] font-semibold" style={{ color: "#111" }}>Historique CRM</p>
+                <p className="text-[15px] font-semibold" style={{ color: "#111" }}>CRM history</p>
                 <p className="text-xs mt-0.5" style={{ color: "#999" }}>
                   {selectedContact.firstName} {selectedContact.lastName} · {selectedContact.company}
                 </p>
@@ -964,20 +964,20 @@ export default function ProspectingPage() {
 
               {gmailConnected === false && (
                 <div className="px-4 py-2.5 text-xs text-center shrink-0" style={{ background: "#fff8f0", color: "#c2410c", borderBottom: "1px solid #ffe4c4" }}>
-                  Gmail non connecté —{" "}
-                  <Link href="/settings" className="underline font-medium">connecte-le dans Settings</Link>
-                  {" "}pour envoyer.
+                  Gmail not connected —{" "}
+                  <Link href="/settings" className="underline font-medium">connect it in Settings</Link>
+                  {" "}to send.
                 </div>
               )}
 
               {/* From */}
               <div className="flex items-center gap-2 px-4 py-2.5 border-b shrink-0" style={{ borderColor: "#f0f0f0", background: "#fafafa" }}>
-                <span className="text-xs font-medium w-10 shrink-0" style={{ color: "#aaa" }}>De</span>
+                <span className="text-xs font-medium w-10 shrink-0" style={{ color: "#aaa" }}>From</span>
                 <span className="text-sm" style={{ color: "#888" }}>{fromEmail || "…"}</span>
               </div>
 
               {/* To */}
-              <TagInput label="À" tags={to} onAdd={addTo} onRemove={(t) => setTo((p) => p.filter((x) => x !== t))} placeholder="destinataire@email.com — Entrée pour ajouter" />
+              <TagInput label="To" tags={to} onAdd={addTo} onRemove={(t) => setTo((p) => p.filter((x) => x !== t))} placeholder="recipient@email.com — Enter to add" />
 
               {showCc && (
                 <TagInput label="Cc" tags={cc} onAdd={addCc} onRemove={(t) => setCc((p) => p.filter((x) => x !== t))} placeholder="cc@email.com" />
@@ -1005,8 +1005,8 @@ export default function ProspectingPage() {
 
               {/* Subject */}
               <div className="flex items-center gap-2 px-4 py-2.5 border-b shrink-0" style={{ borderColor: "#f0f0f0" }}>
-                <span className="text-xs font-medium w-10 shrink-0" style={{ color: "#aaa" }}>Objet</span>
-                <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Objet de l'email"
+                <span className="text-xs font-medium w-10 shrink-0" style={{ color: "#aaa" }}>Subject</span>
+                <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Email subject"
                   className="flex-1 text-sm outline-none bg-transparent font-medium" style={{ color: "#111" }} />
               </div>
 
@@ -1019,21 +1019,21 @@ export default function ProspectingPage() {
                 >
                   <span className="inline-flex items-center gap-1.5">
                     <Sparkles size={12} style={{ color: "#f01563" }} />
-                    Assistant IA — rédiger sans contact CRM
+                    AI assistant - write without a CRM contact
                   </span>
                   {manualOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                 </button>
                 {manualOpen && (
                   <div className="px-4 pb-3 space-y-2">
                     <p className="text-[10px]" style={{ color: "#aaa" }}>
-                      Renseigne <b>prénom + entreprise</b> (Claude trouvera le LinkedIn) ou colle directement une <b>URL LinkedIn</b>. Tous les champs sont optionnels — l&apos;email destinataire (champ &quot;À&quot;) est aussi utilisé pour retrouver le profil.
+                      Enter <b>first name + company</b> (Claude will find the LinkedIn) or paste a <b>LinkedIn URL</b> directly. All fields are optional - the recipient email (the &quot;To&quot; field) is also used to find the profile.
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       <input
                         type="text"
                         value={manualFirstName}
                         onChange={(e) => setManualFirstName(e.target.value)}
-                        placeholder="Prénom"
+                        placeholder="First name"
                         className="text-xs px-2.5 py-1.5 rounded-lg border outline-none"
                         style={{ borderColor: "#e5e5e5", background: "#fff" }}
                       />
@@ -1041,7 +1041,7 @@ export default function ProspectingPage() {
                         type="text"
                         value={manualLastName}
                         onChange={(e) => setManualLastName(e.target.value)}
-                        placeholder="Nom"
+                        placeholder="Last name"
                         className="text-xs px-2.5 py-1.5 rounded-lg border outline-none"
                         style={{ borderColor: "#e5e5e5", background: "#fff" }}
                       />
@@ -1050,7 +1050,7 @@ export default function ProspectingPage() {
                       type="text"
                       value={manualCompany}
                       onChange={(e) => setManualCompany(e.target.value)}
-                      placeholder="Entreprise"
+                      placeholder="Company"
                       className="w-full text-xs px-2.5 py-1.5 rounded-lg border outline-none"
                       style={{ borderColor: "#e5e5e5", background: "#fff" }}
                     />
@@ -1060,7 +1060,7 @@ export default function ProspectingPage() {
                         type="text"
                         value={manualLinkedinUrl}
                         onChange={(e) => setManualLinkedinUrl(e.target.value)}
-                        placeholder="URL LinkedIn (optionnel) — https://www.linkedin.com/in/…"
+                        placeholder="LinkedIn URL (optional) — https://www.linkedin.com/in/…"
                         className="w-full text-xs pl-7 pr-2.5 py-1.5 rounded-lg border outline-none"
                         style={{ borderColor: "#e5e5e5", background: "#fff" }}
                       />
@@ -1068,7 +1068,7 @@ export default function ProspectingPage() {
                     <textarea
                       value={manualContext}
                       onChange={(e) => setManualContext(e.target.value)}
-                      placeholder="Contexte / actualité / angle (optionnel)"
+                      placeholder="Context / news / angle (optional)"
                       rows={2}
                       className="w-full text-xs px-2.5 py-1.5 rounded-lg border outline-none resize-none"
                       style={{ borderColor: "#e5e5e5", background: "#fff" }}
@@ -1085,9 +1085,9 @@ export default function ProspectingPage() {
                       style={{ background: "#f01563", color: "#fff", opacity: manualGenerating ? 0.6 : 1 }}
                     >
                       {manualGenerating ? (
-                        <><Loader2 size={12} className="animate-spin" /> Génération…</>
+                        <><Loader2 size={12} className="animate-spin" /> Generating…</>
                       ) : (
-                        <><Sparkles size={12} /> Générer l&apos;email</>
+                        <><Sparkles size={12} /> Generate email</>
                       )}
                     </button>
                   </div>
@@ -1095,7 +1095,7 @@ export default function ProspectingPage() {
               </div>
 
               {/* Body */}
-              <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Écris ton email ici…"
+              <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write your email here…"
                 className="flex-1 resize-none outline-none text-sm leading-relaxed p-4"
                 style={{ color: "#111", minHeight: "200px" }} />
 
@@ -1106,7 +1106,7 @@ export default function ProspectingPage() {
                     <span key={i} className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full" style={{ background: "#f0f0f0", color: "#555" }}>
                       <Paperclip size={10} />
                       {f.name}
-                      <span className="text-[10px]" style={{ color: "#aaa" }}>({(f.size / 1024).toFixed(0)} Ko)</span>
+                      <span className="text-[10px]" style={{ color: "#aaa" }}>({(f.size / 1024).toFixed(0)} KB)</span>
                       <button onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))} className="hover:opacity-70 flex items-center ml-0.5">
                         <X size={9} />
                       </button>
@@ -1124,7 +1124,7 @@ export default function ProspectingPage() {
                     onMouseLeave={(e) => (e.currentTarget.style.color = "#bbb")}
                   >
                     <Paperclip size={14} />
-                    Joindre
+                    Attach
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1138,14 +1138,14 @@ export default function ProspectingPage() {
                     style={{ borderColor: canDraft ? "#d4d4d4" : "#eee", color: canDraft ? "#555" : "#ccc", cursor: canDraft ? "pointer" : "not-allowed" }}
                   >
                     <Save size={12} />
-                    {drafting ? "…" : "Brouillon"}
+                    {drafting ? "…" : "Draft"}
                   </button>
                   <button onClick={send} disabled={!canSend}
                     className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-opacity"
                     style={{ background: "#f01563", color: "#fff", opacity: canSend ? 1 : 0.4, cursor: canSend ? "pointer" : "not-allowed" }}
                   >
                     <Send size={12} />
-                    {sending ? "Envoi…" : "Envoyer"}
+                    {sending ? "Sending…" : "Send"}
                   </button>
                 </div>
               </div>
@@ -1171,7 +1171,7 @@ export default function ProspectingPage() {
                     {s}
                   </div>
                   <span className="text-xs" style={{ color: agentStep >= s ? "#111" : "#bbb" }}>
-                    {s === 1 ? "Recherche" : s === 2 ? "Informations" : "Génération"}
+                    {s === 1 ? "Search" : s === 2 ? "Information" : "Generation"}
                   </span>
                   {s < 3 && <ChevronRight size={12} style={{ color: "#ddd" }} />}
                 </div>
@@ -1181,7 +1181,7 @@ export default function ProspectingPage() {
                   onMouseEnter={(e) => (e.currentTarget.style.color = "#555")}
                   onMouseLeave={(e) => (e.currentTarget.style.color = "#bbb")}
                 >
-                  <RotateCcw size={11} /> Recommencer
+                  <RotateCcw size={11} /> Start over
                 </button>
               )}
             </div>
@@ -1190,8 +1190,8 @@ export default function ProspectingPage() {
             {agentStep === 1 && (
               <div className="space-y-3">
                 <div>
-                  <p className="text-sm font-medium mb-1" style={{ color: "#111" }}>Prospects HubSpot</p>
-                  <p className="text-xs" style={{ color: "#aaa" }}>Tape un nom, email ou une requête en langage naturel</p>
+                  <p className="text-sm font-medium mb-1" style={{ color: "#111" }}>HubSpot prospects</p>
+                  <p className="text-xs" style={{ color: "#aaa" }}>Type a name, email or a natural-language query</p>
                 </div>
 
                 {/* Search bars */}
@@ -1203,7 +1203,7 @@ export default function ProspectingPage() {
                       value={simpleQuery}
                       onChange={(e) => setSimpleQuery(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && searchSimple()}
-                      placeholder="Nom, email, entreprise…"
+                      placeholder="Name, email, company…"
                       className="flex-1 rounded-xl border px-3 py-2.5 text-sm outline-none transition-all"
                       style={{ borderColor: "#e5e5e5", color: "#111", background: "#fff" }}
                       onFocus={(e) => (e.currentTarget.style.borderColor = "#f01563")}
@@ -1216,7 +1216,7 @@ export default function ProspectingPage() {
                       style={{ background: "#f01563", color: "#fff", opacity: searching && !isAiSearch ? 0.7 : 1 }}
                     >
                       {searching && !isAiSearch ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                      Rechercher
+                      Search
                     </button>
                   </div>
 
@@ -1227,7 +1227,7 @@ export default function ProspectingPage() {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && searchAI()}
-                      placeholder="Demande à l'IA…"
+                      placeholder="Ask AI…"
                       className="flex-1 rounded-xl border px-3 py-2.5 text-sm outline-none transition-all"
                       style={{ borderColor: "#e5e5e5", color: "#111", background: "#fff" }}
                       onFocus={(e) => (e.currentTarget.style.borderColor = "#7c3aed")}
@@ -1240,7 +1240,7 @@ export default function ProspectingPage() {
                       style={{ background: "#7c3aed", color: "#fff", opacity: searching && isAiSearch ? 0.7 : !searchQuery.trim() ? 0.5 : 1 }}
                     >
                       {searching && isAiSearch ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                      IA
+                      AI
                     </button>
                   </div>
                 </div>
@@ -1249,7 +1249,7 @@ export default function ProspectingPage() {
                 {searching && isAiSearch && (
                   <p className="text-xs flex items-center gap-1.5" style={{ color: "#7c3aed" }}>
                     <Loader2 size={11} className="animate-spin" />
-                    L&apos;IA analyse ta demande et cherche dans HubSpot…
+                    AI is analyzing your request and searching HubSpot…
                   </p>
                 )}
 
@@ -1267,7 +1267,7 @@ export default function ProspectingPage() {
                         cursor: "pointer",
                       }}
                     >
-                      {v === "mine" ? "Mes contacts" : "Tous"}
+                      {v === "mine" ? "My contacts" : "All"}
                     </button>
                   ))}
                 </div>
@@ -1276,68 +1276,68 @@ export default function ProspectingPage() {
                 <div className="space-y-2">
                   <div className="flex gap-2 flex-wrap">
                     <FilterSelect value={filterLifecycle} onChange={setFilterLifecycle} label="Lifecycle">
-                      <option value="subscriber">Abonné</option>
+                      <option value="subscriber">Subscriber</option>
                       <option value="lead">Lead</option>
                       <option value="marketingqualifiedlead">MQL</option>
                       <option value="salesqualifiedlead">SQL</option>
-                      <option value="opportunity">Opportunité</option>
-                      <option value="customer">Client</option>
+                      <option value="opportunity">Opportunity</option>
+                      <option value="customer">Customer</option>
                     </FilterSelect>
-                    <FilterSelect value={filterIndustry} onChange={setFilterIndustry} label="Secteur">
+                    <FilterSelect value={filterIndustry} onChange={setFilterIndustry} label="Industry">
                       {[...new Set(searchResults.map((r) => r.industry).filter(Boolean))].sort().map((ind) => (
                         <option key={ind} value={ind}>{ind}</option>
                       ))}
                     </FilterSelect>
-                    <FilterSelect value={filterCountry} onChange={setFilterCountry} label="Pays">
+                    <FilterSelect value={filterCountry} onChange={setFilterCountry} label="Country">
                       {[...new Set(searchResults.map((r) => r.country).filter(Boolean))].sort().map((c) => (
                         <option key={c} value={c}>{c}</option>
                       ))}
                     </FilterSelect>
-                    <FilterSelect value={filterLeadStatus} onChange={setFilterLeadStatus} label="Statut lead">
-                      <option value="NEW">Nouveau</option>
-                      <option value="OPEN">Ouvert</option>
-                      <option value="IN_PROGRESS">En cours</option>
-                      <option value="ATTEMPTED_TO_CONTACT">Contacté</option>
-                      <option value="CONNECTED">Connecté</option>
-                      <option value="BAD_TIMING">Mauvais timing</option>
-                      <option value="UNQUALIFIED">Non qualifié</option>
+                    <FilterSelect value={filterLeadStatus} onChange={setFilterLeadStatus} label="Lead status">
+                      <option value="NEW">New</option>
+                      <option value="OPEN">Open</option>
+                      <option value="IN_PROGRESS">In progress</option>
+                      <option value="ATTEMPTED_TO_CONTACT">Contacted</option>
+                      <option value="CONNECTED">Connected</option>
+                      <option value="BAD_TIMING">Bad timing</option>
+                      <option value="UNQUALIFIED">Unqualified</option>
                     </FilterSelect>
-                    <FilterSelect value={filterContacted} onChange={setFilterContacted} label="Dernier contact">
-                      <option value="never">Jamais contacté</option>
-                      <option value="lt7">Moins de 7j</option>
-                      <option value="lt30">Moins de 30j</option>
-                      <option value="30to60">30 – 60j</option>
-                      <option value="60to180">60j – 6 mois</option>
-                      <option value="180to365">6 – 12 mois</option>
-                      <option value="gt365">Plus d'1 an</option>
+                    <FilterSelect value={filterContacted} onChange={setFilterContacted} label="Last contact">
+                      <option value="never">Never contacted</option>
+                      <option value="lt7">Less than 7d</option>
+                      <option value="lt30">Less than 30d</option>
+                      <option value="30to60">30 – 60d</option>
+                      <option value="60to180">60d – 6 months</option>
+                      <option value="180to365">6 – 12 months</option>
+                      <option value="gt365">More than 1 year</option>
                     </FilterSelect>
-                    <FilterSelect value={filterCompanySize} onChange={setFilterCompanySize} label="Taille">
+                    <FilterSelect value={filterCompanySize} onChange={setFilterCompanySize} label="Size">
                       <option value="1-10">1 – 10</option>
                       <option value="11-50">11 – 50</option>
                       <option value="51-200">51 – 200</option>
                       <option value="201-1000">201 – 1000</option>
-                      <option value="1000+">+ 1000</option>
+                      <option value="1000+">1000+</option>
                     </FilterSelect>
                     <FilterSelect value={filterSource} onChange={setFilterSource} label="Source">
-                      <option value="ORGANIC_SEARCH">Recherche organique</option>
-                      <option value="DIRECT_TRAFFIC">Trafic direct</option>
+                      <option value="ORGANIC_SEARCH">Organic search</option>
+                      <option value="DIRECT_TRAFFIC">Direct traffic</option>
                       <option value="EMAIL_MARKETING">Email marketing</option>
-                      <option value="PAID_SEARCH">Recherche payante</option>
-                      <option value="REFERRALS">Référence</option>
-                      <option value="SOCIAL_MEDIA">Réseaux sociaux</option>
-                      <option value="OFFLINE">Hors ligne</option>
-                      <option value="OTHER">Autre</option>
+                      <option value="PAID_SEARCH">Paid search</option>
+                      <option value="REFERRALS">Referral</option>
+                      <option value="SOCIAL_MEDIA">Social media</option>
+                      <option value="OFFLINE">Offline</option>
+                      <option value="OTHER">Other</option>
                     </FilterSelect>
-                    <FilterSelect value={filterCreatedYear} onChange={setFilterCreatedYear} label="Créé en">
+                    <FilterSelect value={filterCreatedYear} onChange={setFilterCreatedYear} label="Created in">
                       {[2026, 2025, 2024, 2023, 2022, 2021, 2020].map((y) => (
                         <option key={y} value={String(y)}>{y}</option>
                       ))}
                     </FilterSelect>
-                    <FilterSelect value={filterSort} onChange={setFilterSort} label="Trier par">
-                      <option value="recent">Modifié récemment</option>
-                      <option value="created">Date de création</option>
-                      <option value="lastcontact">Dernier contact</option>
-                      <option value="alpha">Alphabétique</option>
+                    <FilterSelect value={filterSort} onChange={setFilterSort} label="Sort by">
+                      <option value="recent">Recently modified</option>
+                      <option value="created">Creation date</option>
+                      <option value="lastcontact">Last contact</option>
+                      <option value="alpha">Alphabetical</option>
                     </FilterSelect>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1408,19 +1408,19 @@ export default function ProspectingPage() {
                   onMouseEnter={(e) => (e.currentTarget.style.color = "#555")}
                   onMouseLeave={(e) => (e.currentTarget.style.color = "#aaa")}
                 >
-                  ← Retour aux résultats
+                  ← Back to results
                 </button>
                 {loadingDetails ? (
                   <div className="flex items-center gap-3 py-8 justify-center">
                     <Loader2 size={18} className="animate-spin" style={{ color: "#f01563" }} />
-                    <span className="text-sm" style={{ color: "#888" }}>Chargement des données HubSpot…</span>
+                    <span className="text-sm" style={{ color: "#888" }}>Loading HubSpot data…</span>
                   </div>
                 ) : selectedContact && (
                   <>
                     {/* Analysis bloc */}
                     {analysis && (
                       <div className="rounded-xl px-4 py-3" style={{ background: "#f5f5f5", border: "1px solid #ebebeb" }}>
-                        <p className="text-[10px] font-semibold mb-1" style={{ color: "#aaa", textTransform: "uppercase", letterSpacing: "0.05em" }}>Analyse</p>
+                        <p className="text-[10px] font-semibold mb-1" style={{ color: "#aaa", textTransform: "uppercase", letterSpacing: "0.05em" }}>Analysis</p>
                         <p className="text-xs leading-relaxed italic" style={{ color: "#555" }}>{analysis}</p>
                       </div>
                     )}
@@ -1457,13 +1457,13 @@ export default function ProspectingPage() {
                             </span>
                           )}
                         </div>
-                        <Field label="Secteur" value={contactIndustry} onChange={setContactIndustry} placeholder="ex: Technology" />
+                        <Field label="Industry" value={contactIndustry} onChange={setContactIndustry} placeholder="e.g. Technology" />
                       </div>
 
                       {/* Mini CRM timeline */}
                       {(selectedContact.crmDetails?.length > 0 || selectedContact.crmSummary) && (
                         <div className="mt-3 pt-3" style={{ borderTop: "1px solid #f0f0f0" }}>
-                          <span className="text-[11px] font-medium" style={{ color: "#888" }}>Historique CRM</span>
+                          <span className="text-[11px] font-medium" style={{ color: "#888" }}>CRM history</span>
                           {selectedContact.crmDetails?.length > 0 ? (
                             <div className="mt-2 space-y-2">
                               {selectedContact.crmDetails.slice(0, 3).map((e, i) => {
@@ -1493,7 +1493,7 @@ export default function ProspectingPage() {
                             className="text-[10px] font-medium mt-2 block transition-opacity hover:opacity-80"
                             style={{ color: "#f01563" }}
                           >
-                            Voir tout l&apos;historique →
+                            View full history →
                           </button>
                         </div>
                       )}
@@ -1501,38 +1501,38 @@ export default function ProspectingPage() {
 
                     {/* Manual fields */}
                     <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: "#e5e5e5", background: "#fff" }}>
-                      <p className="text-xs font-semibold" style={{ color: "#111" }}>Contexte supplémentaire</p>
+                      <p className="text-xs font-semibold" style={{ color: "#111" }}>Additional context</p>
                       <Field
-                        label="Actualité récente / contexte externe"
+                        label="Recent news / external context"
                         value={recentNews}
                         onChange={setRecentNews}
-                        placeholder="Ex : levée de fonds annoncée, post LinkedIn sur le leadership…"
+                        placeholder="e.g. announced funding round, LinkedIn post about leadership…"
                         multiline
                       />
                       <Field
-                        label="Contexte de l'entreprise"
+                        label="Company context"
                         value={companyContext}
                         onChange={setCompanyContext}
-                        placeholder="Ex : scale-up 200 personnes en hypercroissance, réorganisation en cours…"
+                        placeholder="e.g. 200-person scale-up in hypergrowth, reorganization underway…"
                         multiline
                       />
                       <Field
-                        label="Pourquoi pourrait-il avoir besoin de coaching ?"
+                        label="Why might they need coaching?"
                         value={coachingNeed}
                         onChange={setCoachingNeed}
-                        placeholder="Ex : turnover élevé, nouveau manager en difficulté, transformation culturelle…"
+                        placeholder="e.g. high turnover, new manager struggling, cultural transformation…"
                         multiline
                       />
                       <Field
-                        label="Angle d'attaque / message clé"
+                        label="Angle / key message"
                         value={angle}
                         onChange={setAngle}
-                        placeholder="Ex : ROI mesurable, benchmarks sectoriels, cas client similaire…"
+                        placeholder="e.g. measurable ROI, industry benchmarks, similar customer case…"
                         multiline
                       />
                       {selectedContact.linkedinUrl && (
                         <div className="pt-3" style={{ borderTop: "1px solid #f0f0f0" }}>
-                          <p className="text-[11px] font-medium mb-1.5" style={{ color: "#888" }}>Profil LinkedIn</p>
+                          <p className="text-[11px] font-medium mb-1.5" style={{ color: "#888" }}>LinkedIn profile</p>
                           <a
                             href={selectedContact.linkedinUrl}
                             target="_blank"
@@ -1544,7 +1544,7 @@ export default function ProspectingPage() {
                             <span className="truncate max-w-[260px]">{selectedContact.linkedinUrl.replace(/^https?:\/\/(www\.)?/, "")}</span>
                           </a>
                           <p className="text-[10px] mt-1.5" style={{ color: "#aaa" }}>
-                            Vérifie que c&apos;est bien la bonne personne — son parcours sera utilisé pour personnaliser le message.
+                            Make sure this is the right person - their background will be used to personalize the message.
                           </p>
                         </div>
                       )}
@@ -1552,19 +1552,19 @@ export default function ProspectingPage() {
 
                     {/* Instructions block */}
                     <div className="rounded-xl border p-4" style={{ borderColor: "#e5e5e5", background: "#fff" }}>
-                      <p className="text-xs font-semibold mb-3" style={{ color: "#111" }}>Instructions pour Claude</p>
+                      <p className="text-xs font-semibold mb-3" style={{ color: "#111" }}>Instructions for Claude</p>
                       <Field
-                        label="Consignes / ton / contraintes"
+                        label="Guidelines / tone / constraints"
                         value={userInstructions}
                         onChange={setUserInstructions}
-                        placeholder="Ex : Sois très bref, commence par une accroche sur la croissance, évite de parler de prix…"
+                        placeholder="e.g. Be very brief, start with a hook about growth, avoid mentioning pricing…"
                         multiline
                       />
                     </div>
 
                     {/* QCM targeting */}
                     <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: "#e5e5e5", background: "#fff" }}>
-                      <p className="text-xs font-semibold" style={{ color: "#111" }}>Ciblage du message</p>
+                      <p className="text-xs font-semibold" style={{ color: "#111" }}>Message targeting</p>
                       {([
                         {
                           label: "Type",
@@ -1576,35 +1576,35 @@ export default function ProspectingPage() {
                           ],
                         },
                         {
-                          label: "Longueur",
+                          label: "Length",
                           value: qcmLength,
                           setter: setQcmLength,
                           options: [
-                            { v: "court", label: "Court" },
-                            { v: "moyen", label: "Moyen" },
+                            { v: "court", label: "Short" },
+                            { v: "moyen", label: "Medium" },
                             { v: "long", label: "Long" },
                           ],
                         },
                         {
-                          label: "Ton",
+                          label: "Tone",
                           value: qcmTone,
                           setter: setQcmTone,
                           options: [
-                            { v: "formel", label: "Formel" },
-                            { v: "semi-formel", label: "Semi-formel" },
+                            { v: "formel", label: "Formal" },
+                            { v: "semi-formel", label: "Semi-formal" },
                             { v: "direct", label: "Direct" },
                             { v: "challenger", label: "Challenger" },
                           ],
                         },
                         {
-                          label: "Objectif",
+                          label: "Goal",
                           value: qcmObjectif,
                           setter: setQcmObjectif,
                           options: [
-                            { v: "rdv", label: "Obtenir un RDV" },
-                            { v: "ressource", label: "Partager ressource" },
-                            { v: "qualifier", label: "Qualifier" },
-                            { v: "reactiver", label: "Réactiver" },
+                            { v: "rdv", label: "Book a meeting" },
+                            { v: "ressource", label: "Share a resource" },
+                            { v: "qualifier", label: "Qualify" },
+                            { v: "reactiver", label: "Re-engage" },
                           ],
                         },
                       ] as { label: string; value: string; setter: (v: string) => void; options: { v: string; label: string }[] }[]).map(({ label, value, setter, options }) => (
@@ -1647,9 +1647,9 @@ export default function ProspectingPage() {
                       style={{ background: "#f01563", color: "#fff", opacity: canGenerate ? 1 : 0.5 }}
                     >
                       {generating ? (
-                        <><Loader2 size={16} className="animate-spin" /> Génération en cours…</>
+                        <><Loader2 size={16} className="animate-spin" /> Generating…</>
                       ) : (
-                        <><Sparkles size={16} /> Générer l&apos;email</>
+                        <><Sparkles size={16} /> Generate email</>
                       )}
                     </button>
                   </>
@@ -1664,10 +1664,10 @@ export default function ProspectingPage() {
                   <Sparkles size={24} style={{ color: "#16a34a" }} />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-semibold mb-1" style={{ color: "#111" }}>Email généré !</p>
+                  <p className="text-sm font-semibold mb-1" style={{ color: "#111" }}>Email generated!</p>
                   <p className="text-xs" style={{ color: "#888" }}>
-                    Le compositeur a été pré-rempli avec l&apos;objet et le corps de l&apos;email.
-                    <br />Relis, ajuste si besoin, puis envoie.
+                    The composer has been pre-filled with the email subject and body.
+                    <br />Review, adjust if needed, then send.
                   </p>
                 </div>
                 <button
@@ -1677,7 +1677,7 @@ export default function ProspectingPage() {
                   onMouseEnter={(e) => (e.currentTarget.style.background = "#f5f5f5")}
                   onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
                 >
-                  ← Retour aux résultats
+                  ← Back to results
                 </button>
               </div>
             )}

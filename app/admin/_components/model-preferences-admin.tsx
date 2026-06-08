@@ -3,24 +3,24 @@
 import { useState } from "react";
 
 const MODELS = [
-  { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5 — rapide, économique" },
-  { id: "claude-sonnet-4-6", label: "Sonnet 4.6 — équilibré" },
+  { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5 - fast, economical" },
+  { id: "claude-sonnet-4-6", label: "Sonnet 4.6 - balanced" },
   { id: "claude-opus-4-6", label: "Opus 4.6" },
-  { id: "claude-opus-4-8", label: "Opus 4.8 — le plus puissant" },
+  { id: "claude-opus-4-8", label: "Opus 4.8 - most powerful" },
 ];
 
 const FEATURES = [
-  { key: "chat",           label: "Assistant commercial (GPT)",         defaultModel: "claude-haiku-4-5-20251001" },
-  { key: "briefing",       label: "Briefing réunion",                   defaultModel: "claude-haiku-4-5-20251001" },
-  { key: "prospection",    label: "Génération d'emails prospection",    defaultModel: "claude-haiku-4-5-20251001" },
-  { key: "mass_prospection", label: "Mass prospection (campagnes)",     defaultModel: "claude-haiku-4-5-20251001" },
-  { key: "deals_score",    label: "Scoring des deals",                  defaultModel: "claude-haiku-4-5-20251001" },
-  { key: "deals_analyze",  label: "Analyse approfondie des deals",      defaultModel: "claude-sonnet-4-6" },
-  { key: "deals_email",    label: "Email de suivi deal",                defaultModel: "claude-haiku-4-5-20251001" },
-  { key: "sales_coach",    label: "Sales Coach (debrief meetings)",     defaultModel: "claude-haiku-4-5-20251001" },
-  { key: "meeting_recap",  label: "Sales Coach — recap meeting",        defaultModel: "claude-haiku-4-5-20251001" },
-  { key: "clients",        label: "Clients — fiches & recaps",          defaultModel: "claude-sonnet-4-6" },
-  { key: "marketing",      label: "Marketing — articles & LinkedIn",    defaultModel: "claude-sonnet-4-6" },
+  { key: "chat",           label: "Sales assistant (GPT)",              defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "briefing",       label: "Meeting briefing",                   defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "prospection",    label: "Prospecting email generation",       defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "mass_prospection", label: "Mass prospecting (campaigns)",     defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "deals_score",    label: "Deal scoring",                       defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "deals_analyze",  label: "In-depth deal analysis",             defaultModel: "claude-sonnet-4-6" },
+  { key: "deals_email",    label: "Deal follow-up email",               defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "sales_coach",    label: "Sales Coach (meeting debriefs)",     defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "meeting_recap",  label: "Sales Coach - meeting recap",        defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "clients",        label: "Clients - profiles & recaps",        defaultModel: "claude-sonnet-4-6" },
+  { key: "marketing",      label: "Marketing - articles & LinkedIn",    defaultModel: "claude-sonnet-4-6" },
 ];
 
 export function ModelPreferencesAdmin({ initialPreferences }: { initialPreferences: Record<string, string> }) {
@@ -55,7 +55,7 @@ export function ModelPreferencesAdmin({ initialPreferences }: { initialPreferenc
             <span className="text-xs" style={{ color: "#444" }}>{feature.label}</span>
             <div className="flex items-center gap-2">
               {saved === feature.key && (
-                <span className="text-xs" style={{ color: "#16a34a" }}>Enregistré</span>
+                <span className="text-xs" style={{ color: "#16a34a" }}>Saved</span>
               )}
               <select
                 value={current}

@@ -20,7 +20,7 @@ export function SidebarFloatingToggle() {
   return (
     <button
       type="button"
-      aria-label="Déplier la sidebar"
+      aria-label="Expand sidebar"
       onClick={toggle}
       className="hidden md:inline-flex"
       style={{

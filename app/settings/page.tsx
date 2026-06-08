@@ -61,10 +61,10 @@ export default async function SettingsPage() {
     <div className="p-8 max-w-2xl mx-auto">
       <div className="mb-8">
         <h1 className="text-xl font-semibold" style={{ color: "#111" }}>
-          Paramètres
+          Settings
         </h1>
         <p className="text-sm mt-1" style={{ color: "#888" }}>
-          Gère tes intégrations et ton accès à SalesOS.
+          Manage your integrations and your access to SalesOS.
         </p>
       </div>
 
@@ -72,11 +72,11 @@ export default async function SettingsPage() {
         {/* Claude API */}
         <IntegrationCard
           title="Claude AI"
-          description="Accès à l'intelligence artificielle. Configuré par Arthur."
+          description="Access to the AI. Configured by Arthur."
           status={<KeyStatus active={claudeActive} />}
           note={
             !claudeActive
-              ? "Contacte Arthur pour activer ton accès."
+              ? "Contact Arthur to enable your access."
               : undefined
           }
         />
@@ -84,9 +84,9 @@ export default async function SettingsPage() {
         {/* Gmail */}
         <IntegrationCard
           title="Gmail"
-          description="Connecte ton compte Gmail pour envoyer des emails et analyser tes échanges."
+          description="Connect your Gmail account to send emails and analyze your conversations."
           status={
-            <Suspense fallback={<span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "#f5f5f5", color: "#aaa" }}>Vérification…</span>}>
+            <Suspense fallback={<span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "#f5f5f5", color: "#aaa" }}>Checking…</span>}>
               <GmailConnect initialConnected={gmailConnected} />
             </Suspense>
           }
@@ -95,19 +95,19 @@ export default async function SettingsPage() {
         {/* Google Calendar */}
         <IntegrationCard
           title="Google Calendar"
-          description="Accès à ton calendrier pour le Briefing pré-meeting. Utilise le même compte Google que Gmail."
+          description="Access to your calendar for the pre-meeting briefing. Uses the same Google account as Gmail."
           status={
-            <Suspense fallback={<span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "#f5f5f5", color: "#aaa" }}>Vérification…</span>}>
+            <Suspense fallback={<span className="text-xs px-2.5 py-1 rounded-full" style={{ background: "#f5f5f5", color: "#aaa" }}>Checking…</span>}>
               <CalendarStatus gmailConnected={gmailConnected} />
             </Suspense>
           }
-          note={!gmailConnected ? "Connecte d'abord Gmail pour activer Google Calendar." : undefined}
+          note={!gmailConnected ? "Connect Gmail first to enable Google Calendar." : undefined}
         />
 
         {/* Google Drive */}
         <IntegrationCard
           title="Google Drive"
-          description="Accès partagé au Drive pour chercher et lire des documents depuis CoachelloGPT."
+          description="Shared Drive access to search and read documents from CoachelloGPT."
           status={
             <span
               className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium"
@@ -116,29 +116,29 @@ export default async function SettingsPage() {
                 : { background: "#fef2f2", color: "#991b1b" }}
             >
               <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: process.env.GOOGLE_DRIVE_REFRESH_TOKEN ? "#22c55e" : "#ef4444" }} />
-              {process.env.GOOGLE_DRIVE_REFRESH_TOKEN ? "Connecté" : "Non configuré"}
+              {process.env.GOOGLE_DRIVE_REFRESH_TOKEN ? "Connected" : "Not configured"}
             </span>
           }
-          note={!process.env.GOOGLE_DRIVE_REFRESH_TOKEN ? "Variable GOOGLE_DRIVE_REFRESH_TOKEN à configurer." : undefined}
+          note={!process.env.GOOGLE_DRIVE_REFRESH_TOKEN ? "GOOGLE_DRIVE_REFRESH_TOKEN variable to configure." : undefined}
         />
 
         {/* HubSpot */}
         <IntegrationCard
           title="HubSpot CRM"
-          description="Accès partagé à toute l'équipe. Géré par Arthur."
+          description="Shared access for the whole team. Managed by Arthur."
           status={
             <span
               className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium"
               style={{ background: "#f0fdf4", color: "#16a34a" }}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-              Connecté
+              Connected
             </span>
           }
           action={
             <div>
               <p className="text-xs" style={{ color: "#888" }}>
-                Ton identifiant HubSpot Owner — utilisé pour filtrer tes deals et contacts. Détecté automatiquement depuis ton email.
+                Your HubSpot Owner ID - used to filter your deals and contacts. Detected automatically from your email.
               </p>
               <HubspotOwnerInput initialValue={hubspotOwnerId} />
             </div>
@@ -148,20 +148,20 @@ export default async function SettingsPage() {
         {/* Slack */}
         <IntegrationCard
           title="Slack"
-          description="Intégration Slack partagée. Accès en lecture et écriture."
+          description="Shared Slack integration. Read and write access."
           status={
             <span
               className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium"
               style={{ background: "#f0fdf4", color: "#16a34a" }}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-              Connecté
+              Connected
             </span>
           }
           action={
             <div>
               <p className="text-xs" style={{ color: "#888" }}>
-                Ton nom d&apos;affichage Slack — nom exact tel qu&apos;il apparaît sur Slack (pour recevoir les briefings en DM)
+                Your Slack display name - the exact name as it appears on Slack (to receive briefings via DM)
               </p>
               <SlackNameInput initialValue={slackDisplayName} />
             </div>
@@ -172,31 +172,31 @@ export default async function SettingsPage() {
       {/* Guides IA */}
       <div className="mt-8 space-y-3">
         <div>
-          <h2 className="text-base font-semibold" style={{ color: "#111" }}>Guides IA</h2>
+          <h2 className="text-base font-semibold" style={{ color: "#111" }}>AI Guides</h2>
           <p className="text-xs mt-1" style={{ color: "#888" }}>
-            Ajoute tes instructions personnelles aux guides IA. Le guide admin reste toujours actif.
+            Add your personal instructions to the AI guides. The admin guide always stays active.
           </p>
         </div>
         <LockedGuideEditor
           adminGuide={globalBotGuide}
           initialUserInstructions={guides?.user_prompt ?? ""}
           endpoint="/api/settings/bot-guide"
-          title="Guide bot"
-          description="System prompt du chat CoachelloGPT. Le guide admin est fixe, ajoute tes instructions en complément."
+          title="Bot guide"
+          description="System prompt for the CoachelloGPT chat. The admin guide is fixed, add your instructions on top."
         />
         <GuideEditor
           initialGuide={guides?.prospection_guide ?? null}
           defaultGuide={globalProspectionGuide}
           endpoint="/api/settings/guide"
-          title="Guide de prospection"
-          description="Instructions pour générer les emails. Entièrement personnalisable."
+          title="Prospecting guide"
+          description="Instructions for generating emails. Fully customizable."
         />
         <LockedGuideEditor
           adminGuide={globalBriefingGuide}
           initialUserInstructions={guides?.briefing_guide ?? ""}
           endpoint="/api/settings/briefing-guide"
-          title="Guide de briefing"
-          description="Instructions pour les briefings pré-meeting. Le guide admin est fixe, ajoute tes instructions en complément."
+          title="Briefing guide"
+          description="Instructions for pre-meeting briefings. The admin guide is fixed, add your instructions on top."
         />
       </div>
 

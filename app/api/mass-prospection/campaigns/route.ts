@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 // GET — list user's campaigns
 export async function GET() {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { data, error } = await db
     .from("mass_campaigns")
@@ -35,7 +35,7 @@ export async function GET() {
 // POST — create a new campaign
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = await req.json();
   const { name, objective, qcm_type, qcm_length, qcm_tone, qcm_objectif, list_id, parent_campaign_id } = body;

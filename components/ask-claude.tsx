@@ -38,14 +38,14 @@ export function AskClaudeButton({ onClick }: { onClick: () => void }) {
       <img src="/3d-claude-ai-logo.jpg" alt="Claude" style={{ width: 20, height: 20, borderRadius: 4, flexShrink: 0 }} />
       <div style={{ textAlign: "left" }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Claude</div>
-        <div style={{ fontSize: 10, color: "#9ca3af" }}>Poser une question</div>
+        <div style={{ fontSize: 10, color: "#9ca3af" }}>Ask a question</div>
       </div>
     </button>
   );
 }
 
 /** Chat panel — renders full-width below the row */
-export function AskClaudePanel({ context, placeholder = "Poser une question sur ce deal…", onClose }: AskClaudeProps & { onClose: () => void }) {
+export function AskClaudePanel({ context, placeholder = "Ask a question about this deal…", onClose }: AskClaudeProps & { onClose: () => void }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -120,7 +120,7 @@ export function AskClaudePanel({ context, placeholder = "Poser une question sur 
                 const copy = [...prev];
                 const last = copy[copy.length - 1];
                 if (last?.role === "assistant") {
-                  copy[copy.length - 1] = { ...last, content: `Erreur : ${evt.message}` };
+                  copy[copy.length - 1] = { ...last, content: `Error: ${evt.message}` };
                 }
                 return copy;
               });
@@ -134,7 +134,7 @@ export function AskClaudePanel({ context, placeholder = "Poser une question sur 
           const copy = [...prev];
           const last = copy[copy.length - 1];
           if (last?.role === "assistant" && !last.content) {
-            copy[copy.length - 1] = { ...last, content: "Erreur de connexion." };
+            copy[copy.length - 1] = { ...last, content: "Connection error." };
           }
           return copy;
         });
@@ -175,7 +175,7 @@ export function AskClaudePanel({ context, placeholder = "Poser une question sur 
                 background: "none", border: "none", cursor: "pointer",
                 color: "#9ca3af", padding: 2, display: "flex",
               }}
-              title="Nouvelle conversation"
+              title="New conversation"
             >
               <RefreshCw size={13} />
             </button>
@@ -221,7 +221,7 @@ export function AskClaudePanel({ context, placeholder = "Poser une question sur 
             }}
           >
             {msg.content || (streaming && i === messages.length - 1 ? (
-              <span style={{ color: "#9ca3af" }}>Réflexion…</span>
+              <span style={{ color: "#9ca3af" }}>Thinking…</span>
             ) : null)}
           </div>
         ))}

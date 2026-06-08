@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useLeadsFunnel } from "@/lib/hooks/use-marketing";
 
 function formatAmount(n: number): string {
-  return n.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + "€";
+  return n.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + "€";
 }
 
 export default function SalesPerformanceTable() {
@@ -24,7 +24,7 @@ export default function SalesPerformanceTable() {
           color: "#888",
         }}
       >
-        <Loader2 size={16} className="animate-spin" /> Chargement de la performance sales…
+        <Loader2 size={16} className="animate-spin" /> Loading sales performance…
       </div>
     );
   }
@@ -45,15 +45,15 @@ export default function SalesPerformanceTable() {
     >
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: "#111" }}>
-          Performance par sales (365 derniers jours)
+          Performance by sales rep (last 365 days)
         </div>
         <div style={{ fontSize: 12, color: "#888" }}>{rows.length} sales</div>
       </div>
 
       {rows.length === 0 ? (
         <div style={{ fontSize: 12, color: "#888" }}>
-          Aucun deal attribué sur la période. Les sales apparaissent ici dès qu&apos;un deal HubSpot
-          leur est attribué.
+          No deals assigned over the period. Sales reps appear here as soon as a HubSpot deal
+          is assigned to them.
         </div>
       ) : (
         <div style={{ overflowX: "auto" }}>
@@ -72,7 +72,7 @@ export default function SalesPerformanceTable() {
                 <Th>Won</Th>
                 <Th>Lost</Th>
                 <Th>Conversion</Th>
-                <Th>Pipeline ouvert</Th>
+                <Th>Open pipeline</Th>
                 <Th>Won (€)</Th>
               </tr>
             </thead>

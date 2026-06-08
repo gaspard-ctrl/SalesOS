@@ -71,13 +71,13 @@ interface HubSpotResult {
 // ── Status Badge ──────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  pending:     { label: "En attente",      bg: "#f0f0f0", color: "#888" },
-  generating:  { label: "Génération...",   bg: "#f5f3ff", color: "#7c3aed" },
-  drafted:     { label: "Brouillon",       bg: "#eff6ff", color: "#2563eb" },
-  edited:      { label: "Modifié",         bg: "#eff6ff", color: "#2563eb" },
-  sent:        { label: "Envoyé",          bg: "#f0fdf4", color: "#15803d" },
-  draft_saved: { label: "Brouillon Gmail", bg: "#fff7ed", color: "#c2410c" },
-  error:       { label: "Erreur",          bg: "#fef2f2", color: "#dc2626" },
+  pending:     { label: "Pending",       bg: "#f0f0f0", color: "#888" },
+  generating:  { label: "Generating...", bg: "#f5f3ff", color: "#7c3aed" },
+  drafted:     { label: "Draft",         bg: "#eff6ff", color: "#2563eb" },
+  edited:      { label: "Edited",        bg: "#eff6ff", color: "#2563eb" },
+  sent:        { label: "Sent",          bg: "#f0fdf4", color: "#15803d" },
+  draft_saved: { label: "Gmail draft",   bg: "#fff7ed", color: "#c2410c" },
+  error:       { label: "Error",         bg: "#fef2f2", color: "#dc2626" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -784,12 +784,12 @@ export default function MassProspectionPage() {
             </button>
           )}
           <h1 className="text-base font-semibold" style={{ color: "#111" }}>
-            {view === "setup" ? "Prospection Mass" : view === "review" ? (campaignName || "Campagne") : "Édition email"}
+            {view === "setup" ? "Mass Prospection" : view === "review" ? (campaignName || "Campaign") : "Edit email"}
           </h1>
           {view === "review" && generating && (
             <div className="flex items-center gap-2 text-xs" style={{ color: "#7c3aed" }}>
               <Loader2 size={14} className="animate-spin" />
-              Génération en cours... {genProgress.done}/{genProgress.total}
+              Generating... {genProgress.done}/{genProgress.total}
             </div>
           )}
         </div>
@@ -800,7 +800,7 @@ export default function MassProspectionPage() {
               className="text-xs px-3 py-1.5 rounded-lg border transition-colors"
               style={{ borderColor: "#e5e5e5", color: "#666" }}
             >
-              Campagnes précédentes
+              Previous campaigns
             </button>
           )}
           {(view === "review" || view === "detail") && (
@@ -809,7 +809,7 @@ export default function MassProspectionPage() {
               className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
               style={{ background: "#f5f5f5", color: "#666" }}
             >
-              Nouvelle campagne
+              New campaign
             </button>
           )}
         </div>
@@ -819,7 +819,7 @@ export default function MassProspectionPage() {
       {!gmailConnected && (
         <div className="flex items-center gap-2 px-6 py-2 text-xs" style={{ background: "#fff7ed", color: "#c2410c" }}>
           <AlertCircle size={14} />
-          Gmail non connecté — <Link href="/settings" className="underline">Connecter dans les paramètres</Link>
+          Gmail not connected — <Link href="/settings" className="underline">Connect in settings</Link>
         </div>
       )}
 
@@ -837,7 +837,7 @@ export default function MassProspectionPage() {
                   className="flex-1 flex items-center gap-2 text-left"
                 >
                   <div className="flex-1 min-w-0">
-                    <span className="text-xs font-medium" style={{ color: "#111" }}>{c.name || "Sans nom"}</span>
+                    <span className="text-xs font-medium" style={{ color: "#111" }}>{c.name || "Untitled"}</span>
                     <span className="text-[10px] ml-2" style={{ color: "#888" }}>{c.emailCount} contacts</span>
                   </div>
                   <StatusBadge status={c.status} />
@@ -852,7 +852,7 @@ export default function MassProspectionPage() {
                     }
                   }}
                   className="ml-2 p-1.5 rounded-lg transition-colors hover:bg-red-50 shrink-0"
-                  title="Supprimer la campagne"
+                  title="Delete campaign"
                 >
                   <Trash2 size={13} style={{ color: "#dc2626" }} />
                 </button>
@@ -882,10 +882,10 @@ export default function MassProspectionPage() {
                   {tab === "hubspot"
                     ? "HubSpot"
                     : tab === "lists"
-                    ? "Listes"
+                    ? "Lists"
                     : tab === "csv"
                     ? "CSV"
-                    : "Manuel"}
+                    : "Manual"}
                 </button>
               ))}
             </div>
@@ -902,7 +902,7 @@ export default function MassProspectionPage() {
                         value={hsQuery}
                         onChange={(e) => setHsQuery(e.target.value)}
                         onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === "Enter" && searchHubSpot()}
-                        placeholder="Rechercher des contacts HubSpot..."
+                        placeholder="Search HubSpot contacts..."
                         className="w-full pl-9 pr-3 py-2 rounded-lg border text-xs outline-none transition-all"
                         style={{ borderColor: "#e5e5e5" }}
                         onFocus={(e) => (e.currentTarget.style.borderColor = "#f01563")}
@@ -916,7 +916,7 @@ export default function MassProspectionPage() {
                       className="px-4 py-2 rounded-lg text-xs font-medium transition-all"
                       style={{ background: "#f01563", color: "#fff", opacity: hsLoading ? 0.6 : 1 }}
                     >
-                      {hsLoading ? <Loader2 size={14} className="animate-spin" /> : "Rechercher"}
+                      {hsLoading ? <Loader2 size={14} className="animate-spin" /> : "Search"}
                     </button>
                   </div>
 
@@ -928,7 +928,7 @@ export default function MassProspectionPage() {
                         value={hsCompany}
                         onChange={(e) => setHsCompany(e.target.value)}
                         onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === "Enter" && searchHubSpot()}
-                        placeholder="Filtrer par société..."
+                        placeholder="Filter by company..."
                         list="hs-company-suggestions"
                         autoComplete="off"
                         className="w-full pl-9 pr-8 py-2 rounded-lg border text-xs outline-none transition-all"
@@ -942,7 +942,7 @@ export default function MassProspectionPage() {
                           onClick={() => setHsCompany("")}
                           className="absolute right-2.5 top-1/2 -translate-y-1/2"
                           style={{ color: "#aaa" }}
-                          title="Effacer le filtre société"
+                          title="Clear company filter"
                         >
                           <X size={13} />
                         </button>
@@ -1022,9 +1022,9 @@ export default function MassProspectionPage() {
                     </div>
                   ) : savedLists.length === 0 ? (
                     <span className="text-[11px] text-center py-8" style={{ color: "#aaa" }}>
-                      Aucune liste sauvegardée.{" "}
+                      No saved list.{" "}
                       <Link href="/watchlist/lists" className="underline" style={{ color: "#f01563" }}>
-                        Créer une liste
+                        Create a list
                       </Link>
                     </span>
                   ) : (
@@ -1045,7 +1045,7 @@ export default function MassProspectionPage() {
                               border: "1px solid",
                               borderColor: selectedListId === l.id ? "#f01563" : "#e5e5e5",
                             }}
-                            title={`${l.source === "hubspot" ? "HubSpot" : "CSV"} · ${(l.results as EnrichmentProfile[] | undefined)?.length ?? 0} profils`}
+                            title={`${l.source === "hubspot" ? "HubSpot" : "CSV"} · ${(l.results as EnrichmentProfile[] | undefined)?.length ?? 0} profiles`}
                           >
                             {l.name}
                           </button>
@@ -1061,7 +1061,7 @@ export default function MassProspectionPage() {
                                 type="text"
                                 value={listQuery}
                                 onChange={(e) => setListQuery(e.target.value)}
-                                placeholder="Filtrer la liste..."
+                                placeholder="Filter the list..."
                                 className="w-full pl-9 pr-3 py-2 rounded-lg border text-xs outline-none transition-all"
                                 style={{ borderColor: "#e5e5e5" }}
                                 onFocus={(e) => (e.currentTarget.style.borderColor = "#f01563")}
@@ -1075,7 +1075,7 @@ export default function MassProspectionPage() {
                                 checked={listHideContacted}
                                 onChange={(e) => setListHideContacted(e.target.checked)}
                               />
-                              Masquer déjà contactés
+                              Hide already contacted
                             </label>
                             {listProfilesSelected.size > 0 && (
                               <>
@@ -1084,7 +1084,7 @@ export default function MassProspectionPage() {
                                   className="px-3 py-2 rounded-lg text-xs"
                                   style={{ background: "#f5f5f5", color: "#666" }}
                                 >
-                                  Désélectionner
+                                  Deselect
                                 </button>
                                 <button
                                   onClick={() => {
@@ -1127,7 +1127,7 @@ export default function MassProspectionPage() {
                                   className="px-4 py-2 rounded-lg text-xs font-medium transition-all"
                                   style={{ background: "#f01563", color: "#fff" }}
                                 >
-                                  Ajouter {listProfilesSelected.size} profil{listProfilesSelected.size > 1 ? "s" : ""}
+                                  Add {listProfilesSelected.size} profile{listProfilesSelected.size > 1 ? "s" : ""}
                                 </button>
                               </>
                             )}
@@ -1198,7 +1198,7 @@ export default function MassProspectionPage() {
                                             className="text-[9px] px-1.5 py-0.5 rounded-full"
                                             style={{ background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca" }}
                                           >
-                                            Sans email
+                                            No email
                                           </span>
                                         )}
                                       </div>
@@ -1214,7 +1214,7 @@ export default function MassProspectionPage() {
                             {selectedListProfiles.length > 0 &&
                               selectedListProfiles.filter((p) => p.email).length === 0 && (
                                 <span className="text-[11px] text-center py-4" style={{ color: "#aaa" }}>
-                                  Aucun profil avec email dans cette liste.
+                                  No profile with an email in this list.
                                 </span>
                               )}
                           </div>
@@ -1257,7 +1257,7 @@ export default function MassProspectionPage() {
                       <>
                         <Upload size={24} style={{ color: "#ccc" }} />
                         <span className="text-xs" style={{ color: "#888" }}>
-                          Glissez un fichier CSV ici ou <span style={{ color: "#f01563" }}>cliquez pour parcourir</span>
+                          Drag a CSV file here or <span style={{ color: "#f01563" }}>click to browse</span>
                         </span>
                       </>
                     )}
@@ -1270,23 +1270,23 @@ export default function MassProspectionPage() {
                 <div className="p-4 flex flex-col gap-3">
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] font-medium" style={{ color: "#888" }}>Prénom</span>
+                      <span className="text-[10px] font-medium" style={{ color: "#888" }}>First name</span>
                       <input
                         value={manualFirstName}
                         onChange={(e) => setManualFirstName(e.target.value)}
                         className="w-full rounded-lg border px-3 py-1.5 text-xs outline-none"
                         style={{ borderColor: "#e5e5e5" }}
-                        placeholder="Jean"
+                        placeholder="John"
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] font-medium" style={{ color: "#888" }}>Nom</span>
+                      <span className="text-[10px] font-medium" style={{ color: "#888" }}>Last name</span>
                       <input
                         value={manualLastName}
                         onChange={(e) => setManualLastName(e.target.value)}
                         className="w-full rounded-lg border px-3 py-1.5 text-xs outline-none"
                         style={{ borderColor: "#e5e5e5" }}
-                        placeholder="Dupont"
+                        placeholder="Smith"
                       />
                     </div>
                   </div>
@@ -1298,12 +1298,12 @@ export default function MassProspectionPage() {
                       onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => e.key === "Enter" && handleManualAdd()}
                       className="w-full rounded-lg border px-3 py-1.5 text-xs outline-none"
                       style={{ borderColor: "#e5e5e5" }}
-                      placeholder="jean@entreprise.com"
+                      placeholder="john@company.com"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] font-medium" style={{ color: "#888" }}>Entreprise</span>
+                      <span className="text-[10px] font-medium" style={{ color: "#888" }}>Company</span>
                       <input
                         value={manualCompany}
                         onChange={(e) => setManualCompany(e.target.value)}
@@ -1313,13 +1313,13 @@ export default function MassProspectionPage() {
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] font-medium" style={{ color: "#888" }}>Poste</span>
+                      <span className="text-[10px] font-medium" style={{ color: "#888" }}>Job title</span>
                       <input
                         value={manualJobTitle}
                         onChange={(e) => setManualJobTitle(e.target.value)}
                         className="w-full rounded-lg border px-3 py-1.5 text-xs outline-none"
                         style={{ borderColor: "#e5e5e5" }}
-                        placeholder="DRH"
+                        placeholder="Head of HR"
                       />
                     </div>
                   </div>
@@ -1332,7 +1332,7 @@ export default function MassProspectionPage() {
                       color: manualEmail.includes("@") ? "#fff" : "#aaa",
                     }}
                   >
-                    <Plus size={14} /> Ajouter
+                    <Plus size={14} /> Add
                   </button>
                 </div>
               )}
@@ -1344,12 +1344,12 @@ export default function MassProspectionPage() {
                 <div className="flex items-center gap-2">
                   <Users size={14} style={{ color: "#f01563" }} />
                   <span className="text-xs font-semibold" style={{ color: "#111" }}>
-                    {prospects.length} prospect{prospects.length !== 1 ? "s" : ""} sélectionné{prospects.length !== 1 ? "s" : ""}
+                    {prospects.length} prospect{prospects.length !== 1 ? "s" : ""} selected
                   </span>
                 </div>
                 {prospects.length > 0 && (
                   <button onClick={() => setProspects([])} className="text-[10px]" style={{ color: "#dc2626" }}>
-                    Tout supprimer
+                    Remove all
                   </button>
                 )}
               </div>
@@ -1379,7 +1379,7 @@ export default function MassProspectionPage() {
                 ))}
                 {prospects.length === 0 && (
                   <span className="text-[11px] text-center py-4" style={{ color: "#ccc" }}>
-                    Ajoutez des prospects via HubSpot, CSV ou manuellement
+                    Add prospects via HubSpot, CSV or manually
                   </span>
                 )}
               </div>
@@ -1389,73 +1389,73 @@ export default function MassProspectionPage() {
           {/* Right: Campaign Config */}
           <div className="w-1/2 flex flex-col overflow-y-auto p-6 gap-5" style={{ background: "#fff" }}>
             <div className="flex flex-col gap-1">
-              <span className="text-[11px] font-medium" style={{ color: "#888" }}>Nom de la campagne</span>
+              <span className="text-[11px] font-medium" style={{ color: "#888" }}>Campaign name</span>
               <input
                 value={campaignName}
                 onChange={(e) => setCampaignName(e.target.value)}
                 className="w-full rounded-lg border px-3 py-2 text-xs outline-none transition-all"
                 style={{ borderColor: "#e5e5e5" }}
-                placeholder="Ex: Campagne DRH Tech Q2"
+                placeholder="e.g. Tech HR Campaign Q2"
                 onFocus={(e) => (e.currentTarget.style.borderColor = "#f01563")}
                 onBlur={(e) => (e.currentTarget.style.borderColor = "#e5e5e5")}
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <span className="text-[11px] font-medium" style={{ color: "#888" }}>Objectif de la campagne *</span>
+              <span className="text-[11px] font-medium" style={{ color: "#888" }}>Campaign objective *</span>
               <textarea
                 value={objective}
                 onChange={(e) => setObjective(e.target.value)}
                 rows={5}
                 className="w-full rounded-lg border px-3 py-2 text-xs outline-none resize-none transition-all"
                 style={{ borderColor: "#e5e5e5" }}
-                placeholder="Décrivez le but de cette campagne de prospection, le message clé, le contexte..."
+                placeholder="Describe the goal of this prospecting campaign, the key message, the context..."
                 onFocus={(e) => (e.currentTarget.style.borderColor = "#f01563")}
                 onBlur={(e) => (e.currentTarget.style.borderColor = "#e5e5e5")}
               />
             </div>
 
             <div className="flex flex-col gap-4">
-              <span className="text-xs font-semibold" style={{ color: "#111" }}>Paramètres de rédaction</span>
+              <span className="text-xs font-semibold" style={{ color: "#111" }}>Writing settings</span>
               <PillSelect
                 label="Type"
                 value={qcmType}
                 onChange={setQcmType}
                 options={[
-                  { value: "intro", label: "Premier contact" },
+                  { value: "intro", label: "First contact" },
                   { value: "followup", label: "Follow-up" },
                 ]}
               />
               <PillSelect
-                label="Longueur"
+                label="Length"
                 value={qcmLength}
                 onChange={setQcmLength}
                 options={[
-                  { value: "court", label: "Court" },
-                  { value: "moyen", label: "Moyen" },
+                  { value: "court", label: "Short" },
+                  { value: "moyen", label: "Medium" },
                   { value: "long", label: "Long" },
                 ]}
               />
               <PillSelect
-                label="Ton"
+                label="Tone"
                 value={qcmTone}
                 onChange={setQcmTone}
                 options={[
-                  { value: "formel", label: "Formel" },
-                  { value: "semi-formel", label: "Semi-formel" },
+                  { value: "formel", label: "Formal" },
+                  { value: "semi-formel", label: "Semi-formal" },
                   { value: "direct", label: "Direct" },
                   { value: "challenger", label: "Challenger" },
                 ]}
               />
               <PillSelect
-                label="Objectif"
+                label="Goal"
                 value={qcmObjectif}
                 onChange={setQcmObjectif}
                 options={[
-                  { value: "rdv", label: "Obtenir un RDV" },
-                  { value: "ressource", label: "Partager une ressource" },
-                  { value: "qualifier", label: "Qualifier le besoin" },
-                  { value: "reactiver", label: "Réactiver la relation" },
+                  { value: "rdv", label: "Book a meeting" },
+                  { value: "ressource", label: "Share a resource" },
+                  { value: "qualifier", label: "Qualify the need" },
+                  { value: "reactiver", label: "Re-engage the relationship" },
                 ]}
               />
             </div>
@@ -1470,9 +1470,9 @@ export default function MassProspectionPage() {
               }}
             >
               {generating ? (
-                <><Loader2 size={16} className="animate-spin" /> Génération en cours...</>
+                <><Loader2 size={16} className="animate-spin" /> Generating...</>
               ) : (
-                <><Sparkles size={16} /> Générer {prospects.length} email{prospects.length !== 1 ? "s" : ""}</>
+                <><Sparkles size={16} /> Generate {prospects.length} email{prospects.length !== 1 ? "s" : ""}</>
               )}
             </button>
           </div>
@@ -1488,16 +1488,16 @@ export default function MassProspectionPage() {
               <strong style={{ color: "#111" }}>{stats.total}</strong> contacts
             </span>
             {stats.drafted > 0 && (
-              <span className="text-xs" style={{ color: "#2563eb" }}>{stats.drafted} brouillons</span>
+              <span className="text-xs" style={{ color: "#2563eb" }}>{stats.drafted} drafts</span>
             )}
             {stats.sent > 0 && (
-              <span className="text-xs" style={{ color: "#15803d" }}>{stats.sent} envoyés</span>
+              <span className="text-xs" style={{ color: "#15803d" }}>{stats.sent} sent</span>
             )}
             {stats.draftSaved > 0 && (
-              <span className="text-xs" style={{ color: "#c2410c" }}>{stats.draftSaved} brouillons Gmail</span>
+              <span className="text-xs" style={{ color: "#c2410c" }}>{stats.draftSaved} Gmail drafts</span>
             )}
             {stats.errors > 0 && (
-              <span className="text-xs" style={{ color: "#dc2626" }}>{stats.errors} erreurs</span>
+              <span className="text-xs" style={{ color: "#dc2626" }}>{stats.errors} errors</span>
             )}
             <div className="flex-1" />
             {stats.errors > 0 && (
@@ -1507,7 +1507,7 @@ export default function MassProspectionPage() {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
                 style={{ background: "#fef2f2", color: "#dc2626" }}
               >
-                <RotateCcw size={12} /> Régénérer erreurs
+                <RotateCcw size={12} /> Regenerate errors
               </button>
             )}
             {stats.drafted > 0 && gmailConnected && (
@@ -1517,14 +1517,14 @@ export default function MassProspectionPage() {
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
                   style={{ background: "#fff7ed", color: "#c2410c" }}
                 >
-                  <Save size={12} /> Tous en brouillon Gmail
+                  <Save size={12} /> All to Gmail drafts
                 </button>
                 <button
                   onClick={() => handleBulkAction("send")}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
                   style={{ background: "#f01563", color: "#fff" }}
                 >
-                  <Send size={12} /> Envoyer tous
+                  <Send size={12} /> Send all
                 </button>
               </>
             )}
@@ -1572,19 +1572,19 @@ export default function MassProspectionPage() {
           <div className="flex-1 flex flex-col overflow-hidden" style={{ background: "#fff" }}>
             {/* To field */}
             <div className="flex items-center gap-2 px-5 py-2.5 border-b" style={{ borderColor: "#f0f0f0" }}>
-              <span className="text-xs font-medium w-10 shrink-0" style={{ color: "#aaa" }}>À</span>
+              <span className="text-xs font-medium w-10 shrink-0" style={{ color: "#aaa" }}>To</span>
               <span className="text-xs" style={{ color: "#111" }}>{currentEmail.email}</span>
             </div>
 
             {/* Subject */}
             <div className="flex items-center gap-2 px-5 py-2.5 border-b" style={{ borderColor: "#f0f0f0" }}>
-              <span className="text-xs font-medium w-10 shrink-0" style={{ color: "#aaa" }}>Objet</span>
+              <span className="text-xs font-medium w-10 shrink-0" style={{ color: "#aaa" }}>Subject</span>
               <input
                 value={editSubject}
                 onChange={(e) => handleSubjectChange(e.target.value)}
                 className="flex-1 text-xs outline-none bg-transparent"
                 style={{ color: "#111" }}
-                placeholder="Objet de l'email..."
+                placeholder="Email subject..."
               />
             </div>
 
@@ -1595,7 +1595,7 @@ export default function MassProspectionPage() {
                 onChange={(e) => handleBodyChange(e.target.value)}
                 className="w-full h-full px-5 py-4 text-xs outline-none resize-none"
                 style={{ color: "#111", lineHeight: "1.7" }}
-                placeholder="Corps de l'email..."
+                placeholder="Email body..."
               />
             </div>
 
@@ -1611,7 +1611,7 @@ export default function MassProspectionPage() {
                 }}
               >
                 {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                {currentEmail.status === "sent" ? "Envoyé" : "Envoyer"}
+                {currentEmail.status === "sent" ? "Sent" : "Send"}
               </button>
               <button
                 onClick={() => handleSendOrDraft("draft")}
@@ -1622,7 +1622,7 @@ export default function MassProspectionPage() {
                   color: gmailConnected && !sending ? "#c2410c" : "#aaa",
                 }}
               >
-                <Save size={14} /> Brouillon Gmail
+                <Save size={14} /> Gmail draft
               </button>
               <div className="flex-1" />
               {/* Nav arrows */}
@@ -1665,17 +1665,17 @@ export default function MassProspectionPage() {
               </div>
               {currentEmail.job_title && (
                 <div className="text-[11px] mb-1" style={{ color: "#666" }}>
-                  <strong>Poste :</strong> {currentEmail.job_title}
+                  <strong>Job title:</strong> {currentEmail.job_title}
                 </div>
               )}
               {currentEmail.company && (
                 <div className="text-[11px] mb-1" style={{ color: "#666" }}>
-                  <strong>Entreprise :</strong> {currentEmail.company}
+                  <strong>Company:</strong> {currentEmail.company}
                 </div>
               )}
               {currentEmail.industry && (
                 <div className="text-[11px] mb-1" style={{ color: "#666" }}>
-                  <strong>Secteur :</strong> {currentEmail.industry}
+                  <strong>Industry:</strong> {currentEmail.industry}
                 </div>
               )}
               <StatusBadge status={currentEmail.status} />
@@ -1685,7 +1685,7 @@ export default function MassProspectionPage() {
             <div className="p-4 flex flex-col gap-3">
               <span className="text-xs font-semibold" style={{ color: "#111" }}>
                 <Sparkles size={12} className="inline mr-1" style={{ color: "#f01563" }} />
-                Demander à Claude de re-rédiger
+                Ask Claude to rewrite
               </span>
               <textarea
                 value={redraftInstructions}
@@ -1693,7 +1693,7 @@ export default function MassProspectionPage() {
                 rows={3}
                 className="w-full rounded-lg border px-3 py-2 text-xs outline-none resize-none transition-all"
                 style={{ borderColor: "#e5e5e5" }}
-                placeholder="Ex: Rends le plus court, ajoute une référence à leur récente levée de fonds..."
+                placeholder="e.g. Make it shorter, add a reference to their recent funding round..."
                 onFocus={(e) => (e.currentTarget.style.borderColor = "#f01563")}
                 onBlur={(e) => (e.currentTarget.style.borderColor = "#e5e5e5")}
               />
@@ -1704,9 +1704,9 @@ export default function MassProspectionPage() {
                 style={{ background: "#f01563", color: "#fff", opacity: redrafting ? 0.6 : 1 }}
               >
                 {redrafting ? (
-                  <><Loader2 size={14} className="animate-spin" /> Re-génération...</>
+                  <><Loader2 size={14} className="animate-spin" /> Regenerating...</>
                 ) : (
-                  <><RotateCcw size={14} /> Re-générer</>
+                  <><RotateCcw size={14} /> Regenerate</>
                 )}
               </button>
             </div>
@@ -1719,7 +1719,7 @@ export default function MassProspectionPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.4)" }}>
           <div className="w-full max-w-lg rounded-2xl shadow-xl" style={{ background: "#fff" }}>
             <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: "#eee" }}>
-              <h3 className="text-sm font-semibold" style={{ color: "#111" }}>Mapper les colonnes CSV</h3>
+              <h3 className="text-sm font-semibold" style={{ color: "#111" }}>Map CSV columns</h3>
               <button onClick={() => setCsvModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-100">
                 <X size={16} style={{ color: "#666" }} />
               </button>
@@ -1727,17 +1727,17 @@ export default function MassProspectionPage() {
 
             <div className="px-5 py-4 flex flex-col gap-4">
               <p className="text-xs" style={{ color: "#888" }}>
-                {csvTotalRows} ligne{csvTotalRows !== 1 ? "s" : ""} détectée{csvTotalRows !== 1 ? "s" : ""}. Associez chaque champ au bon en-tête CSV.
+                {csvTotalRows} row{csvTotalRows !== 1 ? "s" : ""} detected. Map each field to the right CSV header.
               </p>
 
               {/* Mapping selects */}
               {[
                 { key: "email", label: "Email *", required: true },
-                { key: "firstName", label: "Prénom", required: false },
-                { key: "lastName", label: "Nom", required: false },
-                { key: "company", label: "Entreprise", required: false },
-                { key: "jobTitle", label: "Poste", required: false },
-                { key: "industry", label: "Secteur", required: false },
+                { key: "firstName", label: "First name", required: false },
+                { key: "lastName", label: "Last name", required: false },
+                { key: "company", label: "Company", required: false },
+                { key: "jobTitle", label: "Job title", required: false },
+                { key: "industry", label: "Industry", required: false },
               ].map(({ key, label }) => (
                 <div key={key} className="flex items-center gap-3">
                   <span className="text-xs font-medium w-24 shrink-0" style={{ color: "#111" }}>{label}</span>
@@ -1747,7 +1747,7 @@ export default function MassProspectionPage() {
                     className="flex-1 rounded-lg border px-3 py-1.5 text-xs outline-none"
                     style={{ borderColor: "#e5e5e5" }}
                   >
-                    <option value="">— Ignorer —</option>
+                    <option value="">— Ignore —</option>
                     {csvHeaders.map((h) => (
                       <option key={h} value={h}>{h}</option>
                     ))}
@@ -1759,7 +1759,7 @@ export default function MassProspectionPage() {
               {csvPreview.length > 0 && csvMapping.email && (
                 <div className="border rounded-lg overflow-hidden" style={{ borderColor: "#e5e5e5" }}>
                   <div className="text-[10px] font-medium px-3 py-1.5" style={{ background: "#fafafa", color: "#888" }}>
-                    Aperçu (3 premières lignes)
+                    Preview (first 3 rows)
                   </div>
                   {csvPreview.slice(0, 3).map((row, i) => (
                     <div key={i} className="flex items-center gap-2 px-3 py-1.5 border-t text-[10px]" style={{ borderColor: "#f0f0f0" }}>
@@ -1781,7 +1781,7 @@ export default function MassProspectionPage() {
                 className="px-4 py-2 rounded-lg text-xs font-medium"
                 style={{ background: "#f5f5f5", color: "#666" }}
               >
-                Annuler
+                Cancel
               </button>
               <button
                 onClick={importCsv}
@@ -1792,7 +1792,7 @@ export default function MassProspectionPage() {
                   color: csvMapping.email ? "#fff" : "#aaa",
                 }}
               >
-                Importer {csvTotalRows} contacts
+                Import {csvTotalRows} contacts
               </button>
             </div>
           </div>

@@ -51,7 +51,7 @@ Facteurs calculés : ${health.drivers?.join(" ; ") || "(aucun)"}.
 Derniers échanges (meetings récents) :
 ${recentMeetings || "(aucun meeting récent analysé)"}
 
-Écris UNE seule phrase courte (max 35 mots), en français, qui explique pourquoi le compte est à ce niveau, en t'appuyant SURTOUT sur les derniers échanges (ton, sujets, signaux concrets). Pas de préambule, pas de guillemets, juste la phrase.`;
+Écris UNE seule phrase courte (max 35 mots), dans la langue dominante des derniers échanges (anglais par défaut si mixte ou incertain), qui explique pourquoi le compte est à ce niveau, en t'appuyant SURTOUT sur les derniers échanges (ton, sujets, signaux concrets). Pas de préambule, pas de guillemets, juste la phrase.`;
 
   const client = new Anthropic({ timeout: 120_000 });
   const msg = await withAnthropicRetry(

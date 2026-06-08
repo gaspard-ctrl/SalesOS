@@ -17,13 +17,13 @@ function dealUrl(dealId: string): string | null {
 
 function formatAmount(amount: number | null): string {
   if (amount == null) return "—";
-  return amount.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + "€";
+  return amount.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + "€";
 }
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "2-digit" });
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
 }
 
 export default function LeadDealSide({ analysis }: { analysis: LeadAnalysis }) {
@@ -37,7 +37,7 @@ export default function LeadDealSide({ analysis }: { analysis: LeadAnalysis }) {
   const badge = score ? scoreBadge(score.total) : null;
 
   const headerColor = isWon ? GREEN : isLost ? RED : BLUE;
-  const headerLabel = isWon ? "Won" : isLost ? "Lost" : "En cours";
+  const headerLabel = isWon ? "Won" : isLost ? "Lost" : "In progress";
 
   return (
     <aside
@@ -98,8 +98,8 @@ export default function LeadDealSide({ analysis }: { analysis: LeadAnalysis }) {
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <KvRow k="Étape" v={stage} />
-        <KvRow k="Montant" v={formatAmount(analysis.deal_amount)} />
+        <KvRow k="Stage" v={stage} />
+        <KvRow k="Amount" v={formatAmount(analysis.deal_amount)} />
         <KvRow k="Close" v={formatDate(analysis.deal_close_date)} />
         {analysis.deal_owner_name && <KvRow k="Owner" v={analysis.deal_owner_name} />}
       </div>
@@ -134,7 +134,7 @@ export default function LeadDealSide({ analysis }: { analysis: LeadAnalysis }) {
             </span>
           </div>
           <div style={{ fontSize: 11, color: reliabilityColor(score.reliability) }}>
-            Fiabilité : {reliabilityLabel(score.reliability)} ({score.reliability}/5)
+            Reliability: {reliabilityLabel(score.reliability)} ({score.reliability}/5)
           </div>
         </div>
       )}
@@ -149,7 +149,7 @@ export default function LeadDealSide({ analysis }: { analysis: LeadAnalysis }) {
             fontStyle: "italic",
           }}
         >
-          Pas encore scoré
+          Not scored yet
         </div>
       )}
     </aside>

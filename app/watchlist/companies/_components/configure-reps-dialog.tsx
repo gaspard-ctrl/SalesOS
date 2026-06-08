@@ -57,11 +57,11 @@ export function ConfigureRepsDialog({
         body: JSON.stringify(payload),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error ?? "Erreur");
+      if (!r.ok) throw new Error(j.error ?? "Error");
       await reload();
       onChanged();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Erreur");
+      setErr(e instanceof Error ? e.message : "Error");
     } finally {
       setBusy(false);
     }
@@ -78,7 +78,7 @@ export function ConfigureRepsDialog({
     });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
-      setErr(j.error ?? "Erreur");
+      setErr(j.error ?? "Error");
       await reload();
     }
     onChanged();
@@ -87,7 +87,7 @@ export function ConfigureRepsDialog({
   return (
     <Overlay onClose={onClose}>
       <div style={{ width: 560, maxWidth: "92vw", maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
-        <Header title="Configurer les sales" onClose={onClose} />
+        <Header title="Configure sales reps" onClose={onClose} />
 
         {err && (
           <div style={{ margin: "10px 16px 0", padding: "8px 12px", background: COLORS.errBg, color: COLORS.err, borderRadius: 8, fontSize: 12 }}>
@@ -100,7 +100,7 @@ export function ConfigureRepsDialog({
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="Nom du sales"
+            placeholder="Rep name"
             style={inputStyle(170)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && newName.trim()) {
@@ -113,7 +113,7 @@ export function ConfigureRepsDialog({
           <input
             value={newEmail}
             onChange={(e) => setNewEmail(e.target.value)}
-            placeholder="Email (optionnel)"
+            placeholder="Email (optional)"
             style={inputStyle(170)}
           />
           <button
@@ -138,7 +138,7 @@ export function ConfigureRepsDialog({
               cursor: newName.trim() ? "pointer" : "default",
             }}
           >
-            <Plus size={13} /> Ajouter
+            <Plus size={13} /> Add
           </button>
 
           {/* Seed depuis les utilisateurs SalesOS */}
@@ -151,7 +151,7 @@ export function ConfigureRepsDialog({
               }}
               style={{ ...inputStyle(210), marginLeft: "auto", cursor: "pointer" }}
             >
-              <option value="">+ Depuis un utilisateur SalesOS…</option>
+              <option value="">+ From a SalesOS user…</option>
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name}
@@ -170,7 +170,7 @@ export function ConfigureRepsDialog({
           ) : reps.length === 0 ? (
             <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: COLORS.ink3 }}>
               <UserPlus size={20} style={{ color: COLORS.ink4, marginBottom: 6 }} />
-              <div>Aucun sales. Ajoute-en ci-dessus.</div>
+              <div>No sales reps. Add one above.</div>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -197,18 +197,18 @@ export function ConfigureRepsDialog({
                       flexShrink: 0,
                     }}
                   />
-                  <InlineInput value={r.name} onCommit={(v) => v && v !== r.name && patchRep(r.id, { name: v })} placeholder="Nom" width={160} />
+                  <InlineInput value={r.name} onCommit={(v) => v && v !== r.name && patchRep(r.id, { name: v })} placeholder="Name" width={160} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <InlineInput
                       value={r.email ?? ""}
                       onCommit={(v) => (v || null) !== (r.email ?? null) && patchRep(r.id, { email: v || null })}
-                      placeholder="email (optionnel)"
+                      placeholder="email (optional)"
                       width={180}
                     />
                   </div>
                   <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: COLORS.ink2, cursor: "pointer", whiteSpace: "nowrap" }}>
                     <input type="checkbox" checked={r.in_roster} onChange={(e) => patchRep(r.id, { in_roster: e.target.checked })} />
-                    Affiché
+                    Shown
                   </label>
                 </div>
               ))}
@@ -222,7 +222,7 @@ export function ConfigureRepsDialog({
             onClick={onClose}
             style={{ padding: "7px 14px", fontSize: 12, fontWeight: 600, borderRadius: 8, border: `1px solid ${COLORS.line}`, background: COLORS.bgCard, color: COLORS.ink1, cursor: "pointer" }}
           >
-            Fermer
+            Close
           </button>
         </div>
       </div>

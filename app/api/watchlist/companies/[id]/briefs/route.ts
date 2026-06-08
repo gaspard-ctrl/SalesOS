@@ -17,7 +17,7 @@ const EMPTY_BRIEFS = { ae_analysis: null, news: null };
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) {
-    return NextResponse.json({ briefs: EMPTY_BRIEFS, error: "Non authentifié" }, { status: 401 });
+    return NextResponse.json({ briefs: EMPTY_BRIEFS, error: "Not authenticated" }, { status: 401 });
   }
 
   const { id } = await params;
@@ -26,7 +26,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ briefs });
   } catch (e) {
     return NextResponse.json(
-      { briefs: EMPTY_BRIEFS, error: e instanceof Error ? e.message : "Erreur briefs" },
+      { briefs: EMPTY_BRIEFS, error: e instanceof Error ? e.message : "Briefs error" },
       { status: 500 },
     );
   }

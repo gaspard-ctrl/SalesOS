@@ -15,6 +15,7 @@ import { CrossPageActions } from "./cross-page-actions";
 import { AeAnalysisCard } from "./ae-analysis-card";
 import { ContactsCard } from "./contacts-card";
 import { NewsCard } from "./news-card";
+import { MailDrafter, type DraftRecipient } from "./mail-drafter";
 
 export function WatchCompanyPage({ id }: { id: string }) {
   const {
@@ -41,6 +42,21 @@ export function WatchCompanyPage({ id }: { id: string }) {
     isRefreshing.news;
 
   useBriefsPolling(id, isAnyRunning, reload);
+
+  // Destinataires du drafteur de mail (panneau droit). Alimenté depuis la
+  // contacts card et l'analyse AE. Dédup par email.
+  const [recipients, setRecipients] = React.useState<DraftRecipient[]>([]);
+  const addRecipients = React.useCallback((incoming: DraftRecipient[]) => {
+    setRecipients((prev) => {
+      const next = [...prev];
+      for (const r of incoming) {
+        if (!r.email) continue;
+        if (next.some((x) => x.email.toLowerCase() === r.email.toLowerCase())) continue;
+        next.push(r);
+      }
+      return next;
+    });
+  }, []);
 
   React.useEffect(() => {
     router.prefetch("/watchlist");
@@ -76,7 +92,7 @@ export function WatchCompanyPage({ id }: { id: string }) {
         }}
       >
         <p style={{ color: COLORS.ink2, fontSize: 13 }}>
-          {error ?? "Compte introuvable."}
+          {error ?? "Account not found."}
         </p>
         <Link
           href="/watchlist"
@@ -93,7 +109,7 @@ export function WatchCompanyPage({ id }: { id: string }) {
             background: COLORS.bgCard,
           }}
         >
-          <ArrowLeft size={13} /> Retour à la Watch List
+          <ArrowLeft size={13} /> Back to Watch List
         </Link>
       </div>
     );
@@ -121,27 +137,16 @@ export function WatchCompanyPage({ id }: { id: string }) {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "320px 1fr",
+            gridTemplateColumns: "1fr 440px",
             gap: 16,
-            maxWidth: 1400,
+            maxWidth: 1500,
             margin: "0 auto",
+            alignItems: "start",
           }}
           className="watch-detail-grid"
         >
-          <aside
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-              alignSelf: "start",
-              position: "sticky",
-              top: 0,
-            }}
-          >
-            <CrossPageActions company={company} />
-          </aside>
-
           <main style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+            <CrossPageActions company={company} />
             <AeAnalysisCard
               companyId={company.id}
               notes={company.notes}
@@ -150,8 +155,9 @@ export function WatchCompanyPage({ id }: { id: string }) {
               onRefresh={() => refresh("ae_analysis")}
               isRefreshing={isRefreshing.ae_analysis}
               clientError={errorByKind.ae_analysis ?? null}
+              onProspect={addRecipients}
             />
-            <ContactsCard companyId={company.id} />
+            <ContactsCard companyId={company.id} onProspect={addRecipients} />
             <NewsCard
               brief={briefs.news}
               onRefresh={() => refresh("news")}
@@ -159,15 +165,34 @@ export function WatchCompanyPage({ id }: { id: string }) {
               clientError={errorByKind.news ?? null}
             />
           </main>
+
+          <aside
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              alignSelf: "start",
+              position: "sticky",
+              top: 0,
+              minWidth: 0,
+            }}
+            className="watch-drafter-col"
+          >
+            <MailDrafter
+              companyId={company.id}
+              recipients={recipients}
+              onRecipientsChange={setRecipients}
+            />
+          </aside>
         </div>
       </div>
 
       <style>{`
-        @media (max-width: 900px) {
+        @media (max-width: 1100px) {
           .watch-detail-grid {
             grid-template-columns: 1fr !important;
           }
-          .watch-detail-grid > aside {
+          .watch-detail-grid > aside.watch-drafter-col {
             position: static !important;
           }
         }

@@ -98,7 +98,7 @@ export function CompanyCard({
         <button
           type="button"
           aria-pressed={selected}
-          title={selected ? "Désélectionner" : "Sélectionner"}
+          title={selected ? "Deselect" : "Select"}
           onClick={(e) => {
             e.stopPropagation();
             e.preventDefault();
@@ -219,7 +219,7 @@ export function CompanyCard({
                   href={`/watchlist/${company.id}`}
                   style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", fontSize: 12, color: COLORS.ink1, textDecoration: "none", borderRadius: 6 }}
                 >
-                  <ExternalLink size={13} /> Ouvrir la fiche
+                  <ExternalLink size={13} /> Open profile
                 </Link>
                 {onRemove && (
                   <button
@@ -230,7 +230,7 @@ export function CompanyCard({
                     }}
                     style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", padding: "7px 10px", fontSize: 12, color: COLORS.err, background: "transparent", border: "none", borderRadius: 6, cursor: "pointer" }}
                   >
-                    <Trash2 size={13} /> Retirer de la watchlist
+                    <Trash2 size={13} /> Remove from watchlist
                   </button>
                 )}
               </div>
@@ -242,7 +242,7 @@ export function CompanyCard({
             <Link
               href={`/watchlist/${company.id}`}
               onClick={(e) => e.stopPropagation()}
-              title="Ouvrir la fiche"
+              title="Open profile"
               style={{ color: COLORS.ink3, display: "inline-flex", flexShrink: 0 }}
             >
               <ExternalLink size={13} />
@@ -264,7 +264,7 @@ export function CompanyCard({
           }}
         />
         <span style={{ fontSize: 11, color: owner ? COLORS.ink2 : COLORS.ink4, fontWeight: owner ? 500 : 400 }}>
-          {owner ?? "Non attribué"}
+          {owner ?? "Unassigned"}
         </span>
       </div>
     </div>

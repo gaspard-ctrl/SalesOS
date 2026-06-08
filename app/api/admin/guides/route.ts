@@ -19,7 +19,7 @@ const HARDCODED: Record<GuideKey, string> = {
 
 export async function GET() {
   const user = await getAuthenticatedUser();
-  if (!user || !isAdmin(user)) return NextResponse.json({ error: "Interdit" }, { status: 403 });
+  if (!user || !isAdmin(user)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { data } = await db.from("guide_defaults").select("key, content");
   const dbMap = Object.fromEntries((data ?? []).map((r) => [r.key, r.content]));
@@ -34,12 +34,12 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user || !isAdmin(user)) return NextResponse.json({ error: "Interdit" }, { status: 403 });
+  if (!user || !isAdmin(user)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const url = new URL(req.url);
   const key = url.searchParams.get("key") as GuideKey | null;
   if (!key || !VALID_KEYS.includes(key)) {
-    return NextResponse.json({ error: "Clé invalide" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }
 
   const { guide } = await req.json();

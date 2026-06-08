@@ -103,16 +103,16 @@ async function generateDraft(client: ClientRow, senderName: string, userId: stri
 // et renvoie. Pas d'envoi : la modal review permet d'editer puis copier.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: "ANTHROPIC_API_KEY manquante" }, { status: 500 });
+    return NextResponse.json({ error: "ANTHROPIC_API_KEY missing" }, { status: 500 });
   }
 
   const { id } = await params;
   const body = (await req.json().catch(() => ({}))) as { regenerate?: boolean };
 
   const { data: clientData, error } = await db.from("clients").select("*").eq("id", id).single();
-  if (error || !clientData) return NextResponse.json({ error: "Client introuvable" }, { status: 404 });
+  if (error || !clientData) return NextResponse.json({ error: "Client not found" }, { status: 404 });
   const client = clientData as ClientRow;
 
   const cached = client.missing_info_email_draft ?? null;
@@ -131,16 +131,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 // Body: { to?, subject?, body? } — persiste les editions de l'AE dans le cache.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id } = await params;
   const patch = (await req.json().catch(() => ({}))) as { to?: string; subject?: string; body?: string };
 
   const { data: row, error } = await db.from("clients").select("missing_info_email_draft").eq("id", id).single();
-  if (error || !row) return NextResponse.json({ error: "Client introuvable" }, { status: 404 });
+  if (error || !row) return NextResponse.json({ error: "Client not found" }, { status: 404 });
 
   const current = (row.missing_info_email_draft ?? null) as MissingInfoEmailDraft | null;
-  if (!current) return NextResponse.json({ error: "Aucun brouillon à mettre à jour" }, { status: 400 });
+  if (!current) return NextResponse.json({ error: "No draft to update" }, { status: 400 });
 
   const updated: MissingInfoEmailDraft = {
     ...current,

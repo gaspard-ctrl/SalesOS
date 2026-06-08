@@ -41,7 +41,7 @@ export async function PATCH(req: NextRequest) {
 
   const { error } = await db.from("users").update(update).eq("id", user.id);
 
-  if (error) return NextResponse.json({ error: "Erreur lors de la mise à jour" }, { status: 500 });
+  if (error) return NextResponse.json({ error: "Update failed" }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }

@@ -27,7 +27,7 @@ const ACCENT = "#f01563";
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString("fr-FR", {
+  return d.toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -105,7 +105,7 @@ function LeadCard({
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>
-            {lead.author_name ?? "(auteur inconnu)"}
+            {lead.author_name ?? "(unknown author)"}
           </div>
           <div style={{ fontSize: 12, color: "#888" }}>{formatDate(lead.posted_at)}</div>
           {lead.slack_permalink && (
@@ -219,7 +219,7 @@ function LeadCard({
             ) : (
               <RefreshCw size={14} />
             )}
-            Réanalyser
+            Re-analyze
           </button>
         </div>
       </div>
@@ -243,7 +243,7 @@ export default function LeadsTab() {
     try {
       await analyzeLead(lead.id);
     } catch (e) {
-      setErrorMsg(`Erreur analyse : ${e instanceof Error ? e.message : "inconnue"}`);
+      setErrorMsg(`Analysis error: ${e instanceof Error ? e.message : "unknown"}`);
     } finally {
       setBusyId(null);
     }
@@ -271,9 +271,9 @@ export default function LeadsTab() {
           }}
         >
           <Settings size={15} />
-          Gestion des leads
+          Lead management
           <span style={{ color: "#888", fontWeight: 500 }}>
-            · {counts.pending} non validé{counts.pending > 1 ? "s" : ""}
+            · {counts.pending} pending
           </span>
           {counts.pending > 0 && (
             <span
@@ -318,25 +318,25 @@ export default function LeadsTab() {
         <FilterButton
           active={analysisFilter === "all"}
           onClick={() => setAnalysisFilter("all")}
-          label="Tous"
+          label="All"
           count={counts.validated}
         />
         <FilterButton
           active={analysisFilter === "with_deal"}
           onClick={() => setAnalysisFilter("with_deal")}
-          label="Avec deal"
+          label="With deal"
           count={counts.validatedWithDeal}
         />
         <FilterButton
           active={analysisFilter === "without_deal"}
           onClick={() => setAnalysisFilter("without_deal")}
-          label="Sans deal"
+          label="Without deal"
           count={counts.validatedWithoutDeal}
         />
         <FilterButton
           active={analysisFilter === "with_contact"}
           onClick={() => setAnalysisFilter("with_contact")}
-          label="Avec contact"
+          label="With contact"
           count={counts.validatedWithContact}
         />
       </div>
@@ -352,7 +352,7 @@ export default function LeadsTab() {
             color: "#888",
           }}
         >
-          <Loader2 size={16} className="animate-spin" style={{ marginRight: 8 }} /> Chargement…
+          <Loader2 size={16} className="animate-spin" style={{ marginRight: 8 }} /> Loading…
         </div>
       ) : leads.length === 0 ? (
         <div
@@ -369,7 +369,7 @@ export default function LeadsTab() {
           }}
         >
           <Inbox size={32} />
-          <div style={{ fontSize: 14 }}>Aucun lead dans cette catégorie</div>
+          <div style={{ fontSize: 14 }}>No leads in this category</div>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

@@ -21,7 +21,7 @@ async function slackPost(path: string, body: Record<string, unknown>) {
 export async function POST(req: NextRequest) {
   try {
     const user = await getAuthenticatedUser();
-    if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
     const { briefingText, eventTitle } = await req.json() as {
       briefingText: string;
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
     const slackDisplayName = userRow?.slack_display_name?.trim();
     if (!slackDisplayName) {
-      return NextResponse.json({ error: "User Slack non défini" }, { status: 400 });
+      return NextResponse.json({ error: "Slack user not set" }, { status: 400 });
     }
 
     // Find Slack member by display name or real name
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     );
     const listData = await listRes.json();
     if (!listData.ok) {
-      return NextResponse.json({ error: "Impossible de récupérer les utilisateurs Slack" }, { status: 500 });
+      return NextResponse.json({ error: "Unable to fetch Slack users" }, { status: 500 });
     }
 
     const needle = slackDisplayName.toLowerCase();
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!member) {
-      return NextResponse.json({ error: `Utilisateur Slack "${slackDisplayName}" introuvable` }, { status: 404 });
+      return NextResponse.json({ error: `Slack user "${slackDisplayName}" not found` }, { status: 404 });
     }
 
     const dm = await slackPost("/conversations.open", { users: member.id });

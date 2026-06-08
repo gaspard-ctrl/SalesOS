@@ -31,7 +31,7 @@ type HsFilter = { propertyName: string; operator: string; value?: string; highVa
 
 export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { searchParams } = req.nextUrl;
   const q = searchParams.get("q")?.trim() ?? "";
@@ -156,6 +156,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ results, nextCursor, total, myOwnerId });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur HubSpot" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "HubSpot error" }, { status: 500 });
   }
 }

@@ -15,11 +15,11 @@ function formatDate(iso: string): string {
   const diffDays = Math.floor((now.getTime() - date.getTime()) / 86400000);
 
   if (diffDays === 0)
-    return `Aujourd'hui ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
-  if (diffDays === 1) return "Hier";
+    return `Today ${date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+  if (diffDays === 1) return "Yesterday";
   if (diffDays < 7)
-    return date.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "");
-  return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+    return date.toLocaleDateString("en-GB", { weekday: "short" }).replace(".", "");
+  return date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit" });
 }
 
 export const ConversationHistoryModal = memo(function ConversationHistoryModal({
@@ -62,11 +62,11 @@ export const ConversationHistoryModal = memo(function ConversationHistoryModal({
           style={{ borderColor: "#f0f0f0" }}
         >
           <span className="text-sm font-semibold" style={{ color: "#111" }}>
-            Historique
+            History
           </span>
           <button
             onClick={onClose}
-            aria-label="Fermer l'historique"
+            aria-label="Close history"
             className="p-1 rounded-lg transition-colors hover:bg-[#f5f5f5]"
           >
             <X size={14} style={{ color: "#888" }} />
@@ -79,7 +79,7 @@ export const ConversationHistoryModal = memo(function ConversationHistoryModal({
             <div className="px-4 py-10 text-center">
               <MessageSquare size={22} className="mx-auto mb-2" style={{ color: "#ddd" }} />
               <p className="text-xs" style={{ color: "#bbb" }}>
-                Aucune conversation sauvegardée
+                No saved conversations
               </p>
             </div>
           ) : (
@@ -110,7 +110,7 @@ export const ConversationHistoryModal = memo(function ConversationHistoryModal({
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); onDelete(conv.id); }}
-                    aria-label={`Supprimer la conversation ${conv.title}`}
+                    aria-label={`Delete conversation ${conv.title}`}
                     className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all hover:bg-[#fde8ef]"
                   >
                     <Trash2 size={12} style={{ color: "#f01563" }} />

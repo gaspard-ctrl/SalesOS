@@ -102,33 +102,33 @@ export function stageColor(index: number): string {
 
 export function fmt(amount: string): string {
   const n = parseFloat(amount);
-  if (isNaN(n)) return "—";
+  if (isNaN(n)) return "-";
   return n >= 1000 ? `${(n / 1000).toFixed(0)}k€` : `${n.toFixed(0)}€`;
 }
 
 export function fmtDate(dateStr: string): string {
   if (!dateStr) return "";
-  return new Date(dateStr).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+  return new Date(dateStr).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
 
 export function timeAgo(dateStr: string): string {
   if (!dateStr) return "";
   const diff = Date.now() - new Date(dateStr).getTime();
   const days = Math.floor(diff / 864e5);
-  if (days === 0) return "Aujourd'hui";
-  if (days === 1) return "Hier";
-  if (days < 7) return `Il y a ${days}j`;
-  if (days < 30) return `Il y a ${Math.floor(days / 7)}sem`;
-  return `Il y a ${Math.floor(days / 30)}mois`;
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return `${Math.floor(days / 30)}mo ago`;
 }
 
 export function engagementTypeBadge(type: string): string {
   const map: Record<string, string> = {
     EMAIL: "Email",
-    CALL: "Appel",
-    MEETING: "Réunion",
+    CALL: "Call",
+    MEETING: "Meeting",
     NOTE: "Note",
-    TASK: "Tâche",
+    TASK: "Task",
   };
   return map[type?.toUpperCase()] ?? type;
 }
@@ -136,15 +136,15 @@ export function engagementTypeBadge(type: string): string {
 // Normalise un `meeting_kind` Claap (libre, souvent en anglais) vers un label
 // court FR pour l'affichage en badge dans la timeline.
 export function meetingKindBadge(kind: string | null): string {
-  if (!kind) return "Réunion";
+  if (!kind) return "Meeting";
   const k = kind.toLowerCase();
   if (k.includes("disco")) return "Disco";
-  if (k.includes("demo") || k.includes("démo")) return "Démo";
-  if (k.includes("nego") || k.includes("négo")) return "Négo";
+  if (k.includes("demo") || k.includes("démo")) return "Demo";
+  if (k.includes("nego") || k.includes("négo")) return "Nego";
   if (k.includes("closing") || k.includes("clôture")) return "Closing";
-  if (k.includes("follow") || k.includes("suivi") || k.includes("relance")) return "Suivi";
+  if (k.includes("follow") || k.includes("suivi") || k.includes("relance")) return "Follow-up";
   if (k.includes("kickoff") || k.includes("kick-off") || k.includes("onboard")) return "Kickoff";
-  if (k.includes("intern")) return "Interne";
+  if (k.includes("intern")) return "Internal";
   if (k.includes("qualif")) return "Qualif";
   // Fallback : capitalise le kind brut (tronqué) plutôt qu'un générique.
   return kind.charAt(0).toUpperCase() + kind.slice(1, 16);
@@ -159,40 +159,40 @@ export function formatDealForSlack(
   qualification: Record<string, string | null> | null
 ): string {
   const lines: string[] = [
-    `*Deal — ${details.dealname}*`,
+    `*Deal - ${details.dealname}*`,
     "",
-    `*Stage :* ${stageLabel}`,
+    `*Stage:* ${stageLabel}`,
   ];
-  if (details.amount) lines.push(`*Montant :* ${parseFloat(details.amount).toLocaleString("fr-FR")}€`);
-  if (details.closedate) lines.push(`*Clôture :* ${new Date(details.closedate).toLocaleDateString("fr-FR")}`);
-  if (details.ownerName) lines.push(`*Owner :* ${details.ownerName}`);
+  if (details.amount) lines.push(`*Amount:* ${parseFloat(details.amount).toLocaleString("en-GB")}€`);
+  if (details.closedate) lines.push(`*Close:* ${new Date(details.closedate).toLocaleDateString("en-GB")}`);
+  if (details.ownerName) lines.push(`*Owner:* ${details.ownerName}`);
 
   if (score) {
-    lines.push("", `*Score :* ${score.total}/100`);
+    lines.push("", `*Score:* ${score.total}/100`);
     if (score.components?.length) {
-      lines.push(...score.components.map((c) => `  • ${c.name} : ${c.earned}/${c.max}`));
+      lines.push(...score.components.map((c) => `  • ${c.name}: ${c.earned}/${c.max}`));
     }
   }
 
-  if (reasoning) lines.push("", `*Analyse :*`, reasoning);
-  if (nextAction) lines.push("", `*Prochaine action :* ${nextAction}`);
+  if (reasoning) lines.push("", `*Analysis:*`, reasoning);
+  if (nextAction) lines.push("", `*Next action:* ${nextAction}`);
 
   if (qualification) {
     const QUAL_LABELS: Record<string, string> = {
       budget: "Budget",
-      estimatedBudget: "Budget estimé",
-      authority: "Autorité",
-      need: "Besoin",
+      estimatedBudget: "Estimated budget",
+      authority: "Authority",
+      need: "Need",
       champion: "Champion",
-      needDetailed: "Besoin détaillé",
+      needDetailed: "Detailed need",
       timeline: "Timeline",
-      strategicFit: "Fit stratégique",
+      strategicFit: "Strategic fit",
     };
     const entries = Object.entries(qualification).filter(([, v]) => !!v);
     if (entries.length > 0) {
-      lines.push("", `*Qualification :*`);
+      lines.push("", `*Qualification:*`);
       entries.forEach(([k, v]) => {
-        lines.push(`  • ${QUAL_LABELS[k] ?? k} : ${v}`);
+        lines.push(`  • ${QUAL_LABELS[k] ?? k}: ${v}`);
       });
     }
   }
@@ -201,17 +201,17 @@ export function formatDealForSlack(
     const cp = details.company;
     const companyParts = [
       cp.name,
-      cp.industry ? `Secteur : ${cp.industry}` : null,
-      cp.employees ? `Effectifs : ${cp.employees}` : null,
+      cp.industry ? `Sector: ${cp.industry}` : null,
+      cp.employees ? `Headcount: ${cp.employees}` : null,
     ].filter(Boolean);
-    lines.push("", `*Entreprise :*`, ...companyParts.map((p) => `  • ${p}`));
+    lines.push("", `*Company:*`, ...companyParts.map((p) => `  • ${p}`));
   }
 
   if (details.contacts?.length > 0) {
-    lines.push("", `*Contacts :*`);
+    lines.push("", `*Contacts:*`);
     details.contacts.forEach((c) => {
       const parts = [c.name, c.jobTitle, c.email].filter(Boolean);
-      lines.push(`  • ${parts.join(" — ")}`);
+      lines.push(`  • ${parts.join(" - ")}`);
     });
   }
 

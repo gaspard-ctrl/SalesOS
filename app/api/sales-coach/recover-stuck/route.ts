@@ -11,7 +11,7 @@ const ANALYZING_THRESHOLD_MIN = 5;
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateCronOrUser(req);
-  if (!auth) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!auth) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   // UI callers must be admin. Cron bypasses this check.
   if (!auth.isCron) {

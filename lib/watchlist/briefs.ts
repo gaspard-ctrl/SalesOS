@@ -37,6 +37,12 @@ export interface AeContact {
 /** Analyse AE : reco de prospection sur un compte (remplace l'ancienne synthèse IA). */
 export interface AeAnalysisContent {
   strategy: string; // 2 à 4 paragraphes : comment aborder ce compte
+  /**
+   * Histoire à raconter : accroche de social proof basée sur le secteur du
+   * prospect et nos clients actuels (ex : "on coache déjà XXX dans votre
+   * secteur"). Vide si aucun client comparable n'est connu.
+   */
+  story_to_tell: string;
   priority_contacts: AeContact[]; // classés par priorité
   next_actions: string[];
   watch_outs: string[]; // risques / à éviter

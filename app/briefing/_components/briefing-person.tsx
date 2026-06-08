@@ -23,7 +23,7 @@ export function BriefingPerson({ briefing }: { briefing: BriefingResult }) {
   return (
     <Card padding={16}>
       <SectionHeader
-        title="Interlocuteur"
+        title="Contact"
         right={
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#1d4ed8" }}>
             <Linkedin size={11} />

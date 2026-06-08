@@ -19,11 +19,11 @@ type RawLog = {
 
 // days: 0 = tout, -1 = journée en cours (depuis minuit local), n > 0 = fenêtre glissante de n jours
 const DATE_RANGES = [
-  { label: "Aujourd'hui", days: -1 },
-  { label: "7j",    days: 7 },
-  { label: "30j",   days: 30 },
-  { label: "3 mois", days: 90 },
-  { label: "Tout",  days: 0 },
+  { label: "Today", days: -1 },
+  { label: "7d",    days: 7 },
+  { label: "30d",   days: 30 },
+  { label: "3 months", days: 90 },
+  { label: "All",  days: 0 },
 ];
 
 function fmtCost(usd: number) {
@@ -36,10 +36,10 @@ function fmtTokens(n: number) {
   return String(n);
 }
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 function fmtDateShort(iso: string) {
-  return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 function initials(name: string) {
   return name.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
@@ -47,11 +47,11 @@ function initials(name: string) {
 function sinceLabel(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   const h = diff / 3_600_000;
-  if (h < 1) return "il y a < 1h";
-  if (h < 24) return `il y a ${Math.round(h)}h`;
+  if (h < 1) return "< 1h ago";
+  if (h < 24) return `${Math.round(h)}h ago`;
   const d = Math.floor(h / 24);
-  if (d < 7) return `il y a ${d}j`;
-  return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+  if (d < 7) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }
 
 function startOfTodayMs() {
@@ -67,15 +67,15 @@ function filterByDays<T extends { created_at: string }>(items: T[], days: number
 }
 
 const FEATURE_DESCRIPTIONS: Record<string, string> = {
-  chat:                    "Onglet CoachelloGPT — chaque message envoyé au bot",
-  conversations:           "Onglet CoachelloGPT — génération automatique du titre de conversation (1er message uniquement)",
-  briefing:                "Onglet Briefing — synthèse pré-meeting (contexte HubSpot + calendrier)",
-  prospection_search:      "Onglet Prospection — recherche IA de prospects (langage naturel)",
-  prospection_generate:    "Onglet Prospection — génération d'email de prospection",
-  prospection_details:     "Onglet Prospection — inférence des champs de contexte depuis HubSpot",
-  deals_analyze:           "Onglet Deals — analyse d'opportunité",
-  deals_email:             "Onglet Deals — génération d'email de relance deal",
-  deals_score:             "Onglet Deals — scoring automatique d'un deal",
+  chat:                    "CoachelloGPT tab - every message sent to the bot",
+  conversations:           "CoachelloGPT tab - automatic conversation title generation (first message only)",
+  briefing:                "Briefing tab - pre-meeting summary (HubSpot context + calendar)",
+  prospection_search:      "Prospecting tab - AI prospect search (natural language)",
+  prospection_generate:    "Prospecting tab - prospecting email generation",
+  prospection_details:     "Prospecting tab - inferring context fields from HubSpot",
+  deals_analyze:           "Deals tab - opportunity analysis",
+  deals_email:             "Deals tab - deal follow-up email generation",
+  deals_score:             "Deals tab - automatic deal scoring",
 };
 
 const MODEL_COLORS: Record<string, { bg: string; text: string }> = {
@@ -201,11 +201,11 @@ export function UsageTabs({
   );
 
   const TABS = [
-    { id: "users",    label: "Par utilisateur" },
-    { id: "features", label: "Par feature" },
+    { id: "users",    label: "By user" },
+    { id: "features", label: "By feature" },
     { id: "grid",     label: "User × Feature" },
-    { id: "activity", label: "Activité" },
-    { id: "catalog",  label: "Features & Modèles" },
+    { id: "activity", label: "Activity" },
+    { id: "catalog",  label: "Features & Models" },
   ] as const;
 
   return (
@@ -226,7 +226,7 @@ export function UsageTabs({
           </button>
         ))}
         <span className="text-xs ml-2" style={{ color: "#aaa" }}>
-          {filteredLogs.length} appels
+          {filteredLogs.length} calls
         </span>
       </div>
 
@@ -254,7 +254,7 @@ export function UsageTabs({
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: "#f9f9f9", borderBottom: "1px solid #eee" }}>
-                {["Utilisateur", "Appels", "Tokens in", "Tokens out", "Coût total", "Dernière activité"].map((h) => (
+                {["User", "Calls", "Tokens in", "Tokens out", "Total cost", "Last activity"].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold" style={{ color: "#555" }}>{h}</th>
                 ))}
               </tr>
@@ -270,7 +270,7 @@ export function UsageTabs({
                       <span className="font-medium text-xs" style={{ color: "#111" }}>{u.name}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs font-semibold" style={{ color: "#111" }}>{u.calls.toLocaleString("fr-FR")}</td>
+                  <td className="px-4 py-3 text-xs font-semibold" style={{ color: "#111" }}>{u.calls.toLocaleString("en-GB")}</td>
                   <td className="px-4 py-3 text-xs" style={{ color: "#555" }}>{fmtTokens(u.inputTokens)}</td>
                   <td className="px-4 py-3 text-xs" style={{ color: "#555" }}>{fmtTokens(u.outputTokens)}</td>
                   <td className="px-4 py-3">
@@ -282,7 +282,7 @@ export function UsageTabs({
                 </tr>
               ))}
               {byUser.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-xs" style={{ color: "#aaa" }}>Aucun appel sur cette période</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-xs" style={{ color: "#aaa" }}>No calls in this period</td></tr>
               )}
             </tbody>
           </table>
@@ -295,7 +295,7 @@ export function UsageTabs({
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: "#f9f9f9", borderBottom: "1px solid #eee" }}>
-                {["Feature", "Appels", "Tokens in", "Tokens out", "Coût total", "Coût / appel"].map((h) => (
+                {["Feature", "Calls", "Tokens in", "Tokens out", "Total cost", "Cost / call"].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold" style={{ color: "#555" }}>{h}</th>
                 ))}
               </tr>
@@ -308,7 +308,7 @@ export function UsageTabs({
                       {f.label}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-xs font-semibold" style={{ color: "#111" }}>{f.calls.toLocaleString("fr-FR")}</td>
+                  <td className="px-4 py-3 text-xs font-semibold" style={{ color: "#111" }}>{f.calls.toLocaleString("en-GB")}</td>
                   <td className="px-4 py-3 text-xs" style={{ color: "#555" }}>{fmtTokens(f.inputTokens)}</td>
                   <td className="px-4 py-3 text-xs" style={{ color: "#555" }}>{fmtTokens(f.outputTokens)}</td>
                   <td className="px-4 py-3">
@@ -320,7 +320,7 @@ export function UsageTabs({
                 </tr>
               ))}
               {byFeature.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-xs" style={{ color: "#aaa" }}>Aucun appel sur cette période</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-xs" style={{ color: "#aaa" }}>No calls in this period</td></tr>
               )}
             </tbody>
           </table>
@@ -334,7 +334,7 @@ export function UsageTabs({
             <thead>
               <tr style={{ background: "#f9f9f9" }}>
                 <th className="px-4 py-3 text-left font-semibold sticky left-0" style={{ color: "#555", background: "#f9f9f9", minWidth: 140, borderBottom: "1px solid #eee", borderRight: "1px solid #eee" }}>
-                  Utilisateur
+                  User
                 </th>
                 {allFeatures.map((f) => (
                   <th key={f} className="px-3 py-3 font-semibold whitespace-nowrap" style={{ color: "#555", borderBottom: "1px solid #eee", borderLeft: "1px solid #f0f0f0" }}>
@@ -381,11 +381,11 @@ export function UsageTabs({
           <div className="flex items-center gap-4 mb-4">
             <div className="flex items-center gap-1.5">
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#16a34a", display: "inline-block" }} />
-              <span className="text-xs" style={{ color: "#888" }}>Modèle configurable dans Admin</span>
+              <span className="text-xs" style={{ color: "#888" }}>Model configurable in Admin</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#d1d5db", display: "inline-block" }} />
-              <span className="text-xs" style={{ color: "#888" }}>Modèle fixe (non configurable)</span>
+              <span className="text-xs" style={{ color: "#888" }}>Fixed model (not configurable)</span>
             </div>
           </div>
           {Object.entries(FEATURE_DESCRIPTIONS).map(([key, desc]) => {
@@ -417,7 +417,7 @@ export function UsageTabs({
                     </span>
                     {!stat && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#f5f5f5", color: "#bbb" }}>
-                        jamais appelé
+                        never called
                       </span>
                     )}
                   </div>
@@ -433,7 +433,7 @@ export function UsageTabs({
                       color: configurable ? currentColor.text : "#9ca3af",
                     }}
                   >
-                    {currentModel}{!configurable && " — fixe"}
+                    {currentModel}{!configurable && " - fixed"}
                   </span>
                 </div>
               </div>
@@ -447,7 +447,7 @@ export function UsageTabs({
         <div className="space-y-6">
           {/* Summary per user */}
           <div>
-            <h3 className="text-sm font-semibold mb-3" style={{ color: "#111" }}>Résumé par utilisateur</h3>
+            <h3 className="text-sm font-semibold mb-3" style={{ color: "#111" }}>Summary by user</h3>
             <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
               {byUser.map((u) => (
                 <div key={u.id} className="rounded-xl border p-4" style={{ borderColor: "#eee", background: "#fff" }}>
@@ -457,16 +457,16 @@ export function UsageTabs({
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold truncate" style={{ color: "#111" }}>{u.name}</p>
-                      <p className="text-xs" style={{ color: "#888" }}>Dernière activité {sinceLabel(u.lastSeen)}</p>
+                      <p className="text-xs" style={{ color: "#888" }}>Last activity {sinceLabel(u.lastSeen)}</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div className="rounded-lg px-3 py-2" style={{ background: "#f9f9f9" }}>
-                      <p className="text-[10px] font-medium mb-0.5" style={{ color: "#888" }}>Appels</p>
+                      <p className="text-[10px] font-medium mb-0.5" style={{ color: "#888" }}>Calls</p>
                       <p className="text-lg font-bold" style={{ color: "#111" }}>{u.calls}</p>
                     </div>
                     <div className="rounded-lg px-3 py-2" style={{ background: "#f9f9f9" }}>
-                      <p className="text-[10px] font-medium mb-0.5" style={{ color: "#888" }}>Coût</p>
+                      <p className="text-[10px] font-medium mb-0.5" style={{ color: "#888" }}>Cost</p>
                       <p className="text-lg font-bold" style={{ color: "#f01563" }}>{fmtCost(u.costUsd)}</p>
                     </div>
                   </div>
@@ -490,7 +490,7 @@ export function UsageTabs({
           {/* Detailed log */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold" style={{ color: "#111" }}>Log détaillé</h3>
+              <h3 className="text-sm font-semibold" style={{ color: "#111" }}>Detailed log</h3>
               <div className="flex gap-2">
                 <select
                   value={filterUser}
@@ -498,7 +498,7 @@ export function UsageTabs({
                   className="text-xs px-2 py-1.5 rounded-lg border outline-none"
                   style={{ borderColor: "#e5e5e5", color: "#555" }}
                 >
-                  <option value="">Tous les users</option>
+                  <option value="">All users</option>
                   {byUser.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
                 <select
@@ -507,7 +507,7 @@ export function UsageTabs({
                   className="text-xs px-2 py-1.5 rounded-lg border outline-none"
                   style={{ borderColor: "#e5e5e5", color: "#555" }}
                 >
-                  <option value="">Toutes les features</option>
+                  <option value="">All features</option>
                   {allFeatures.map((f) => <option key={f} value={f}>{featureLabels[f] ?? f}</option>)}
                 </select>
               </div>
@@ -516,7 +516,7 @@ export function UsageTabs({
               <table className="w-full text-xs">
                 <thead>
                   <tr style={{ background: "#f9f9f9", borderBottom: "1px solid #eee" }}>
-                    {["Date", "Utilisateur", "Feature", "Tokens in", "Tokens out", "Coût", "Modèle"].map((h) => (
+                    {["Date", "User", "Feature", "Tokens in", "Tokens out", "Cost", "Model"].map((h) => (
                       <th key={h} className="text-left px-3 py-2.5 font-semibold" style={{ color: "#555" }}>{h}</th>
                     ))}
                   </tr>

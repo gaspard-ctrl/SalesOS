@@ -33,10 +33,10 @@ const DEAL_PROPS = [
 
 export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const id = req.nextUrl.searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "ID manquant" }, { status: 400 });
+  if (!id) return NextResponse.json({ error: "ID missing" }, { status: 400 });
 
   try {
     const propsQuery = DEAL_PROPS.join(",");
@@ -233,7 +233,7 @@ export async function GET(req: NextRequest) {
       });
     }
     if (p.createdate) {
-      events.push({ kind: "created", label: "Deal créé", iso: p.createdate });
+      events.push({ kind: "created", label: "Deal created", iso: p.createdate });
     }
 
     // Fetch cached AI score
@@ -354,6 +354,6 @@ export async function GET(req: NextRequest) {
       keyEvents,
     });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Error" }, { status: 500 });
   }
 }

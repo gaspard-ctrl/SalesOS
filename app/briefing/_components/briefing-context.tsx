@@ -12,13 +12,13 @@ import { isExistingClient } from "../_helpers";
 
 const QUAL_FIELDS: { key: keyof DealQualification; label: string }[] = [
   { key: "budget", label: "Budget" },
-  { key: "estimatedBudget", label: "Budget estimé" },
-  { key: "authority", label: "Autorité (décisionnaire)" },
-  { key: "need", label: "Besoin" },
-  { key: "champion", label: "Champion interne" },
-  { key: "needDetailed", label: "Besoin détaillé" },
+  { key: "estimatedBudget", label: "Estimated budget" },
+  { key: "authority", label: "Authority (decision-maker)" },
+  { key: "need", label: "Need" },
+  { key: "champion", label: "Internal champion" },
+  { key: "needDetailed", label: "Detailed need" },
   { key: "timeline", label: "Timeline" },
-  { key: "strategicFit", label: "Fit stratégique" },
+  { key: "strategicFit", label: "Strategic fit" },
 ];
 
 export function BriefingContext({ briefing, rawData }: { briefing: BriefingResult; rawData: GatheredData | null }) {
@@ -28,7 +28,7 @@ export function BriefingContext({ briefing, rawData }: { briefing: BriefingResul
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {briefing.contextSummary && (
         <Card padding={16}>
-          <SectionHeader title="Contexte" />
+          <SectionHeader title="Context" />
           <MarkdownBlock text={briefing.contextSummary} />
         </Card>
       )}
@@ -41,7 +41,7 @@ export function BriefingContext({ briefing, rawData }: { briefing: BriefingResul
         return (
           <Card padding={16}>
             <SectionHeader
-              title={`Qualification deal — ${known.length}/${QUAL_FIELDS.length}`}
+              title={`Deal qualification - ${known.length}/${QUAL_FIELDS.length}`}
             />
             <div style={{ marginBottom: 12 }}>
               <ProgressBar
@@ -76,7 +76,7 @@ export function BriefingContext({ briefing, rawData }: { briefing: BriefingResul
             {missing.length > 0 && (
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.line}` }}>
                 <p style={{ fontSize: 11, fontWeight: 600, color: COLORS.ink3, marginBottom: 6, marginTop: 0 }}>
-                  À collecter
+                  To collect
                 </p>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {missing.map((f) => (
@@ -114,7 +114,7 @@ export function BriefingContext({ briefing, rawData }: { briefing: BriefingResul
               marginBottom: 4,
             }}
           >
-            Prochaine étape
+            Next step
           </p>
           <p style={{ fontSize: 13, color: "#15803d", margin: 0, lineHeight: 1.5 }}>{briefing.nextStep}</p>
         </Card>
@@ -135,13 +135,17 @@ const RISK_STYLES: Record<DealAnalysis["riskLevel"], { bg: string; color: string
   "Élevé": { bg: "#fef2f2", color: "#dc2626" },
 };
 
+// Display-only FR->EN maps (the raw values come from the AI and stay as the style keys above).
+const MOMENTUM_EN: Record<string, string> = { "En accélération": "Accelerating", "Stable": "Stable", "En perte de vitesse": "Losing momentum" };
+const RISK_EN: Record<string, string> = { "Faible": "Low", "Moyen": "Medium", "Élevé": "High" };
+
 function DealAnalysisCard({ analysis }: { analysis: DealAnalysis }) {
   if (typeof analysis.momentum !== "string" || typeof analysis.riskLevel !== "string") return null;
   const mom = MOMENTUM_STYLES[analysis.momentum] ?? MOMENTUM_STYLES.Stable;
   const risk = RISK_STYLES[analysis.riskLevel] ?? RISK_STYLES.Moyen;
   return (
     <Card padding={16}>
-      <SectionHeader title="État du deal" />
+      <SectionHeader title="Deal status" />
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         <span
           style={{
@@ -156,7 +160,7 @@ function DealAnalysisCard({ analysis }: { analysis: DealAnalysis }) {
             color: mom.color,
           }}
         >
-          {mom.icon} {analysis.momentum}
+          {mom.icon} {MOMENTUM_EN[analysis.momentum] ?? analysis.momentum}
         </span>
         <span
           style={{
@@ -171,7 +175,7 @@ function DealAnalysisCard({ analysis }: { analysis: DealAnalysis }) {
             color: risk.color,
           }}
         >
-          <AlertTriangle size={12} /> Risque {analysis.riskLevel.toLowerCase()}
+          <AlertTriangle size={12} /> {(RISK_EN[analysis.riskLevel] ?? analysis.riskLevel).toLowerCase()} risk
         </span>
       </div>
 
@@ -196,7 +200,7 @@ function DealAnalysisCard({ analysis }: { analysis: DealAnalysis }) {
                   marginBottom: 4,
                 }}
               >
-                Signaux positifs
+                Positive signals
               </p>
               <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 4 }}>
                 {analysis.positiveSignals.map((s, i) => (
@@ -221,7 +225,7 @@ function DealAnalysisCard({ analysis }: { analysis: DealAnalysis }) {
                   marginBottom: 4,
                 }}
               >
-                Signaux négatifs
+                Negative signals
               </p>
               <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 4 }}>
                 {analysis.negativeSignals.map((s, i) => (
@@ -249,7 +253,7 @@ function DealAnalysisCard({ analysis }: { analysis: DealAnalysis }) {
               marginBottom: 4,
             }}
           >
-            Action CRM
+            CRM action
           </p>
           <p style={{ fontSize: 12, color: COLORS.ink0, margin: 0, lineHeight: 1.5 }}>
             {analysis.nextStepCrm}

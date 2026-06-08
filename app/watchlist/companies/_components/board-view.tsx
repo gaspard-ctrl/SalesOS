@@ -78,7 +78,7 @@ export function BoardView() {
   const selectedRepName = filter !== ALL && filter !== UNASSIGNED_KEY ? railReps.find((r) => r.name.toLowerCase() === filter)?.name ?? filter : null;
 
   async function removeCompany(c: ScopeCompany) {
-    if (!confirm(`Retirer ${c.name} de la watchlist ?`)) return;
+    if (!confirm(`Remove ${c.name} from the watchlist?`)) return;
     const r = await fetch(`/api/intel/admin/scope-companies/${c.id}`, { method: "DELETE" });
     if (r.ok) {
       setSelectedIds((prev) => {
@@ -131,7 +131,7 @@ export function BoardView() {
   async function removeSelected() {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    if (!confirm(`Retirer ${ids.length} compan${ids.length > 1 ? "ies" : "y"} de la watchlist ?`)) return;
+    if (!confirm(`Remove ${ids.length} compan${ids.length > 1 ? "ies" : "y"} from the watchlist?`)) return;
     const r = await fetch("/api/intel/admin/scope-companies", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -198,18 +198,18 @@ export function BoardView() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher une company…"
+              placeholder="Search a company…"
               style={{ width: "100%", paddingLeft: 30, paddingRight: 10, paddingTop: 7, paddingBottom: 7, borderRadius: 8, border: `1px solid ${COLORS.line}`, fontSize: 12, outline: "none", background: COLORS.bgCard }}
             />
           </div>
           <select value={sector} onChange={(e) => setSector(e.target.value)} style={selectStyle(!!sector)}>
-            <option value="">Tous secteurs</option>
+            <option value="">All sectors</option>
             {sectorOptions.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
           <select value={platform} onChange={(e) => setPlatform(e.target.value)} style={selectStyle(!!platform)}>
-            <option value="">Toutes plateformes</option>
+            <option value="">All platforms</option>
             {platformOptions.map((p) => (
               <option key={p} value={p}>{p}</option>
             ))}
@@ -218,23 +218,23 @@ export function BoardView() {
             {selectedIds.size > 0 && (
               <>
                 <span style={{ fontSize: 11, color: COLORS.ink2, fontWeight: 600 }}>
-                  {selectedIds.size} sélectionnée{selectedIds.size > 1 ? "s" : ""}
+                  {selectedIds.size} selected
                 </span>
                 <button type="button" onClick={removeSelected} style={dangerBtn()}>
-                  <Trash2 size={12} /> Retirer
+                  <Trash2 size={12} /> Remove
                 </button>
                 <button type="button" onClick={() => { setSelectedIds(new Set()); anchorRef.current = null; }} style={ghostBtn()}>
-                  <X size={12} /> Désélectionner
+                  <X size={12} /> Deselect
                 </button>
                 <span style={{ width: 1, height: 18, background: COLORS.line }} />
               </>
             )}
             {visible.length > 0 && (
               <button type="button" onClick={toggleSelectAll} style={ghostBtn()}>
-                <CheckSquare size={12} /> {allVisibleSelected ? "Tout désél." : "Tout sél."}
+                <CheckSquare size={12} /> {allVisibleSelected ? "Deselect all" : "Select all"}
               </button>
             )}
-            <span style={{ fontSize: 11, color: COLORS.ink3 }}>{visible.length} affichée{visible.length > 1 ? "s" : ""}</span>
+            <span style={{ fontSize: 11, color: COLORS.ink3 }}>{visible.length} shown</span>
             <button type="button" onClick={exportCsv} disabled={visible.length === 0} style={ghostBtn()}>
               <Download size={12} /> CSV
             </button>
@@ -250,8 +250,8 @@ export function BoardView() {
           ) : visible.length === 0 ? (
             <div style={{ padding: 40, textAlign: "center", color: COLORS.ink3, fontSize: 12 }}>
               {accounts.length === 0
-                ? "Aucune company. Va dans l'onglet Liste pour en ajouter depuis HubSpot."
-                : "Aucun résultat avec ces filtres."}
+                ? "No companies. Go to the List tab to add some from HubSpot."
+                : "No results with these filters."}
             </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10, alignContent: "start" }}>

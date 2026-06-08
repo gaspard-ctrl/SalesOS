@@ -15,7 +15,7 @@ const STALE_RUNNING_MS = 15 * 60_000;
 // délègue à la Background Function (runtime long).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id } = await params;
 
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
-  if (error || !row) return NextResponse.json({ error: "Liste introuvable" }, { status: 404 });
+  if (error || !row) return NextResponse.json({ error: "List not found" }, { status: 404 });
 
   // Garde anti-double-lancement : un push récent encore "running" bloque, mais on
   // débloque au-delà de 15 min (run morte) pour ne pas geler le bouton à vie.
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (current?.status === "running") {
     const startedMs = current.startedAt ? Date.parse(current.startedAt) : 0;
     if (Date.now() - startedMs < STALE_RUNNING_MS) {
-      return NextResponse.json({ error: "Un envoi est déjà en cours pour cette liste." }, { status: 409 });
+      return NextResponse.json({ error: "A send is already in progress for this list." }, { status: 409 });
     }
   }
 

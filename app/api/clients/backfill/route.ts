@@ -15,7 +15,7 @@ export const maxDuration = 60;
 // fiche). Idempotent : repasse les deals déjà importés sans erreur.
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   let dealIds: string[] = [];
   try {
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (dealIds.length === 0) {
-    return NextResponse.json({ error: "dealIds requis (liste non vide)" }, { status: 400 });
+    return NextResponse.json({ error: "dealIds required (non-empty list)" }, { status: 400 });
   }
 
   try {

@@ -134,9 +134,9 @@ export function BriefingDealSummary({ rawData }: { rawData: GatheredData | null 
   if (!deal) return null;
 
   const amountNum = deal.amount ? Number(deal.amount) : 0;
-  const dealAmount = amountNum > 0 ? `${amountNum.toLocaleString("fr-FR")} €` : null;
+  const dealAmount = amountNum > 0 ? `${amountNum.toLocaleString("en-GB")} €` : null;
   const closureLabel = deal.closedate
-    ? new Date(deal.closedate).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })
+    ? new Date(deal.closedate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
     : null;
   const stage = deal.stage ?? "";
   const isClosedWon = /closed\s*won/i.test(stage) || stage.toLowerCase() === "closedwon";
@@ -178,9 +178,9 @@ export function BriefingDealSummary({ rawData }: { rawData: GatheredData | null 
             </span>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            <MetaChip label="Stade" value={deal.stage} />
-            {dealAmount && <MetaChip label="Montant" value={dealAmount} />}
-            {closureLabel && <MetaChip label="Clôture" value={closureLabel} />}
+            <MetaChip label="Stage" value={deal.stage} />
+            {dealAmount && <MetaChip label="Amount" value={dealAmount} />}
+            {closureLabel && <MetaChip label="Close" value={closureLabel} />}
             {deal.ownerName && <MetaChip label="Owner" value={deal.ownerName} />}
           </div>
         </div>
@@ -190,7 +190,7 @@ export function BriefingDealSummary({ rawData }: { rawData: GatheredData | null 
       {hasBoxes && (
         <div style={{ display: "flex", gap: 10, alignItems: "stretch" }}>
           <SignalBox
-            title="Points forts"
+            title="Strengths"
             items={pos}
             Icon={CheckCircle2}
             fg={COLORS.ok}
@@ -200,7 +200,7 @@ export function BriefingDealSummary({ rawData }: { rawData: GatheredData | null 
             flex={1}
           />
           <SignalBox
-            title="Points faibles"
+            title="Weaknesses"
             items={neg}
             Icon={XCircle}
             fg={COLORS.err}

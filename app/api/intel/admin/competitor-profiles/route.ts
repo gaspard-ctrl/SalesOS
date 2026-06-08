@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { data, error } = await db
     .from("linkedin_competitor_profiles")
@@ -20,13 +20,13 @@ export async function GET(_req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as
     | { username: string; full_name?: string; headline?: string; competitor_name: string; role_type?: string }
     | null;
   if (!body?.username || !body?.competitor_name) {
-    return NextResponse.json({ error: "username et competitor_name requis" }, { status: 400 });
+    return NextResponse.json({ error: "username and competitor_name required" }, { status: 400 });
   }
 
   const username = body.username
@@ -56,10 +56,10 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const id = req.nextUrl.searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "id requis" }, { status: 400 });
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   const { error } = await db.from("linkedin_competitor_profiles").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

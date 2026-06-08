@@ -59,11 +59,11 @@ export function GuideEditor({
             <p className="text-sm font-semibold" style={{ color: "#111" }}>{title}</p>
             {isCustom ? (
               <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "#dbeafe", color: "#1e40af" }}>
-                Personnalisé
+                Custom
               </span>
             ) : (
               <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "#f1f5f9", color: "#475569" }}>
-                Par défaut
+                Default
               </span>
             )}
           </div>
@@ -88,7 +88,7 @@ export function GuideEditor({
                 className="text-[10px]"
                 style={{ color: "#aaa" }}
               >
-                Réinitialiser au défaut
+                Reset to default
               </button>
             )}
           </div>
@@ -107,7 +107,7 @@ export function GuideEditor({
             className="text-xs px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
             style={{ background: saved ? "#dcfce7" : "#f01563", color: saved ? "#166534" : "#fff" }}
           >
-            {saving ? "Sauvegarde..." : saved ? "Sauvegardé !" : "Sauvegarder"}
+            {saving ? "Saving..." : saved ? "Saved!" : "Save"}
           </button>
         </div>
       )}

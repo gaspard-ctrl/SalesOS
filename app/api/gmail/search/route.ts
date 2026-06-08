@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
     const user = await getAuthenticatedUser();
-    if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
     const q = req.nextUrl.searchParams.get("q") ?? "";
     const maxResults = Math.min(parseInt(req.nextUrl.searchParams.get("maxResults") ?? "10", 10), 15);

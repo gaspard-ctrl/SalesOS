@@ -37,7 +37,7 @@ export default function ProspectionGuidePage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur inconnue");
+      setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setSaving(false);
     }
@@ -58,9 +58,9 @@ export default function ProspectionGuidePage() {
           Admin
         </button>
         <div className="text-center">
-          <h1 className="text-sm font-semibold" style={{ color: "#111" }}>Guide Prospection</h1>
+          <h1 className="text-sm font-semibold" style={{ color: "#111" }}>Prospecting Guide</h1>
           <p className="text-xs" style={{ color: "#aaa" }}>
-            Exemples d&apos;emails et instructions que Claude utilise pour rédiger les emails de prospection
+            Email examples and instructions Claude uses to write prospecting emails
           </p>
         </div>
         <button
@@ -70,7 +70,7 @@ export default function ProspectionGuidePage() {
           style={{ background: saved ? "#22c55e" : "#f01563", color: "#fff", opacity: saving ? 0.7 : 1 }}
         >
           <Save size={12} />
-          {saved ? "Sauvegardé !" : saving ? "…" : "Sauvegarder"}
+          {saved ? "Saved!" : saving ? "…" : "Save"}
         </button>
       </div>
 
@@ -79,11 +79,11 @@ export default function ProspectionGuidePage() {
         <div className="max-w-3xl mx-auto">
           {error && (
             <p className="text-xs mb-3 px-3 py-2 rounded-lg" style={{ background: "#fff0f3", color: "#f01563" }}>
-              Erreur : {error}
+              Error: {error}
             </p>
           )}
           <p className="text-xs mb-3" style={{ color: "#aaa" }}>
-            Ce guide est injecté dans le prompt de génération. Ajoute des exemples d&apos;emails, le ton à adopter, les signaux à exploiter et les cibles prioritaires.
+            This guide is injected into the generation prompt. Add email examples, the tone to use, the signals to leverage and the priority targets.
           </p>
           <textarea
             value={content}

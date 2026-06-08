@@ -64,7 +64,7 @@ export function ListsPanel() {
 
   async function persist(source: "hubspot" | "mixed", criteria: unknown, results: EnrichmentProfile[]) {
     const name = window.prompt(
-      `Nom de la liste ? (${results.length} contact${results.length > 1 ? "s" : ""})`,
+      `List name? (${results.length} contact${results.length > 1 ? "s" : ""})`,
       "",
     );
     if (!name) return;
@@ -75,7 +75,7 @@ export function ListsPanel() {
       await reload();
       backToBrowse();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur d'enregistrement");
+      setError(e instanceof Error ? e.message : "Save failed");
     } finally {
       setBusy(false);
     }
@@ -96,12 +96,12 @@ export function ListsPanel() {
   }
 
   async function onDeleteList(id: string, name: string) {
-    if (!window.confirm(`Supprimer la liste "${name}" ?`)) return;
+    if (!window.confirm(`Delete the list "${name}"?`)) return;
     try {
       await deleteList(id);
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur de suppression");
+      setError(e instanceof Error ? e.message : "Delete failed");
     }
   }
 
@@ -116,9 +116,9 @@ export function ListsPanel() {
     if (pushable === 0) return;
     if (
       !window.confirm(
-        `Créer ${pushable} contact${pushable > 1 ? "s" : ""} dans HubSpot ?\n\n` +
-          "Seules les lignes avec un email sont envoyées (les contacts existants sont réutilisés, pas de doublon). " +
-          "Chaque contact est associé à sa company uniquement si elle existe déjà dans HubSpot (aucune company n'est créée).",
+        `Create ${pushable} contact${pushable > 1 ? "s" : ""} in HubSpot?\n\n` +
+          "Only rows with an email are sent (existing contacts are reused, no duplicates). " +
+          "Each contact is associated with its company only if it already exists in HubSpot (no company is created).",
       )
     ) {
       return;
@@ -129,12 +129,12 @@ export function ListsPanel() {
       const r = await fetch(`/api/intel/enrich/lists/${list.id}/push-hubspot`, { method: "POST" });
       const j = await r.json().catch(() => ({}));
       if (!r.ok && r.status !== 202) {
-        setError(j.error ?? "Erreur d'envoi vers HubSpot");
+        setError(j.error ?? "Failed to send to HubSpot");
         return;
       }
       await reload(); // passe la carte en "Envoi en cours…", le polling prend le relais
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur d'envoi vers HubSpot");
+      setError(e instanceof Error ? e.message : "Failed to send to HubSpot");
     } finally {
       setPushingId(null);
     }
@@ -147,16 +147,16 @@ export function ListsPanel() {
       const r = await fetch(`/api/intel/enrich/lists/${id}/relaunch`, { method: "POST" });
       const j = await r.json();
       if (!r.ok) {
-        setError(j.error ?? "Erreur de relance");
+        setError(j.error ?? "Relaunch failed");
         return;
       }
       if (!j.campaignId) {
-        setError(j.message ?? "Rien à relancer.");
+        setError(j.message ?? "Nothing to relaunch.");
         return;
       }
       router.push(`/mass-prospection?view=review&campaignId=${j.campaignId}&autogen=1`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur de relance");
+      setError(e instanceof Error ? e.message : "Relaunch failed");
     } finally {
       setRelaunchingId(null);
     }
@@ -166,21 +166,21 @@ export function ListsPanel() {
     <div style={{ flex: 1, overflowY: "auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         {view !== "browse" && (
-          <button type="button" onClick={backToBrowse} style={iconBtn()} aria-label="Retour">
+          <button type="button" onClick={backToBrowse} style={iconBtn()} aria-label="Back">
             <ArrowLeft size={16} />
           </button>
         )}
         <div>
           <h2 style={{ fontSize: 14, fontWeight: 600, color: COLORS.ink0, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-            <ListIcon size={15} /> Gestion des listes
+            <ListIcon size={15} /> List management
           </h2>
           <p style={{ fontSize: 11, color: COLORS.ink3, margin: 0 }}>
-            Crée tes listes de prospects (CSV ou HubSpot) et relance tes campagnes.
+            Build your prospect lists (CSV or HubSpot) and relaunch your campaigns.
           </p>
         </div>
         {view === "browse" && (
           <button type="button" onClick={() => setView("create-choose")} style={{ ...btnPrimary(), marginLeft: "auto" }}>
-            <Plus size={14} /> Nouvelle liste
+            <Plus size={14} /> New list
           </button>
         )}
       </div>
@@ -209,14 +209,14 @@ export function ListsPanel() {
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", maxWidth: 720 }}>
           <SourceCard
             icon={<Upload size={22} />}
-            title="Importer un CSV"
-            description="Glisse un fichier CSV (prénom, nom, entreprise, email…) et choisis les contacts à garder."
+            title="Import a CSV"
+            description="Drop a CSV file (first name, last name, company, email…) and choose which contacts to keep."
             onClick={() => setView("create-csv")}
           />
           <SourceCard
             icon={<Building2 size={22} />}
-            title="Importer depuis HubSpot"
-            description="Filtre tes contacts HubSpot (owner, company, engagement…) et coche ceux à enregistrer."
+            title="Import from HubSpot"
+            description="Filter your HubSpot contacts (owner, company, engagement…) and check the ones to save."
             onClick={() => setView("create-hubspot")}
           />
         </div>
@@ -261,7 +261,7 @@ function ListBrowser({
   pushingId: string | null;
 }) {
   if (isLoading) {
-    return <p style={{ fontSize: 13, color: COLORS.ink3 }}>Chargement…</p>;
+    return <p style={{ fontSize: 13, color: COLORS.ink3 }}>Loading…</p>;
   }
   if (lists.length === 0) {
     return (
@@ -275,12 +275,12 @@ function ListBrowser({
         }}
       >
         <ListIcon size={28} color={COLORS.ink3} style={{ marginBottom: 10 }} />
-        <p style={{ fontSize: 14, fontWeight: 600, color: COLORS.ink0, margin: 0 }}>Aucune liste pour le moment</p>
+        <p style={{ fontSize: 14, fontWeight: 600, color: COLORS.ink0, margin: 0 }}>No lists yet</p>
         <p style={{ fontSize: 12, color: COLORS.ink3, margin: "6px 0 14px" }}>
-          Crée ta première liste depuis un CSV ou depuis HubSpot.
+          Create your first list from a CSV or from HubSpot.
         </p>
         <button type="button" onClick={onCreate} style={btnPrimary()}>
-          <Plus size={14} /> Nouvelle liste
+          <Plus size={14} /> New list
         </button>
       </div>
     );
@@ -315,7 +315,7 @@ function ListBrowser({
                   {l.name}
                 </div>
                 <div style={{ fontSize: 11, color: COLORS.ink3, marginTop: 2 }}>
-                  Mise à jour {fmtDate(l.updated_at)}
+                  Updated {fmtDate(l.updated_at)}
                 </div>
               </div>
               <SourceBadge source={l.source} />
@@ -336,26 +336,26 @@ function ListBrowser({
                 }}
               >
                 <div style={{ fontWeight: 600, color: COLORS.ink1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  Dernière campagne : {last.name || "Sans nom"}
+                  Last campaign: {last.name || "Untitled"}
                 </div>
                 <div style={{ color: COLORS.ink3, marginTop: 2 }}>
-                  {fmtDate(last.created_at)} · {last.sentCount} envoyé{last.sentCount > 1 ? "s" : ""} / {last.emailCount}
+                  {fmtDate(last.created_at)} · {last.sentCount} sent / {last.emailCount}
                 </div>
               </div>
             ) : (
-              <div style={{ fontSize: 11, color: COLORS.ink3, fontStyle: "italic" }}>Aucune campagne lancée.</div>
+              <div style={{ fontSize: 11, color: COLORS.ink3, fontStyle: "italic" }}>No campaign launched yet.</div>
             )}
 
             <HubspotPushRow state={pushState} />
 
             <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
               <button type="button" onClick={() => onUse(l.id)} style={{ ...btnPrimary(), flex: 1, justifyContent: "center" }}>
-                <Send size={13} /> Utiliser
+                <Send size={13} /> Use
                 <ArrowRight size={13} />
               </button>
               {pushRunning ? (
-                <button type="button" disabled title="Envoi vers HubSpot en cours" style={{ ...btnSecondary(), opacity: 0.6 }}>
-                  <Loader2 size={13} className="animate-spin" /> Envoi…
+                <button type="button" disabled title="Sending to HubSpot in progress" style={{ ...btnSecondary(), opacity: 0.6 }}>
+                  <Loader2 size={13} className="animate-spin" /> Sending…
                 </button>
               ) : (
                 pushableCount > 0 && (
@@ -363,7 +363,7 @@ function ListBrowser({
                     type="button"
                     onClick={() => onPushHubspot(l)}
                     disabled={pushingId === l.id}
-                    title={`Créer ${pushableCount} contact(s) dans HubSpot (optionnel)`}
+                    title={`Create ${pushableCount} contact(s) in HubSpot (optional)`}
                     style={{ ...btnSecondary(), opacity: pushingId === l.id ? 0.6 : 1 }}
                   >
                     <UploadCloud size={13} /> HubSpot
@@ -375,13 +375,13 @@ function ListBrowser({
                   type="button"
                   onClick={() => onRelaunch(l.id)}
                   disabled={relaunchingId === l.id}
-                  title="Relancer les contacts sans réponse (follow-up)"
+                  title="Follow up with contacts who didn't reply"
                   style={{ ...btnSecondary(), opacity: relaunchingId === l.id ? 0.6 : 1 }}
                 >
-                  <RotateCw size={13} className={relaunchingId === l.id ? "animate-spin" : undefined} /> Relancer
+                  <RotateCw size={13} className={relaunchingId === l.id ? "animate-spin" : undefined} /> Relaunch
                 </button>
               )}
-              <button type="button" onClick={() => onDelete(l.id, l.name)} style={iconBtn()} aria-label="Supprimer">
+              <button type="button" onClick={() => onDelete(l.id, l.name)} style={iconBtn()} aria-label="Delete">
                 <Trash2 size={14} />
               </button>
             </div>
@@ -399,7 +399,7 @@ function HubspotPushRow({ state }: { state: HubspotPushState | undefined }) {
   if (state.status === "running") {
     return (
       <div style={{ fontSize: 11, color: COLORS.info, display: "flex", alignItems: "center", gap: 6 }}>
-        <Loader2 size={12} className="animate-spin" /> Envoi vers HubSpot en cours…
+        <Loader2 size={12} className="animate-spin" /> Sending to HubSpot…
       </div>
     );
   }
@@ -407,7 +407,7 @@ function HubspotPushRow({ state }: { state: HubspotPushState | undefined }) {
   if (state.status === "error") {
     return (
       <div style={{ fontSize: 11, color: COLORS.err }}>
-        Échec de l&apos;envoi HubSpot{state.error ? ` : ${state.error}` : ""}
+        HubSpot send failed{state.error ? `: ${state.error}` : ""}
       </div>
     );
   }
@@ -415,14 +415,14 @@ function HubspotPushRow({ state }: { state: HubspotPushState | undefined }) {
   const s = state.summary;
   if (!s) return null;
   const parts = [
-    `${s.created} créé${s.created > 1 ? "s" : ""}`,
-    `${s.existing} existant${s.existing > 1 ? "s" : ""}`,
-    `${s.companyAssociated} associé${s.companyAssociated > 1 ? "s" : ""}`,
+    `${s.created} created`,
+    `${s.existing} existing`,
+    `${s.companyAssociated} associated`,
   ];
-  if (s.companyCreated > 0) parts.push(`${s.companyCreated} company créée${s.companyCreated > 1 ? "s" : ""}`);
-  if (s.scopeUpserted > 0) parts.push(`${s.scopeUpserted} ajoutée${s.scopeUpserted > 1 ? "s" : ""} au scope`);
-  if (s.skippedNoEmail > 0) parts.push(`${s.skippedNoEmail} sans email`);
-  if (s.errors > 0) parts.push(`${s.errors} erreur${s.errors > 1 ? "s" : ""}`);
+  if (s.companyCreated > 0) parts.push(`${s.companyCreated} compan${s.companyCreated > 1 ? "ies" : "y"} created`);
+  if (s.scopeUpserted > 0) parts.push(`${s.scopeUpserted} added to scope`);
+  if (s.skippedNoEmail > 0) parts.push(`${s.skippedNoEmail} without email`);
+  if (s.errors > 0) parts.push(`${s.errors} error${s.errors > 1 ? "s" : ""}`);
 
   return (
     <div
@@ -439,7 +439,7 @@ function HubspotPushRow({ state }: { state: HubspotPushState | undefined }) {
       }}
     >
       <CheckCircle2 size={12} color={COLORS.brand} style={{ flexShrink: 0 }} />
-      <span>HubSpot : {parts.join(" · ")}</span>
+      <span>HubSpot: {parts.join(" · ")}</span>
     </div>
   );
 }
@@ -502,7 +502,7 @@ function SourceCard({
 
 function fmtDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+    return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   } catch {
     return "—";
   }

@@ -15,13 +15,13 @@ export async function POST(req: NextRequest) {
 
   if (!isCron) {
     const user = await getAuthenticatedUser();
-    if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   try {
     const result = await buildAndSendAeDigests();
     return NextResponse.json(result);
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Error" }, { status: 500 });
   }
 }

@@ -30,16 +30,16 @@ export default function FunnelStats() {
           color: "#888",
         }}
       >
-        <Loader2 size={16} className="animate-spin" /> Chargement du funnel…
+        <Loader2 size={16} className="animate-spin" /> Loading funnel…
       </div>
     );
   }
 
   const { funnel: f } = funnel;
   const steps = [
-    { label: "Leads totaux", count: f.totalLeads, color: "#9ca3af", base: f.totalLeads },
-    { label: "Validés", count: f.validated, color: ACCENT, base: f.totalLeads },
-    { label: "Avec deal", count: f.withDeal, color: BLUE, base: f.validated },
+    { label: "Total leads", count: f.totalLeads, color: "#9ca3af", base: f.totalLeads },
+    { label: "Validated", count: f.validated, color: ACCENT, base: f.totalLeads },
+    { label: "With deal", count: f.withDeal, color: BLUE, base: f.validated },
     { label: "Closed won", count: f.closedWon, color: GREEN, base: f.withDeal },
     { label: "Closed lost", count: f.closedLost, color: RED, base: f.withDeal },
   ];
@@ -56,7 +56,7 @@ export default function FunnelStats() {
         gap: 20,
       }}
     >
-      <div style={{ fontSize: 14, fontWeight: 600, color: "#111" }}>Funnel leads → deals</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: "#111" }}>Leads → deals funnel</div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {steps.map((s, i) => {

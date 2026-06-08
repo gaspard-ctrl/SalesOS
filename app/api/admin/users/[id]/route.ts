@@ -17,12 +17,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (typeof body.is_sales === "boolean") update.is_sales = body.is_sales;
 
   if (Object.keys(update).length === 0) {
-    return NextResponse.json({ error: "Aucun champ à mettre à jour" }, { status: 400 });
+    return NextResponse.json({ error: "No field to update" }, { status: 400 });
   }
 
   const { error } = await db.from("users").update(update).eq("id", id);
 
-  if (error) return NextResponse.json({ error: "Erreur lors de la mise à jour" }, { status: 500 });
+  if (error) return NextResponse.json({ error: "Update failed" }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }

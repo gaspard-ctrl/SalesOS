@@ -10,13 +10,13 @@ export const dynamic = "force-dynamic";
 // Utilisé par le drag & drop du board et le menu "Assigner à…".
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as { ids?: unknown; owner?: unknown } | null;
   const ids = Array.isArray(body?.ids)
     ? body!.ids.filter((v): v is string => typeof v === "string" && v.length > 0)
     : [];
-  if (ids.length === 0) return NextResponse.json({ error: "ids requis" }, { status: 400 });
+  if (ids.length === 0) return NextResponse.json({ error: "ids required" }, { status: 400 });
 
   const ownerRaw = typeof body?.owner === "string" ? body.owner.trim() : "";
   const owner = ownerRaw || null;

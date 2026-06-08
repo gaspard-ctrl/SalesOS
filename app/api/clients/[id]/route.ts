@@ -19,7 +19,7 @@ const STALE_RUNNING_MS = 12 * 60_000;
 // raisonnables"). Sera resserré quand on aura les rôles.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id } = await params;
 
@@ -96,11 +96,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 // rattachés au deal HubSpot, pas à l'id client, donc ne sont pas touchés.
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { data: userRow } = await db.from("users").select("is_admin").eq("id", user.id).single();
   if (!userRow?.is_admin) {
-    return NextResponse.json({ error: "Admin requis" }, { status: 403 });
+    return NextResponse.json({ error: "Admin required" }, { status: 403 });
   }
 
   const { id } = await params;

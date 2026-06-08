@@ -43,7 +43,7 @@ const EMPTY: Omit<WatchCompanyDetailResponse, "error"> = {
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) {
-    return NextResponse.json({ ...EMPTY, error: "Non authentifié" }, { status: 401 });
+    return NextResponse.json({ ...EMPTY, error: "Not authenticated" }, { status: 401 });
   }
 
   const { id } = await params;
@@ -57,12 +57,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (companyErr) {
     // Erreur SQL (ex: colonne absente parce que la migration n'est pas appliquée)
     return NextResponse.json(
-      { ...EMPTY, error: `Erreur DB: ${companyErr.message}` },
+      { ...EMPTY, error: `DB error: ${companyErr.message}` },
       { status: 500 },
     );
   }
   if (!company) {
-    return NextResponse.json({ ...EMPTY, error: "Compte introuvable" }, { status: 404 });
+    return NextResponse.json({ ...EMPTY, error: "Account not found" }, { status: 404 });
   }
 
   const briefs = await getBriefs(company.id);

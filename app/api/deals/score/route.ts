@@ -8,10 +8,10 @@ export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { dealId } = await req.json();
-  if (!dealId) return NextResponse.json({ error: "dealId manquant" }, { status: 400 });
+  if (!dealId) return NextResponse.json({ error: "dealId missing" }, { status: 400 });
 
   try {
     const { data: globalModelEntry } = await db.from("guide_defaults").select("content").eq("key", "model_preferences").single();
@@ -41,6 +41,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result);
   } catch (e) {
     console.error("[deals/score] ERROR:", e instanceof Error ? e.stack : e);
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Error" }, { status: 500 });
   }
 }

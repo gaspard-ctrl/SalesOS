@@ -11,7 +11,7 @@ const KEY = "competitor_companies";
 
 export async function GET(_req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { data } = await db.from("guide_defaults").select("content").eq("key", KEY).maybeSingle();
   let companies: string[] = [];
@@ -25,11 +25,11 @@ export async function GET(_req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as { companies?: string[] } | null;
   if (!body || !Array.isArray(body.companies)) {
-    return NextResponse.json({ error: "companies[] requis" }, { status: 400 });
+    return NextResponse.json({ error: "companies[] required" }, { status: 400 });
   }
   const cleaned = body.companies.map((c) => c.trim()).filter(Boolean);
 

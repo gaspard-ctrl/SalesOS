@@ -41,9 +41,9 @@ const EVENT_COLORS: Record<MarketingEventType, string> = {
 };
 
 const EVENT_TYPE_LABEL: Record<MarketingEventType, string> = {
-  salon:              "Salon",
+  salon:              "Trade show",
   linkedin_pro:       "LinkedIn Pro",
-  linkedin_perso:     "LinkedIn Perso",
+  linkedin_perso:     "LinkedIn Personal",
   nurturing_campaign: "Nurturing",
 };
 
@@ -130,7 +130,7 @@ export default function OverviewTab() {
       const groups: MarkerGroup[] = [];
       const leadCount = filters.leads ? (leadsAnchorMap.get(p.date) ?? 0) : 0;
       if (leadCount > 0) {
-        const bucketLabel = leadBucketSize === 1 ? "today" : leadBucketSize === 2 ? "on 2 days" : "this week";
+        const bucketLabel = leadBucketSize === 1 ? "today" : leadBucketSize === 2 ? "over 2 days" : "this week";
         groups.push({
           type: "lead",
           color: MARKER_COLORS.lead,
@@ -187,16 +187,16 @@ export default function OverviewTab() {
   const kpiCards = useMemo(() => {
     if (!kpis) return [];
     const leadsTooltip = kpis.incomingLeadsChannelMissing
-      ? "Channel Slack #1a-new-incoming-leads introuvable (le bot n'y est peut-être pas invité). Invite le bot dans le channel pour compter les messages."
-      : "Compte les messages postés dans le channel Slack #1a-new-incoming-leads sur la période (hors system events comme joins/leaves, hors thread replies). Chaque message = 1 lead entrant.";
+      ? "Slack channel #1a-new-incoming-leads not found (the bot may not be invited). Invite the bot to the channel to count messages."
+      : "Counts messages posted in the Slack channel #1a-new-incoming-leads over the period (excluding system events like joins/leaves, excluding thread replies). Each message = 1 incoming lead.";
     return [
-      { label: "SESSIONS", value: formatNumber(kpis.sessions), wow: kpis.sessionsWoW, invertColor: false, tooltip: "GA4: sessions — nombre total de sessions démarrées sur le site." },
-      { label: "ENGAGED SESSIONS", value: formatNumber(kpis.engagedSessions), wow: kpis.engagedSessionsWoW, invertColor: false, tooltip: "GA4: engagedSessions — sessions qui ont (1) duré plus de 10 secondes, OU (2) déclenché au moins 1 key event (conversion), OU (3) vu au moins 2 pages. Indicateur clé de qualité du trafic : une session non engagée = un visiteur qui part vite sans interagir." },
-      { label: "ACTIVE USERS", value: formatNumber(kpis.activeUsers), wow: kpis.activeUsersWoW, invertColor: false, tooltip: "GA4: activeUsers — users qui ont eu au moins une session engagée." },
-      { label: "NEW USERS", value: formatNumber(kpis.newUsers), wow: kpis.newUsersWoW, invertColor: false, tooltip: "GA4: newUsers — première visite sur le site." },
-      { label: "PAGE VIEWS", value: formatNumber(kpis.pageViews), wow: kpis.pageViewsWoW, invertColor: false, tooltip: "GA4: screenPageViews — nombre total de pages vues." },
-      { label: "AVG. DURATION", value: formatDuration(kpis.avgDuration), wow: kpis.avgDurationWoW, invertColor: false, tooltip: "GA4: averageSessionDuration — durée moyenne d'une session en secondes." },
-      { label: "KEY EVENTS", value: formatNumber(kpis.keyEvents), wow: kpis.keyEventsWoW, invertColor: false, tooltip: "GA4: keyEvents — events marqués comme clés dans GA4 Admin → Events (remplace `conversions` depuis mars 2024)." },
+      { label: "SESSIONS", value: formatNumber(kpis.sessions), wow: kpis.sessionsWoW, invertColor: false, tooltip: "GA4: sessions - total number of sessions started on the site." },
+      { label: "ENGAGED SESSIONS", value: formatNumber(kpis.engagedSessions), wow: kpis.engagedSessionsWoW, invertColor: false, tooltip: "GA4: engagedSessions - sessions that (1) lasted more than 10 seconds, OR (2) triggered at least 1 key event (conversion), OR (3) viewed at least 2 pages. A key traffic quality indicator: a non-engaged session = a visitor who leaves quickly without interacting." },
+      { label: "ACTIVE USERS", value: formatNumber(kpis.activeUsers), wow: kpis.activeUsersWoW, invertColor: false, tooltip: "GA4: activeUsers - users who had at least one engaged session." },
+      { label: "NEW USERS", value: formatNumber(kpis.newUsers), wow: kpis.newUsersWoW, invertColor: false, tooltip: "GA4: newUsers - first visit to the site." },
+      { label: "PAGE VIEWS", value: formatNumber(kpis.pageViews), wow: kpis.pageViewsWoW, invertColor: false, tooltip: "GA4: screenPageViews - total number of page views." },
+      { label: "AVG. DURATION", value: formatDuration(kpis.avgDuration), wow: kpis.avgDurationWoW, invertColor: false, tooltip: "GA4: averageSessionDuration - average session duration in seconds." },
+      { label: "KEY EVENTS", value: formatNumber(kpis.keyEvents), wow: kpis.keyEventsWoW, invertColor: false, tooltip: "GA4: keyEvents - events marked as key in GA4 Admin → Events (replaces `conversions` since March 2024)." },
       { label: "INCOMING LEADS", value: formatNumber(kpis.incomingLeads), wow: kpis.incomingLeadsWoW, invertColor: false, tooltip: leadsTooltip },
     ];
   }, [kpis]);
@@ -240,7 +240,7 @@ export default function OverviewTab() {
                 onClick={() => setPeriod({ kind: "days", days: 30 })}
                 className="inline-flex items-center justify-center rounded-full"
                 style={{ background: "rgba(255,255,255,0.25)", width: 14, height: 14 }}
-                aria-label="Annuler le filtre custom"
+                aria-label="Clear custom filter"
               >
                 <X size={10} />
               </button>
@@ -312,7 +312,7 @@ export default function OverviewTab() {
             <h3 className="font-semibold" style={{ color: "#111" }}>
               {view === "bar" ? "Yearly overview" : "Traffic"}
             </h3>
-            <InfoTooltip text="Line: courbe rose = active users, dots verts = leads, cyan = articles publiés, orange/bleu/violet = events marketing (salons, LinkedIn pro/perso). Tous les dots sont positionnés sur la courbe. — Bar: vue annuelle agrégée par mois. Clique une barre pour zoomer sur ce mois dans la vue ligne." />
+            <InfoTooltip text="Line: pink curve = active users, green dots = leads, cyan = published articles, orange/blue/purple = marketing events (trade shows, LinkedIn pro/personal). All dots sit on the curve. - Bar: yearly view aggregated by month. Click a bar to zoom into that month in the line view." />
           </div>
           <div className="flex items-center gap-2">
             <ViewToggle view={view} onChange={setView} />
@@ -424,7 +424,7 @@ export default function OverviewTab() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-1.5">
               <h3 className="font-semibold" style={{ color: "#111" }}>Traffic Sources</h3>
-              <InfoTooltip text="GA4: dimension `sessionDefaultChannelGroup` × metric `sessions`. Groupes : Organic Search, Direct, Social, Referral, Email, Paid Search, Unassigned." />
+              <InfoTooltip text="GA4: dimension `sessionDefaultChannelGroup` × metric `sessions`. Groups: Organic Search, Direct, Social, Referral, Email, Paid Search, Unassigned." />
             </div>
             <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: source === "ga4" ? "#f0fdf4" : "#f5f5f5", color: source === "ga4" ? "#16a34a" : "#888" }}>
               {source === "ga4" ? "Live" : "Mock"}
@@ -470,7 +470,7 @@ export default function OverviewTab() {
           <div className="px-4 py-3 flex items-center justify-between" style={{ background: "#f9f9f9", borderBottom: "1px solid #eeeeee" }}>
             <div className="flex items-center gap-1.5">
               <h3 className="font-semibold text-sm" style={{ color: "#111" }}>Top Blog Articles</h3>
-              <InfoTooltip text="GA4: dimensions `pagePath` + `pageTitle`, metrics `sessions` + `screenPageViews`. Filtré sur les pages `/blog/*`, top 10 par sessions." />
+              <InfoTooltip text="GA4: dimensions `pagePath` + `pageTitle`, metrics `sessions` + `screenPageViews`. Filtered on `/blog/*` pages, top 10 by sessions." />
             </div>
             <span
               className="text-[10px] font-medium px-2 py-0.5 rounded-full"
@@ -533,18 +533,18 @@ export default function OverviewTab() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <TrendList
           title={`Top Gainers (last ${seoTrendsDays}d)`}
-          subtitle="Pages qui gagnent le plus de clics vs période précédente"
-          info={`Search Console: dimension \`page\` × metric \`clicks\`, filtre /blog/*. Compare les ${seoTrendsDays} derniers jours vs les ${seoTrendsDays} jours précédents. Top 10 par Δclicks positif.`}
+          subtitle="Pages gaining the most clicks vs the previous period"
+          info={`Search Console: dimension \`page\` × metric \`clicks\`, filter /blog/*. Compares the last ${seoTrendsDays} days vs the previous ${seoTrendsDays} days. Top 10 by positive Δclicks.`}
           trends={winners}
-          emptyLabel={seoTrendsError ? seoTrendsError : "Pas de données Search Console pour cette période"}
+          emptyLabel={seoTrendsError ? seoTrendsError : "No Search Console data for this period"}
           positive
         />
         <TrendList
           title={`Top Losers (last ${seoTrendsDays}d)`}
-          subtitle="Pages qui perdent le plus de clics — candidates à refresh"
-          info={`Même requête Search Console que Top Gainers mais trié par Δclicks négatif. Utile pour détecter les articles qui décrochent et méritent un refresh.`}
+          subtitle="Pages losing the most clicks - candidates for a refresh"
+          info={`Same Search Console query as Top Gainers but sorted by negative Δclicks. Useful for spotting articles that are slipping and deserve a refresh.`}
           trends={losers}
-          emptyLabel={seoTrendsError ? seoTrendsError : "Pas de données Search Console pour cette période"}
+          emptyLabel={seoTrendsError ? seoTrendsError : "No Search Console data for this period"}
           positive={false}
         />
       </div>
@@ -628,9 +628,9 @@ function shortPath(url: string): string {
 const MARKER_ORDER_LABEL: Record<MarkerType, string> = {
   lead: "Leads",
   article: "Articles",
-  salon: "Salons",
+  salon: "Trade shows",
   linkedin_pro: "LinkedIn Pro",
-  linkedin_perso: "LinkedIn Perso",
+  linkedin_perso: "LinkedIn Personal",
   nurturing_campaign: "Nurturing",
 };
 
@@ -645,7 +645,7 @@ function TrafficTooltip({
   if (!data) return null;
 
   const date = new Date(data.date + "T12:00:00Z");
-  const formattedDate = date.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  const formattedDate = date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
   const groups = data.groups ?? [];
 
   return (
@@ -701,11 +701,11 @@ function CustomPeriodButton({
   onApply: (from: string, to: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const today = new Date().toLocaleDateString("fr-CA");
+  const today = new Date().toLocaleDateString("en-CA");
   const defaultFrom = (() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
-    return d.toLocaleDateString("fr-CA");
+    return d.toLocaleDateString("en-CA");
   })();
   const [from, setFrom] = useState<string>(initialFrom ?? defaultFrom);
   const [to, setTo] = useState<string>(initialTo ?? today);
@@ -722,11 +722,11 @@ function CustomPeriodButton({
 
   function apply() {
     if (!from || !to) {
-      setError("Choisis une date de début et de fin.");
+      setError("Pick a start and end date.");
       return;
     }
     if (from > to) {
-      setError("La date de début doit être avant la date de fin.");
+      setError("The start date must be before the end date.");
       return;
     }
     setError(null);
@@ -744,7 +744,7 @@ function CustomPeriodButton({
           color: active ? "#c2410c" : "#666",
           border: active ? "1px solid #fdba74" : "1px solid #eee",
         }}
-        aria-label="Filtre date custom"
+        aria-label="Custom date filter"
       >
         <Calendar size={12} />
         Custom
@@ -764,8 +764,8 @@ function CustomPeriodButton({
           >
             <div className="px-4 py-3 flex items-center justify-between" style={{ background: "#f9f9f9", borderBottom: "1px solid #eeeeee" }}>
               <div>
-                <h3 className="text-sm font-semibold" style={{ color: "#111" }}>Période custom</h3>
-                <p className="text-[11px]" style={{ color: "#888" }}>Choisis une plage de dates précise</p>
+                <h3 className="text-sm font-semibold" style={{ color: "#111" }}>Custom period</h3>
+                <p className="text-[11px]" style={{ color: "#888" }}>Pick a specific date range</p>
               </div>
               <button
                 onClick={() => setOpen(false)}
@@ -773,7 +773,7 @@ function CustomPeriodButton({
                 style={{ color: "#888" }}
                 onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#eeeeee"; }}
                 onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-                aria-label="Fermer"
+                aria-label="Close"
               >
                 <X size={16} />
               </button>
@@ -782,7 +782,7 @@ function CustomPeriodButton({
             <div className="p-4 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#888" }}>Du</label>
+                  <label className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#888" }}>From</label>
                   <input
                     type="date"
                     value={from}
@@ -793,7 +793,7 @@ function CustomPeriodButton({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#888" }}>Au</label>
+                  <label className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#888" }}>To</label>
                   <input
                     type="date"
                     value={to}
@@ -809,9 +809,9 @@ function CustomPeriodButton({
               {/* Quick presets */}
               <div className="flex flex-wrap gap-1.5">
                 {([
-                  { label: "Ce mois", from: firstOfCurrentMonth(), to: today },
-                  { label: "Mois dernier", from: firstOfPreviousMonth(), to: lastOfPreviousMonth() },
-                  { label: "Année en cours", from: `${new Date().getFullYear()}-01-01`, to: today },
+                  { label: "This month", from: firstOfCurrentMonth(), to: today },
+                  { label: "Last month", from: firstOfPreviousMonth(), to: lastOfPreviousMonth() },
+                  { label: "Year to date", from: `${new Date().getFullYear()}-01-01`, to: today },
                 ]).map((q) => (
                   <button
                     key={q.label}
@@ -834,14 +834,14 @@ function CustomPeriodButton({
                   className="text-xs font-medium px-3 py-1.5 rounded-lg"
                   style={{ background: "#fafafa", color: "#666", border: "1px solid #e5e5e5" }}
                 >
-                  Annuler
+                  Cancel
                 </button>
                 <button
                   onClick={apply}
                   className="text-xs font-medium px-3 py-1.5 rounded-lg"
                   style={{ background: "#f01563", color: "#fff" }}
                 >
-                  Appliquer
+                  Apply
                 </button>
               </div>
             </div>
@@ -893,12 +893,12 @@ function TrafficSourceTooltip({
         <span style={{ fontWeight: 600, color: "#111" }}>{data.source}</span>
       </div>
       <div style={{ color: "#555", marginBottom: details.length > 0 ? 8 : 0 }}>
-        <strong style={{ color: "#111" }}>{data.sessions.toLocaleString("fr-FR")}</strong> sessions · {data.percentage}%
+        <strong style={{ color: "#111" }}>{data.sessions.toLocaleString("en-GB")}</strong> sessions · {data.percentage}%
       </div>
       {details.length > 0 && (
         <>
           <div style={{ fontSize: 10, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 4 }}>
-            Détails
+            Details
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {details.slice(0, 10).map((d, i) => (
@@ -910,13 +910,13 @@ function TrafficSourceTooltip({
                   {d.label}
                 </span>
                 <span style={{ fontWeight: 500, color: "#111", flexShrink: 0 }}>
-                  {d.sessions.toLocaleString("fr-FR")}
+                  {d.sessions.toLocaleString("en-GB")}
                 </span>
               </div>
             ))}
             {details.length > 10 && (
               <div style={{ color: "#aaa", fontSize: 11, marginTop: 2 }}>
-                + {details.length - 10} autres
+                + {details.length - 10} more
               </div>
             )}
           </div>
@@ -930,9 +930,9 @@ function formatRange(from: string, to: string): string {
   const f = new Date(from + "T12:00:00Z");
   const t = new Date(to + "T12:00:00Z");
   if (f.getMonth() === t.getMonth() && f.getFullYear() === t.getFullYear()) {
-    return f.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+    return f.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
   }
-  return `${f.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} → ${t.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}`;
+  return `${f.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} → ${t.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
 }
 
 function ViewToggle({ view, onChange }: { view: "line" | "bar"; onChange: (v: "line" | "bar") => void }) {
@@ -1004,7 +1004,7 @@ function DeviceBlock({ devices }: { devices: DeviceBreakdown[] }) {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-1.5">
           <h3 className="font-semibold" style={{ color: "#111" }}>Device Split</h3>
-          <InfoTooltip text="GA4: dimension `deviceCategory` × metrics `sessions`, `activeUsers`, `engagementRate`, `averageSessionDuration`. Révèle souvent de gros écarts mobile/desktop." />
+          <InfoTooltip text="GA4: dimension `deviceCategory` × metrics `sessions`, `activeUsers`, `engagementRate`, `averageSessionDuration`. Often reveals large mobile/desktop gaps." />
         </div>
         <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: hasData ? "#f0fdf4" : "#f5f5f5", color: hasData ? "#16a34a" : "#888" }}>
           {hasData ? "Live — GA4 deviceCategory" : "No data"}
@@ -1049,7 +1049,7 @@ function CountryBlock({ countries }: { countries: CountryBreakdown[] }) {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-1.5">
           <h3 className="font-semibold" style={{ color: "#111" }}>Top Countries</h3>
-          <InfoTooltip text="GA4: dimension `country` × metric `activeUsers`. Top 10 par utilisateurs actifs. Utile pour valider le mix FR/EN/autres." />
+          <InfoTooltip text="GA4: dimension `country` × metric `activeUsers`. Top 10 by active users. Useful for validating the FR/EN/other mix." />
         </div>
         <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: hasData ? "#f0fdf4" : "#f5f5f5", color: hasData ? "#16a34a" : "#888" }}>
           {hasData ? "Live — GA4 country" : "No data"}

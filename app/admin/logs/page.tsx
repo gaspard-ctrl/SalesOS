@@ -23,17 +23,17 @@ function cost(model: string, input: number, output: number) {
 const FEATURE_LABELS: Record<string, string> = {
   chat:                    "Chat",
   briefing:                "Briefing",
-  prospection_search:      "Prospection — Recherche IA",
-  prospection_generate:    "Prospection — Email",
-  prospection_bulk:        "Prospection — Email en masse",
-  prospection_details:     "Prospection — Détails",
-  deals_analyze:           "Deals — Analyse",
-  deals_email:             "Deals — Email",
-  deals_score:             "Deals — Score",
-  conversations:           "Chat — Titre auto (Haiku)",
-  clients_enrich_fields:   "Clients — Extraction 30 fields",
-  clients_coach_brief:     "Clients — Brief coachs",
-  clients_deal_recap:      "Clients — Recap deal",
+  prospection_search:      "Prospecting - AI search",
+  prospection_generate:    "Prospecting - Email",
+  prospection_bulk:        "Prospecting - Bulk email",
+  prospection_details:     "Prospecting - Details",
+  deals_analyze:           "Deals - Analysis",
+  deals_email:             "Deals - Email",
+  deals_score:             "Deals - Score",
+  conversations:           "Chat - Auto title (Haiku)",
+  clients_enrich_fields:   "Clients - 30 fields extraction",
+  clients_coach_brief:     "Clients - Coach brief",
+  clients_deal_recap:      "Clients - Deal recap",
 };
 
 export type RawLog = {
@@ -49,7 +49,7 @@ export type RawLog = {
 // Clé d'agrégation pour les appels sans user attribué (cron, webhooks,
 // résolveurs internes). Affichée comme "Système (cron / non-attribué)".
 const SYSTEM_USER_KEY = "__system__";
-const SYSTEM_USER_LABEL = "Système (cron / non-attribué)";
+const SYSTEM_USER_LABEL = "System (cron / unattributed)";
 
 export type UserMeta = { id: string; name: string | null; email: string };
 
@@ -142,7 +142,7 @@ export default async function AdminLogsPage() {
         <div>
           <h1 className="text-xl font-semibold" style={{ color: "#111" }}>Logs & Usage</h1>
           <p className="text-sm mt-0.5" style={{ color: "#888" }}>
-            {(logs ?? []).length} appels Claude enregistrés
+            {(logs ?? []).length} Claude calls logged
           </p>
         </div>
       </div>

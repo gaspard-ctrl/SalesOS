@@ -81,7 +81,7 @@ function rangeCutoff(range: HubspotCriteria["createdRange"]): string | null {
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const c = (await req.json().catch(() => ({}))) as HubspotCriteria;
   const limit = Math.max(10, Math.min(500, c.limit ?? 100));
@@ -467,7 +467,7 @@ export async function POST(req: NextRequest) {
       hasMore,
     });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur HubSpot" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "HubSpot error" }, { status: 500 });
   }
 }
 

@@ -28,7 +28,7 @@ interface PrevEmailRow {
  */
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id } = await params;
 
@@ -39,7 +39,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle();
-  if (!list) return NextResponse.json({ error: "Liste introuvable" }, { status: 404 });
+  if (!list) return NextResponse.json({ error: "List not found" }, { status: 404 });
 
   // 2. Dernière campagne de la liste
   const { data: prev } = await db
@@ -51,7 +51,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .limit(1)
     .maybeSingle();
   if (!prev) {
-    return NextResponse.json({ error: "Aucune campagne à relancer pour cette liste." }, { status: 400 });
+    return NextResponse.json({ error: "No campaign to follow up for this list." }, { status: 400 });
   }
 
   // 3. Contacts déjà envoyés
@@ -63,7 +63,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const sent = (sentEmails ?? []) as PrevEmailRow[];
   if (sent.length === 0) {
-    return NextResponse.json({ error: "Aucun contact envoyé à relancer dans la dernière campagne." }, { status: 400 });
+    return NextResponse.json({ error: "No contacted person to follow up in the last campaign." }, { status: 400 });
   }
 
   // 4. Détecter les réponses (best-effort) pour les exclure.
@@ -75,7 +75,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       campaignId: null,
       retained: 0,
       replied: repliedEmails.size,
-      message: "Tous les contacts envoyés ont déjà répondu, rien à relancer.",
+      message: "All contacted people have already replied, nothing to follow up.",
     });
   }
 
@@ -97,7 +97,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .select("id")
     .single();
   if (campErr || !campaign) {
-    return NextResponse.json({ error: campErr?.message ?? "Erreur création campagne" }, { status: 500 });
+    return NextResponse.json({ error: campErr?.message ?? "Campaign creation error" }, { status: 500 });
   }
 
   // 6. Insérer les emails à relancer, avec l'email précédent en contexte.

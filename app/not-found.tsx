@@ -8,10 +8,10 @@ export default function NotFound() {
           404
         </h1>
         <h2 className="mt-2 text-xl font-semibold" style={{ color: "#111" }}>
-          Page introuvable
+          Page not found
         </h2>
         <p className="mt-2 text-sm" style={{ color: "#888" }}>
-          La page que vous cherchez n&apos;existe pas ou a été déplacée.
+          The page you are looking for doesn&apos;t exist or has been moved.
         </p>
       </div>
       <Link
@@ -19,7 +19,7 @@ export default function NotFound() {
         className="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
         style={{ background: "#f01563", color: "#fff" }}
       >
-        Retour à l&apos;accueil
+        Back to home
       </Link>
     </div>
   );

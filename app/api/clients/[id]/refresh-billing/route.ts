@@ -19,7 +19,7 @@ export const maxDuration = 30;
 // de match (matched=false renvoyé normalement).
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id } = await params;
 
@@ -29,7 +29,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     .eq("id", id)
     .single();
   if (clientErr || !client) {
-    return NextResponse.json({ error: "Client introuvable" }, { status: 404 });
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
   let billing;
@@ -39,7 +39,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[clients/refresh-billing/${id}] fetch failed:`, msg);
-    return NextResponse.json({ error: `Lecture du fichier revenue échouée : ${msg}` }, { status: 502 });
+    return NextResponse.json({ error: `Failed to read the revenue file: ${msg}` }, { status: 502 });
   }
 
   const billing_refreshed_at = new Date().toISOString();

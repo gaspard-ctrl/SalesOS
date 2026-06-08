@@ -51,7 +51,7 @@ export const ChatInputBar = React.forwardRef<
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKey}
-        placeholder={placeholder ?? "Pose une question, demande un brief, rédige un email…"}
+        placeholder={placeholder ?? "Ask a question, request a brief, draft an email…"}
         rows={1}
         className="resize-none text-sm outline-none bg-transparent leading-relaxed"
         style={{
@@ -76,7 +76,7 @@ export const ChatInputBar = React.forwardRef<
             type="button"
             onClick={onToggleBetterThinking}
             aria-pressed={betterThinking}
-            title="Réflexion approfondie : le modèle est plus rigoureux, fouille toutes les données disponibles et répond en détail."
+            title="Deeper thinking: the model is more rigorous, digs through all available data and answers in detail."
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -103,7 +103,7 @@ export const ChatInputBar = React.forwardRef<
         <button
           onClick={onSend}
           disabled={!canSend}
-          aria-label="Envoyer le message"
+          aria-label="Send message"
           style={{
             width: 32,
             height: 32,

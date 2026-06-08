@@ -34,25 +34,25 @@ export function BoardStats({
       }}
     >
       <Tile
-        label={selectedRep ? "Companies (sales)" : "Companies"}
+        label={selectedRep ? "Companies (rep)" : "Companies"}
         value={selectedRep ? `${visible.length}` : `${totalAll}`}
-        sub={selectedRep ? `sur ${totalAll}` : undefined}
+        sub={selectedRep ? `of ${totalAll}` : undefined}
       />
       <Divider />
       <Tile label="Sales" value={`${salesCount}`} />
       <Divider />
-      <Tile label="⌀ par sales" value={`${avg}`} />
+      <Tile label="⌀ per rep" value={`${avg}`} />
 
       {sectors.length > 0 && (
         <>
           <Divider />
-          <Distribution title="Secteurs" items={sectors} />
+          <Distribution title="Sectors" items={sectors} />
         </>
       )}
       {platforms.length > 0 && (
         <>
           <Divider />
-          <Distribution title="Plateformes" items={platforms} />
+          <Distribution title="Platforms" items={platforms} />
         </>
       )}
     </div>

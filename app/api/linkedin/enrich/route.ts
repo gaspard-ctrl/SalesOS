@@ -42,8 +42,8 @@ function serialize(profile: LinkedInProfile) {
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-  if (!BRIGHTDATA_API_KEY) return NextResponse.json({ error: "Bright Data non configuré" }, { status: 500 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  if (!BRIGHTDATA_API_KEY) return NextResponse.json({ error: "Bright Data not configured" }, { status: 500 });
 
   const body = await req.json().catch(() => ({}));
   const mode = body.mode as string | undefined;
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     const lastName = (body.lastName as string | undefined)?.trim() ?? "";
     const company = (body.company as string | undefined)?.trim() ?? "";
     if (!firstName && !lastName) {
-      return NextResponse.json({ error: "Nom requis" }, { status: 400 });
+      return NextResponse.json({ error: "Name required" }, { status: 400 });
     }
     try {
       const r = await searchPeople({ firstName, lastName, company });
@@ -67,35 +67,35 @@ export async function POST(req: NextRequest) {
       // peuvent être bruités (homonymes) → afficher le picker.
       return NextResponse.json({ candidates, companyProvided: !!company });
     } catch (e) {
-      return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur recherche" }, { status: 502 });
+      return NextResponse.json({ error: e instanceof Error ? e.message : "Search error" }, { status: 502 });
     }
   }
 
   if (mode === "trigger") {
     const linkedinUrl = (body.linkedinUrl as string | undefined)?.trim() ?? "";
     if (!/linkedin\.com\/in\//i.test(linkedinUrl)) {
-      return NextResponse.json({ error: "URL de profil LinkedIn invalide" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid LinkedIn profile URL" }, { status: 400 });
     }
     try {
       const snapshotId = await triggerDataset(DATASETS.peopleProfile, [{ url: linkedinUrl }]);
       return NextResponse.json({ snapshotId });
     } catch (e) {
-      return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur scrape" }, { status: 502 });
+      return NextResponse.json({ error: e instanceof Error ? e.message : "Scrape error" }, { status: 502 });
     }
   }
 
-  return NextResponse.json({ error: "mode invalide (search | trigger)" }, { status: 400 });
+  return NextResponse.json({ error: "invalid mode (search | trigger)" }, { status: 400 });
 }
 
 export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const snapshotId = req.nextUrl.searchParams.get("snapshot_id")?.trim();
-  if (!snapshotId) return NextResponse.json({ error: "snapshot_id requis" }, { status: 400 });
+  if (!snapshotId) return NextResponse.json({ error: "snapshot_id required" }, { status: 400 });
 
   const status = await snapshotStatus(snapshotId);
-  if (status === "failed") return NextResponse.json({ ready: false, status: "failed", error: "Scrape échoué" }, { status: 502 });
+  if (status === "failed") return NextResponse.json({ ready: false, status: "failed", error: "Scrape failed" }, { status: 502 });
   if (status !== "ready") return NextResponse.json({ ready: false, status });
 
   try {
@@ -103,6 +103,6 @@ export async function GET(req: NextRequest) {
     if (!rows.length) return NextResponse.json({ ready: true, profile: null });
     return NextResponse.json({ ready: true, profile: serialize(mapProfile(rows[0])) });
   } catch (e) {
-    return NextResponse.json({ ready: false, status: "error", error: e instanceof Error ? e.message : "Erreur" }, { status: 502 });
+    return NextResponse.json({ ready: false, status: "error", error: e instanceof Error ? e.message : "Error" }, { status: 502 });
   }
 }

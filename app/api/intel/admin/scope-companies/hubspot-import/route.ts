@@ -156,9 +156,9 @@ async function fetchCompaniesByIds(ids: string[]): Promise<HubspotCompanyRow[]> 
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   if (!process.env.HUBSPOT_ACCESS_TOKEN)
-    return NextResponse.json({ error: "HubSpot non configuré" }, { status: 500 });
+    return NextResponse.json({ error: "HubSpot not configured" }, { status: 500 });
 
   const body = (await req.json().catch(() => null)) as {
     filters?: Filters;
@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
     after?: string;
     pageSize?: number;
   } | null;
-  if (!body) return NextResponse.json({ error: "Body invalide" }, { status: 400 });
+  if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
   const filters = body.filters ?? {};
   const dryRun = body.dryRun !== false && !body.selectedIds; // dryRun par défaut si pas de selection
@@ -215,15 +215,15 @@ export async function POST(req: NextRequest) {
     // ── Commit : on lit les companies sélectionnées par id.
     const defaultOwner = (body.defaultOwner ?? "").trim();
     if (!defaultOwner) {
-      return NextResponse.json({ error: "Owner par défaut obligatoire" }, { status: 400 });
+      return NextResponse.json({ error: "Default owner required" }, { status: 400 });
     }
     const selectedIds = (body.selectedIds ?? []).filter(Boolean);
     if (selectedIds.length === 0) {
-      return NextResponse.json({ error: "Aucune company sélectionnée" }, { status: 400 });
+      return NextResponse.json({ error: "No company selected" }, { status: 400 });
     }
     const toImport = toPreview(await fetchCompaniesByIds(selectedIds));
     if (toImport.length === 0) {
-      return NextResponse.json({ error: "Aucune company sélectionnée" }, { status: 400 });
+      return NextResponse.json({ error: "No company selected" }, { status: 400 });
     }
 
     let inserted = 0;
@@ -277,7 +277,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Erreur HubSpot" },
+      { error: e instanceof Error ? e.message : "HubSpot error" },
       { status: 500 }
     );
   }

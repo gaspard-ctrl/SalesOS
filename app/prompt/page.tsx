@@ -49,7 +49,7 @@ export default function PromptPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur inconnue");
+      setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setSaving(false);
     }
@@ -65,14 +65,14 @@ export default function PromptPage() {
           style={{ color: "#888" }}
         >
           <ArrowLeft size={16} />
-          Retour
+          Back
         </button>
         <div className="text-center">
           <h1 className="text-sm font-semibold" style={{ color: "#111" }}>
-            Guide de {firstName || "…"}
+            {firstName || "…"}&apos;s guide
           </h1>
           <p className="text-xs" style={{ color: "#aaa" }}>
-            Instructions personnelles ajoutées au guide admin
+            Personal instructions added to the admin guide
           </p>
         </div>
         <button
@@ -82,7 +82,7 @@ export default function PromptPage() {
           style={{ background: saved ? "#22c55e" : "#f01563", color: "#fff", opacity: saving || !hasChanges ? 0.5 : 1 }}
         >
           <Save size={12} />
-          {saved ? "Sauvegardé !" : saving ? "…" : "Sauvegarder"}
+          {saved ? "Saved!" : saving ? "…" : "Save"}
         </button>
       </div>
 
@@ -91,7 +91,7 @@ export default function PromptPage() {
         <div className="max-w-3xl mx-auto space-y-4">
           {error && (
             <p className="text-xs px-3 py-2 rounded-lg" style={{ background: "#fff0f3", color: "#f01563" }}>
-              Erreur : {error}
+              Error: {error}
             </p>
           )}
 
@@ -103,9 +103,9 @@ export default function PromptPage() {
               style={{ color: "#666" }}
             >
               {showAdmin ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              Guide admin (lecture seule)
+              Admin guide (read-only)
               <span className="text-[10px] px-2 py-0.5 rounded-full ml-auto" style={{ background: "#f0fdf4", color: "#15803d" }}>
-                Toujours actif
+                Always active
               </span>
             </button>
             {showAdmin && (
@@ -123,12 +123,12 @@ export default function PromptPage() {
           {/* User instructions */}
           <div>
             <p className="text-xs mb-2" style={{ color: "#888" }}>
-              Tes instructions personnelles seront ajoutées au guide admin. Ajoute tes préférences, ton contexte, ou des règles spécifiques.
+              Your personal instructions will be added to the admin guide. Add your preferences, your context, or specific rules.
             </p>
             <textarea
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
-              placeholder="Ex: Toujours répondre en anglais, mentionner notre offre coaching leadership, privilégier un ton direct..."
+              placeholder="E.g. Always reply in English, mention our leadership coaching offer, favor a direct tone..."
               className="w-full rounded-xl border p-4 text-sm font-mono resize-none outline-none transition-all focus:border-[#f01563]"
               style={{
                 borderColor: "#e5e5e5",

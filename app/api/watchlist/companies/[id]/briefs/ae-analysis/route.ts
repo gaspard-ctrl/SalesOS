@@ -19,7 +19,7 @@ const BG_FN = "watchlist-ae-analysis-background";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) {
-    return NextResponse.json({ ok: false, error: "Non authentifié" }, { status: 401 });
+    return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
   }
 
   const { id } = await params;
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .eq("id", id)
     .single();
   if (companyErr || !company) {
-    return NextResponse.json({ ok: false, error: "Compte introuvable" }, { status: 404 });
+    return NextResponse.json({ ok: false, error: "Account not found" }, { status: 404 });
   }
 
   const { alreadyRunning, briefId } = await startBriefRun({

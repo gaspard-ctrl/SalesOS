@@ -17,11 +17,11 @@ export const maxDuration = 30;
 // d'un enrichissement (~0,20 $) justifie de ne pas l'exposer à tout le monde.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { data: userRow } = await db.from("users").select("is_admin").eq("id", user.id).single();
   if (!userRow?.is_admin) {
-    return NextResponse.json({ error: "Admin requis" }, { status: 403 });
+    return NextResponse.json({ error: "Admin required" }, { status: 403 });
   }
 
   const { id } = await params;
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .eq("id", id)
     .single();
   if (clientErr || !client) {
-    return NextResponse.json({ error: "Client introuvable" }, { status: 404 });
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
   // Si l'enrichissement est en cours, on ne relance pas (runClientEnrichment
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const internalSecret = process.env.INTERNAL_SECRET;
   if (!internalSecret) {
-    return NextResponse.json({ error: "INTERNAL_SECRET manquant" }, { status: 500 });
+    return NextResponse.json({ error: "INTERNAL_SECRET missing" }, { status: 500 });
   }
 
   // En prod : trigger la Netlify Background Function. La fiche poll en SWR.

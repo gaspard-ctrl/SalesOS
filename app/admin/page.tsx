@@ -109,7 +109,7 @@ export default async function AdminPage() {
         <div>
           <h1 className="text-xl font-semibold" style={{ color: "#111" }}>Admin</h1>
           <p className="text-xs mt-1" style={{ color: "#888" }}>
-            Console d&apos;administration : utilisateurs, modèles, guides.
+            Admin console: users, models, guides.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -127,10 +127,10 @@ export default async function AdminPage() {
       <div>
         <div className="mb-6">
           <h1 className="text-xl font-semibold" style={{ color: "#111" }}>
-            Gestion des utilisateurs
+            User management
           </h1>
           <p className="text-sm mt-1" style={{ color: "#888" }}>
-            Configure les clés API Claude pour chaque membre de l&apos;équipe.
+            Configure the Claude API keys for each team member.
           </p>
         </div>
         <UsersTable users={usersWithStatus} />
@@ -139,9 +139,9 @@ export default async function AdminPage() {
       {/* Modèles IA */}
       <div>
         <div className="mb-4">
-          <h2 className="text-base font-semibold" style={{ color: "#111" }}>Modèles IA</h2>
+          <h2 className="text-base font-semibold" style={{ color: "#111" }}>AI models</h2>
           <p className="text-xs mt-1" style={{ color: "#888" }}>
-            Modèle Claude utilisé par défaut pour chaque feature. S&apos;applique à tous les utilisateurs.
+            Default Claude model used for each feature. Applies to all users.
           </p>
         </div>
         <div className="rounded-xl border p-5" style={{ borderColor: "#eeeeee", background: "#fff" }}>
@@ -153,10 +153,10 @@ export default async function AdminPage() {
       <div>
         <div className="mb-4">
           <h2 className="text-base font-semibold" style={{ color: "#111" }}>
-            Guides IA
+            AI guides
           </h2>
           <p className="text-xs mt-1" style={{ color: "#888" }}>
-            Ces guides sont les valeurs par défaut pour tous les utilisateurs. Chaque utilisateur peut ensuite personnaliser les siens dans Paramètres.
+            These guides are the defaults for all users. Each user can then customize their own in Settings.
           </p>
         </div>
         <div className="space-y-3">
@@ -166,22 +166,22 @@ export default async function AdminPage() {
               initialGuide={globalMap.bot ?? null}
               defaultGuide={DEFAULT_BOT_GUIDE}
               endpoint="/api/admin/guides?key=bot"
-              title="Guide bot"
-              description="System prompt du chat CoachelloGPT."
+              title="Bot guide"
+              description="System prompt for the CoachelloGPT chat."
             />
             <GuideEditor
               initialGuide={globalMap.prospection ?? null}
               defaultGuide={DEFAULT_PROSPECTION_GUIDE}
               endpoint="/api/admin/guides?key=prospection"
-              title="Guide de prospection"
-              description="Instructions pour générer les emails dans Prospection."
+              title="Prospecting guide"
+              description="Instructions for generating emails in Prospecting."
             />
             <GuideEditor
               initialGuide={globalMap.briefing ?? null}
               defaultGuide={DEFAULT_BRIEFING_GUIDE}
               endpoint="/api/admin/guides?key=briefing"
-              title="Guide de briefing"
-              description="Instructions pour préparer les briefings pré-meeting."
+              title="Briefing guide"
+              description="Instructions for preparing pre-meeting briefings."
             />
           </Suspense>
         </div>

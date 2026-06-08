@@ -26,7 +26,7 @@ type HsFilter = { propertyName: string; operator: string; value?: string };
 // sur les contacts de l'utilisateur, pour alimenter le combobox de filtre.
 export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { searchParams } = req.nextUrl;
   const q = searchParams.get("q")?.trim() ?? "";
@@ -74,6 +74,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ companies });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur HubSpot", companies: [] }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "HubSpot error", companies: [] }, { status: 500 });
   }
 }

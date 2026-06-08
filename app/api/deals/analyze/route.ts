@@ -46,7 +46,7 @@ async function triggerBackground(req: NextRequest, dealId: string, userId: strin
   if (useBackground) {
     const internalSecret = process.env.INTERNAL_SECRET;
     if (!internalSecret) {
-      const msg = "INTERNAL_SECRET non configuré";
+      const msg = "INTERNAL_SECRET not configured";
       console.error(`[deals/analyze/${dealId}] ${msg}`);
       return { inlineDone: false, inlineError: msg };
     }
@@ -89,10 +89,10 @@ async function triggerBackground(req: NextRequest, dealId: string, userId: strin
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { dealId, force } = (await req.json().catch(() => ({}))) as { dealId?: string; force?: boolean };
-  if (!dealId) return NextResponse.json({ error: "dealId manquant" }, { status: 400 });
+  if (!dealId) return NextResponse.json({ error: "dealId missing" }, { status: 400 });
 
   const existing = await fetchRow(dealId);
   const updatedMs = existing?.updated_at ? new Date(existing.updated_at).getTime() : 0;
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
     );
   if (upsertErr) {
     console.error(`[deals/analyze/${dealId}] upsert failed:`, upsertErr.message);
-    return NextResponse.json({ error: `Persistance impossible: ${upsertErr.message}` }, { status: 500 });
+    return NextResponse.json({ error: `Failed to persist: ${upsertErr.message}` }, { status: 500 });
   }
 
   const trigger = await triggerBackground(req, dealId, user.id);
@@ -167,10 +167,10 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const dealId = req.nextUrl.searchParams.get("dealId");
-  if (!dealId) return NextResponse.json({ error: "dealId manquant" }, { status: 400 });
+  if (!dealId) return NextResponse.json({ error: "dealId missing" }, { status: 400 });
 
   const row = await fetchRow(dealId);
   if (!row) {

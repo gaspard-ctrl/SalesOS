@@ -3,16 +3,16 @@
 import { useState } from "react";
 
 const MODELS = [
-  { id: "claude-haiku-4-5-20251001", label: "Haiku — rapide, économique" },
-  { id: "claude-sonnet-4-6", label: "Sonnet — équilibré" },
-  { id: "claude-opus-4-6", label: "Opus — le plus puissant" },
+  { id: "claude-haiku-4-5-20251001", label: "Haiku - fast, economical" },
+  { id: "claude-sonnet-4-6", label: "Sonnet - balanced" },
+  { id: "claude-opus-4-6", label: "Opus - most powerful" },
 ];
 
 const FEATURES = [
-  { key: "briefing", label: "Briefing réunion" },
-  { key: "deals_score", label: "Scoring des deals" },
-  { key: "prospection", label: "Génération d'emails" },
-  { key: "chat", label: "Assistant commercial" },
+  { key: "briefing", label: "Meeting briefing" },
+  { key: "deals_score", label: "Deal scoring" },
+  { key: "prospection", label: "Email generation" },
+  { key: "chat", label: "Sales assistant" },
 ];
 
 const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
@@ -55,7 +55,7 @@ export function ModelPreferences({
             </span>
             <div className="flex items-center gap-2">
               {saved === feature.key && (
-                <span className="text-xs" style={{ color: "#16a34a" }}>Enregistré</span>
+                <span className="text-xs" style={{ color: "#16a34a" }}>Saved</span>
               )}
               <select
                 value={current}

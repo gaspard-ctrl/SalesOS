@@ -734,7 +734,7 @@ ${draft.content[lang]}
                     )}
                   </p>
                   <p className="text-xs mb-4" style={{ color: "#888" }}>
-                    ~{rec.estimatedTraffic} sessions/mois · Difficulté: {DIFFICULTY_LABELS[rec.difficulty]}
+                    ~{rec.estimatedTraffic} sessions/month · Difficulty: {DIFFICULTY_LABELS[rec.difficulty]}
                   </p>
                   <div className="flex gap-2">
                     <button

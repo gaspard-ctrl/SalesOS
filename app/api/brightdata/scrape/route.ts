@@ -47,7 +47,7 @@ async function searchLinkedInProfiles(firstName: string, lastName: string, compa
   try {
     parsed = JSON.parse(await res.text());
   } catch {
-    throw new Error("Réponse SERP illisible (JSON attendu)");
+    throw new Error("Unreadable SERP response (JSON expected)");
   }
 
   const organic = parsed.organic ?? [];
@@ -84,17 +84,17 @@ async function searchLinkedInProfiles(firstName: string, lastName: string, compa
 // GET ci-dessous (évite le timeout Netlify ~26s sur les fonctions synchrones).
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   if (!API_KEY) {
-    return NextResponse.json({ error: "BRIGHTDATA_API_KEY manquante dans l'environnement" }, { status: 500 });
+    return NextResponse.json({ error: "BRIGHTDATA_API_KEY missing from the environment" }, { status: 500 });
   }
 
   let body: { firstName?: string; lastName?: string; company?: string; linkedinUrl?: string };
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Corps de requête invalide" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
   const firstName = body.firstName?.trim() ?? "";
@@ -106,22 +106,22 @@ export async function POST(req: NextRequest) {
   let urls: string[];
   if (directUrl) {
     if (!/linkedin\.com\/in\//i.test(directUrl)) {
-      return NextResponse.json({ error: "L'URL doit être un profil LinkedIn (linkedin.com/in/...)" }, { status: 400 });
+      return NextResponse.json({ error: "The URL must be a LinkedIn profile (linkedin.com/in/...)" }, { status: 400 });
     }
     urls = [directUrl];
   } else {
     if (!firstName || !lastName) {
-      return NextResponse.json({ error: "Fournis une URL LinkedIn, ou un prénom + nom" }, { status: 400 });
+      return NextResponse.json({ error: "Provide a LinkedIn URL, or a first name + last name" }, { status: 400 });
     }
     let candidates: Candidate[];
     try {
       candidates = await searchLinkedInProfiles(firstName, lastName, company);
     } catch (e) {
-      return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur recherche SERP" }, { status: 502 });
+      return NextResponse.json({ error: e instanceof Error ? e.message : "SERP search error" }, { status: 502 });
     }
     if (candidates.length === 0) {
       return NextResponse.json(
-        { error: "Aucun profil LinkedIn trouvé pour ce nom (essaie d'ajouter la société, ou colle l'URL directement)" },
+        { error: "No LinkedIn profile found for this name (try adding the company, or paste the URL directly)" },
         { status: 404 },
       );
     }
@@ -145,11 +145,11 @@ export async function POST(req: NextRequest) {
   try {
     json = JSON.parse(text);
   } catch {
-    return NextResponse.json({ error: `Réponse Bright Data inattendue: ${text.slice(0, 200)}` }, { status: 502 });
+    return NextResponse.json({ error: `Unexpected Bright Data response: ${text.slice(0, 200)}` }, { status: 502 });
   }
 
   if (!json.snapshot_id) {
-    return NextResponse.json({ error: "snapshot_id absent de la réponse Bright Data" }, { status: 502 });
+    return NextResponse.json({ error: "snapshot_id missing from the Bright Data response" }, { status: 502 });
   }
 
   return NextResponse.json({ snapshotId: json.snapshot_id, urls, count: urls.length });
@@ -159,15 +159,15 @@ export async function POST(req: NextRequest) {
 // status "running" => pas encore prêt ; "ready" => renvoie les profils.
 export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   if (!API_KEY) {
-    return NextResponse.json({ error: "BRIGHTDATA_API_KEY manquante dans l'environnement" }, { status: 500 });
+    return NextResponse.json({ error: "BRIGHTDATA_API_KEY missing from the environment" }, { status: 500 });
   }
 
   const snapshotId = req.nextUrl.searchParams.get("snapshot_id")?.trim();
   if (!snapshotId) {
-    return NextResponse.json({ error: "snapshot_id requis" }, { status: 400 });
+    return NextResponse.json({ error: "snapshot_id required" }, { status: 400 });
   }
 
   // 1) état du snapshot
@@ -207,7 +207,7 @@ export async function GET(req: NextRequest) {
   try {
     data = JSON.parse(dataText);
   } catch {
-    return NextResponse.json({ error: "Données Bright Data illisibles", status: "error" }, { status: 502 });
+    return NextResponse.json({ error: "Unreadable Bright Data response", status: "error" }, { status: 502 });
   }
 
   const profiles = Array.isArray(data) ? data : [data];

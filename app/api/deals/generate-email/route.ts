@@ -31,10 +31,10 @@ function sanitizeString(s: string): string {
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { dealId, instructions } = await req.json() as { dealId: string; instructions?: string };
-  if (!dealId) return NextResponse.json({ error: "dealId manquant" }, { status: 400 });
+  if (!dealId) return NextResponse.json({ error: "dealId missing" }, { status: 400 });
 
   try {
     const DEAL_PROPS = [
@@ -147,6 +147,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ subject, body, toEmail });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Error" }, { status: 500 });
   }
 }

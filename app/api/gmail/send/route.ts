@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   const hubspotId = ((formData.get("hubspot_id") as string) ?? "").trim() || null;
   const files = formData.getAll("attachments") as File[];
 
-  if (!to.length) return NextResponse.json({ error: "Destinataire requis" }, { status: 400 });
+  if (!to.length) return NextResponse.json({ error: "Recipient required" }, { status: 400 });
 
   const attachments = await Promise.all(
     files.filter((f) => f.size > 0).map(async (f) => ({
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   try {
     accessToken = await getGmailAccessToken(user.id);
   } catch {
-    return NextResponse.json({ error: "Gmail non connecté" }, { status: 403 });
+    return NextResponse.json({ error: "Gmail not connected" }, { status: 403 });
   }
 
   // Get sender address from Gmail profile

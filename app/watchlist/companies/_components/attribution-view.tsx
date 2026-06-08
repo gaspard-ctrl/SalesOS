@@ -116,7 +116,7 @@ export function AttributionView() {
         body: JSON.stringify({ filters: buildFilters(), dryRun: true, pageSize: PAGE_SIZE, after: reset ? undefined : nextAfter }),
       });
       const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? "Erreur recherche");
+      if (!res.ok) throw new Error(j.error ?? "Search failed");
       const preview = (j.preview ?? []) as HubspotPreviewCompany[];
       setResults((prev) => {
         if (reset) return preview;
@@ -126,7 +126,7 @@ export function AttributionView() {
       setNextAfter(j.nextAfter ?? null);
       setHasSearched(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur");
+      setError(e instanceof Error ? e.message : "Error");
     } finally {
       setSearching(false);
       setLoadingMore(false);
@@ -216,12 +216,12 @@ export function AttributionView() {
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        setError(j.error ?? "Erreur d'attribution");
+        setError(j.error ?? "Assignment failed");
         await reloadScope();
       }
       await reloadRoster();
     } catch {
-      setError("Erreur réseau");
+      setError("Network error");
       await reloadScope();
     }
   }
@@ -246,26 +246,26 @@ export function AttributionView() {
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && search()}
-                placeholder="Chercher des companies HubSpot (nom, domaine)…"
+                placeholder="Search HubSpot companies (name, domain)…"
                 style={{ width: "100%", paddingLeft: 30, paddingRight: 10, paddingTop: 8, paddingBottom: 8, borderRadius: 8, border: `1px solid ${COLORS.line}`, fontSize: 12, outline: "none", background: COLORS.bgCard }}
               />
             </div>
             <button type="button" onClick={() => setShowFilters((v) => !v)} style={ghostBtn(showFilters)}>
-              <FilterIcon size={12} /> Filtres
+              <FilterIcon size={12} /> Filters
             </button>
             <button type="button" onClick={() => search()} disabled={searching} style={primaryBtn(!searching)}>
-              {searching ? <Loader2 size={13} className="animate-spin" /> : "Rechercher"}
+              {searching ? <Loader2 size={13} className="animate-spin" /> : "Search"}
             </button>
           </div>
 
           {showFilters && (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", paddingTop: 4 }}>
-              <input value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="Industry (ex: LUXURY_GOODS)" style={inp(180)} />
-              <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Pays" style={inp(120)} />
+              <input value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="Industry (e.g. LUXURY_GOODS)" style={inp(180)} />
+              <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Country" style={inp(120)} />
               <input value={employeesMin} onChange={(e) => setEmployeesMin(e.target.value)} placeholder="Empl. min" style={inp(90)} />
               <input value={employeesMax} onChange={(e) => setEmployeesMax(e.target.value)} placeholder="Empl. max" style={inp(90)} />
               <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} style={{ ...inp(150), cursor: "pointer" }}>
-                <option value="">Owner HubSpot : tous</option>
+                <option value="">HubSpot owner: all</option>
                 {owners.map((o) => (
                   <option key={o.id} value={o.id}>{o.name}</option>
                 ))}
@@ -293,7 +293,7 @@ export function AttributionView() {
                 })}
               </div>
               <label style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: COLORS.ink2, cursor: "pointer" }}>
-                <input type="checkbox" checked={sortRecent} onChange={(e) => setSortRecent(e.target.checked)} /> Récents d&apos;abord
+                <input type="checkbox" checked={sortRecent} onChange={(e) => setSortRecent(e.target.checked)} /> Recent first
               </label>
             </div>
           )}
@@ -308,15 +308,15 @@ export function AttributionView() {
           <div style={{ padding: "8px 16px", display: "flex", gap: 8, alignItems: "center", borderBottom: `1px solid ${COLORS.line}` }}>
             <div style={{ position: "relative", flex: "0 0 220px" }}>
               <Search size={12} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: COLORS.ink3 }} />
-              <input value={localFilter} onChange={(e) => setLocalFilter(e.target.value)} placeholder="Filtrer les résultats…" style={{ width: "100%", paddingLeft: 28, paddingRight: 8, paddingTop: 6, paddingBottom: 6, borderRadius: 8, border: `1px solid ${COLORS.line}`, fontSize: 12, outline: "none" }} />
+              <input value={localFilter} onChange={(e) => setLocalFilter(e.target.value)} placeholder="Filter results…" style={{ width: "100%", paddingLeft: 28, paddingRight: 8, paddingTop: 6, paddingBottom: 6, borderRadius: 8, border: `1px solid ${COLORS.line}`, fontSize: 12, outline: "none" }} />
             </div>
             <span style={{ marginLeft: "auto", fontSize: 11, color: COLORS.ink3 }}>
-              {visible.length} résultat{visible.length > 1 ? "s" : ""}
-              {selectedIds.size > 0 ? ` · ${selectedIds.size} sélectionnée${selectedIds.size > 1 ? "s" : ""}` : ""}
+              {visible.length} result{visible.length > 1 ? "s" : ""}
+              {selectedIds.size > 0 ? ` · ${selectedIds.size} selected` : ""}
             </span>
             {selectedIds.size > 0 && (
               <button type="button" onClick={() => setSelectedIds(new Set())} style={ghostBtn(false)}>
-                <X size={12} /> Désélectionner
+                <X size={12} /> Deselect
               </button>
             )}
           </div>
@@ -330,10 +330,10 @@ export function AttributionView() {
             </div>
           ) : !hasSearched ? (
             <div style={{ padding: 40, textAlign: "center", color: COLORS.ink3, fontSize: 12 }}>
-              Cherche des companies HubSpot, puis glisse-les sur un sales à droite pour les ajouter à la watchlist.
+              Search HubSpot companies, then drag them onto a sales rep on the right to add them to the watchlist.
             </div>
           ) : visible.length === 0 ? (
-            <div style={{ padding: 40, textAlign: "center", color: COLORS.ink3, fontSize: 12 }}>Aucun résultat.</div>
+            <div style={{ padding: 40, textAlign: "center", color: COLORS.ink3, fontSize: 12 }}>No results.</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               {visible.map((c) => (
@@ -350,7 +350,7 @@ export function AttributionView() {
               ))}
               {nextAfter && (
                 <button type="button" onClick={() => search(false)} disabled={loadingMore} style={{ ...ghostBtn(false), justifyContent: "center", margin: "8px auto 0" }}>
-                  {loadingMore ? <Loader2 size={13} className="animate-spin" /> : "Charger plus"}
+                  {loadingMore ? <Loader2 size={13} className="animate-spin" /> : "Load more"}
                 </button>
               )}
             </div>

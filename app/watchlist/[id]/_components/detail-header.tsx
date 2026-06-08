@@ -28,7 +28,7 @@ export function DetailHeader({ company }: { company: WatchCompanyDetail }) {
     >
       <Link
         href="/watchlist"
-        aria-label="Retour à la Watch List"
+        aria-label="Back to Watch List"
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -52,7 +52,7 @@ export function DetailHeader({ company }: { company: WatchCompanyDetail }) {
           {company.name}
         </h1>
         <p style={{ margin: "2px 0 0", fontSize: 11, color: COLORS.ink3 }}>
-          {company.owner ? `👤 ${company.owner}` : "Sans owner"}
+          {company.owner ? `👤 ${company.owner}` : "No owner"}
           {company.sector ? ` · 🏷 ${company.sector}` : ""}
           {company.current_coaching_platform ? ` · 🎓 ${company.current_coaching_platform}` : ""}
         </p>
@@ -63,7 +63,7 @@ export function DetailHeader({ company }: { company: WatchCompanyDetail }) {
           href={linkedinUrl}
           target="_blank"
           rel="noreferrer"
-          title="Voir sur LinkedIn"
+          title="View on LinkedIn"
           style={iconBtnStyle()}
         >
           <Linkedin size={14} />
@@ -73,7 +73,7 @@ export function DetailHeader({ company }: { company: WatchCompanyDetail }) {
             href={`https://app.hubspot.com/contacts/_/company/${company.hubspot_company_id}`}
             target="_blank"
             rel="noreferrer"
-            title="Ouvrir dans HubSpot"
+            title="Open in HubSpot"
             style={iconBtnStyle()}
           >
             <ExternalLink size={14} />

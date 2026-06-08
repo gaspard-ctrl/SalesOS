@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
     const user = await getAuthenticatedUser();
-    if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
     const days = parseInt(req.nextUrl.searchParams.get("days") ?? "7", 10);
 
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     if (err.code === "scope_missing" || err.message === "calendar_scope_missing") {
       return NextResponse.json({ events: [], calendarConnected: false, reason: "scope_missing" });
     }
-    if (err.message?.includes("Gmail non connecté")) {
+    if (err.message?.includes("Gmail not connected")) {
       return NextResponse.json({ events: [], calendarConnected: false, reason: "not_connected" });
     }
     console.error("calendar/events error:", e);

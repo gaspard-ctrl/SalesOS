@@ -45,13 +45,13 @@ export function BriefingActions({
         }}
       >
         <RefreshCw size={13} />
-        Rafraîchir
+        Refresh
       </button>
       <button
         type="button"
         onClick={onSendSlack}
         disabled={sendingSlack || slackSent || !slackName}
-        title={!slackName ? "Configure ton nom Slack dans Admin" : undefined}
+        title={!slackName ? "Set your Slack name in Admin" : undefined}
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -69,7 +69,7 @@ export function BriefingActions({
         }}
       >
         {slackSent ? <Check size={13} /> : <Send size={13} />}
-        {slackSent ? "Envoyé en Slack" : sendingSlack ? "Envoi…" : "Envoyer en Slack"}
+        {slackSent ? "Sent to Slack" : sendingSlack ? "Sending…" : "Send to Slack"}
       </button>
     </div>
   );

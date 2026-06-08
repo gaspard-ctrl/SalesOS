@@ -11,20 +11,20 @@ export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   if (!BRIGHTDATA_API_KEY) {
-    return NextResponse.json({ error: "Bright Data non configuré" }, { status: 500 });
+    return NextResponse.json({ error: "Bright Data not configured" }, { status: 500 });
   }
 
   const body = (await req.json().catch(() => ({}))) as { username?: string; name?: string };
-  if (!body.username) return NextResponse.json({ error: "username requis" }, { status: 400 });
+  if (!body.username) return NextResponse.json({ error: "username required" }, { status: 400 });
 
   try {
     const postsRes = await getCompanyPosts(body.username, { timeoutMs: 18_000 });
     const posts = (postsRes.data ?? []).slice(0, 10);
     if (posts.length === 0) {
-      return NextResponse.json({ error: "Aucun post à analyser" }, { status: 400 });
+      return NextResponse.json({ error: "No post to analyze" }, { status: 400 });
     }
 
     const block = posts
@@ -54,6 +54,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ analysis: parsed });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Error" }, { status: 500 });
   }
 }

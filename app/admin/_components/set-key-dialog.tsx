@@ -33,12 +33,12 @@ export function SetKeyDialog({
       });
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error ?? "Erreur");
+        setError(data.error ?? "Error");
         return;
       }
       onSaved();
     } catch {
-      setError("Erreur de connexion");
+      setError("Connection error");
     } finally {
       setLoading(false);
     }
@@ -55,11 +55,11 @@ export function SetKeyDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-base font-semibold mb-1" style={{ color: "#111" }}>
-          Clé Claude — {user.name ?? user.email}
+          Claude key - {user.name ?? user.email}
         </h2>
         <p className="text-xs mb-4" style={{ color: "#888" }}>
-          Entre la clé API Anthropic pour cet utilisateur. Elle sera chiffrée
-          immédiatement.
+          Enter the Anthropic API key for this user. It will be encrypted
+          immediately.
         </p>
         <input
           type="password"
@@ -88,7 +88,7 @@ export function SetKeyDialog({
             className="px-4 py-2 text-sm rounded-xl border"
             style={{ borderColor: "#e5e5e5", color: "#888" }}
           >
-            Annuler
+            Cancel
           </button>
           <button
             onClick={handleSave}
@@ -99,7 +99,7 @@ export function SetKeyDialog({
               opacity: !key.trim() || loading ? 0.5 : 1,
             }}
           >
-            {loading ? "Enregistrement…" : "Enregistrer"}
+            {loading ? "Saving…" : "Save"}
           </button>
         </div>
       </div>

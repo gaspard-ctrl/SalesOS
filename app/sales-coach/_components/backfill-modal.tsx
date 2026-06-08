@@ -42,7 +42,7 @@ function formatDuration(sec: number | null): string {
 
 function formatDate(iso: string | null): string {
   if (!iso) return "?";
-  return new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+  return new Date(iso).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" });
 }
 
 export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
@@ -68,7 +68,7 @@ export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
     if (cursor) params.set("cursor", cursor);
     const res = await fetch(`/api/sales-coach/claap-recordings?${params.toString()}`);
     const json = await res.json();
-    if (!res.ok) throw new Error(json.error ?? "Erreur de chargement");
+    if (!res.ok) throw new Error(json.error ?? "Failed to load");
     return json as ListResponse;
   }
 
@@ -88,7 +88,7 @@ export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
         setIsAdmin(!!json.isAdmin);
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Erreur de chargement");
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -108,7 +108,7 @@ export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
       setRecordings((prev) => [...prev, ...json.recordings]);
       setNextCursor(json.nextCursor ?? null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur de chargement");
+      setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
       setIsLoadingMore(false);
     }
@@ -126,7 +126,7 @@ export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
   async function launchBackfill(recordingId: string) {
     const dealId = dealIdByRec[recordingId]?.trim() || undefined;
     setLaunching(recordingId);
-    setResult((r) => ({ ...r, [recordingId]: { ok: true, msg: "Envoi…" } }));
+    setResult((r) => ({ ...r, [recordingId]: { ok: true, msg: "Sending…" } }));
     try {
       const res = await fetch("/api/sales-coach/backfill", {
         method: "POST",
@@ -134,8 +134,8 @@ export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
         body: JSON.stringify({ recordingId, hubspotDealId: dealId }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Erreur");
-      setResult((r) => ({ ...r, [recordingId]: { ok: true, msg: "Analyse lancée" } }));
+      if (!res.ok) throw new Error(json.error ?? "Error");
+      setResult((r) => ({ ...r, [recordingId]: { ok: true, msg: "Analysis started" } }));
       if (json.id) {
         setRecordings((prev) =>
           prev.map((rec) =>
@@ -149,7 +149,7 @@ export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
     } catch (e) {
       setResult((r) => ({
         ...r,
-        [recordingId]: { ok: false, msg: e instanceof Error ? e.message : "Erreur" },
+        [recordingId]: { ok: false, msg: e instanceof Error ? e.message : "Error" },
       }));
     } finally {
       setLaunching(null);
@@ -174,9 +174,9 @@ export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
         {/* Header */}
         <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: "#eeeeee" }}>
           <div>
-            <h2 className="text-base font-semibold" style={{ color: "#111" }}>Analyser un meeting passé</h2>
+            <h2 className="text-base font-semibold" style={{ color: "#111" }}>Analyze a past meeting</h2>
             <p className="text-xs mt-0.5" style={{ color: "#888" }}>
-              {scope === "mine" ? "Tes meetings Claap les plus récents" : "Meetings Claap du workspace"}. Choisis un deal HubSpot et lance l&apos;analyse. Utilise « Charger plus » pour remonter dans le temps.
+              {scope === "mine" ? "Your most recent Claap meetings" : "Workspace Claap meetings"}. Pick a HubSpot deal and start the analysis. Use &laquo; Load more &raquo; to go further back in time.
             </p>
             {isAdmin && (
               <div className="mt-2 flex gap-1">
@@ -191,13 +191,13 @@ export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
                       border: "1px solid " + (scope === v ? "#f01563" : "#e5e5e5"),
                     }}
                   >
-                    {v === "mine" ? "Mes meetings" : "Tous"}
+                    {v === "mine" ? "My meetings" : "All"}
                   </button>
                 ))}
               </div>
             )}
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100" aria-label="Fermer">
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100" aria-label="Close">
             <X size={18} style={{ color: "#666" }} />
           </button>
         </div>
@@ -207,7 +207,7 @@ export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
           {isLoading && (
             <div className="px-5 py-10 text-center text-sm" style={{ color: "#888" }}>
               <Loader2 size={18} className="animate-spin inline mr-2" />
-              Chargement des meetings Claap…
+              Loading Claap meetings…
             </div>
           )}
           {error && (
@@ -217,7 +217,7 @@ export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
           )}
           {!isLoading && !error && recordings.length === 0 && (
             <div className="px-5 py-10 text-center text-sm" style={{ color: "#888" }}>
-              Aucun meeting Claap trouvé pour toi.
+              No Claap meeting found for you.
             </div>
           )}
           {recordings.map((r) => {
@@ -238,14 +238,14 @@ export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
                       {r.meeting_type === "internal" && (
                         <span
                           className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                          title="Claap a classé ce meeting comme interne — analyse possible si tu confirmes"
+                          title="Claap classified this meeting as internal, you can still analyze it if you confirm"
                           style={{ background: "#f4f4f4", color: "#888" }}
                         >
-                          Interne (Claap)
+                          Internal (Claap)
                         </span>
                       )}
                       {!r.has_transcript && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: "#fee2e2", color: "#dc2626" }}>Sans transcript</span>
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: "#fee2e2", color: "#dc2626" }}>No transcript</span>
                       )}
                       {r.claap_url && (
                         <a href={r.claap_url} target="_blank" rel="noreferrer" className="text-[10px] font-medium flex items-center gap-0.5" style={{ color: "#6d28d9" }}>
@@ -276,14 +276,14 @@ export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
                           style={{ color: "#059669" }}
                         >
                           <CheckCircle2 size={12} />
-                          Déjà analysé ({r.existing_analysis.status}) — voir
+                          Already analyzed ({r.existing_analysis.status}) - view
                         </a>
                       ) : analyzable ? (
                         <>
                           <input
                             type="text"
                             list={`deals-${r.id}`}
-                            placeholder="ID deal HubSpot (optionnel)"
+                            placeholder="HubSpot deal ID (optional)"
                             value={dealIdByRec[r.id] ?? ""}
                             onChange={(e) => setDealIdByRec((m) => ({ ...m, [r.id]: e.target.value }))}
                             className="text-xs px-2 py-1 rounded border outline-none flex-1 min-w-0"
@@ -300,11 +300,11 @@ export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
                             className="text-xs font-medium px-3 py-1 rounded disabled:opacity-50"
                             style={{ background: "#f01563", color: "#fff" }}
                           >
-                            {launching === r.id ? "Envoi…" : "Analyser"}
+                            {launching === r.id ? "Sending…" : "Analyze"}
                           </button>
                         </>
                       ) : (
-                        <span className="text-xs italic" style={{ color: "#888" }}>Non analysable</span>
+                        <span className="text-xs italic" style={{ color: "#888" }}>Not analyzable</span>
                       )}
                       {res && (
                         <span className="text-xs" style={{ color: res.ok ? "#059669" : "#dc2626" }}>
@@ -328,10 +328,10 @@ export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
                 {isLoadingMore ? (
                   <>
                     <Loader2 size={12} className="animate-spin inline mr-1.5" />
-                    Chargement…
+                    Loading…
                   </>
                 ) : (
-                  "Charger plus de meetings"
+                  "Load more meetings"
                 )}
               </button>
             </div>
@@ -340,7 +340,7 @@ export function BackfillModal({ open, onClose, onAnalysisStarted }: Props) {
 
         {/* Footer */}
         <div className="px-5 py-3 border-t text-xs" style={{ borderColor: "#eeeeee", color: "#888" }}>
-          L&apos;analyse tourne en arrière-plan (~30-60s). Rafraîchis la liste principale après quelques secondes pour voir le résultat.
+          The analysis runs in the background (~30-60s). Refresh the main list after a few seconds to see the result.
         </div>
       </div>
     </div>

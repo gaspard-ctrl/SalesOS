@@ -47,10 +47,10 @@ function parseRecordingId(input: string): string | null {
 // Authentifié (pas admin-only) : même portée que la confirmation des meetings.
 export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   if (!process.env.CLAAP_API_TOKEN) {
-    return NextResponse.json({ error: "Claap non configuré" }, { status: 500 });
+    return NextResponse.json({ error: "Claap not configured" }, { status: 500 });
   }
 
   const params = req.nextUrl.searchParams;

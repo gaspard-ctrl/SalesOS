@@ -22,7 +22,7 @@ export interface ResolvedCompany {
 // preview de l'enrich. domains: { companyName -> domaine } améliore le match.
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as {
     names?: unknown;

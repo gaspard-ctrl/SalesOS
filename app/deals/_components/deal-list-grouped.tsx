@@ -83,7 +83,7 @@ export function DealListGrouped({
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {items.length === 0 && (
                 <div style={{ fontSize: 11, color: COLORS.ink4, fontStyle: "italic", padding: "6px 10px" }}>
-                  Aucun deal
+                  No deal
                 </div>
               )}
               {items.map((d) => {
@@ -125,7 +125,7 @@ export function DealListGrouped({
                           textOverflow: "ellipsis",
                         }}
                       >
-                        {d.dealname || "Sans nom"}
+                        {d.dealname || "Untitled"}
                       </span>
                       <span style={{ fontSize: 10, color: COLORS.ink3 }}>
                         {fmt(d.amount)}

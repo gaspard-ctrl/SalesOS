@@ -21,7 +21,7 @@ export function SlackNameInput({ initialValue }: { initialValue: string | null }
       <input
         type="text"
         value={value}
-        placeholder="ex: Arthur Dubois"
+        placeholder="e.g. Arthur Dubois"
         className="text-xs px-3 py-1.5 border rounded-lg outline-none"
         style={{ borderColor: "#e5e5e5", color: "#555", width: 200 }}
         onChange={(e) => setValue(e.target.value)}
@@ -29,7 +29,7 @@ export function SlackNameInput({ initialValue }: { initialValue: string | null }
         onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
       />
       {saved && (
-        <span className="text-xs" style={{ color: "#16a34a" }}>Enregistré</span>
+        <span className="text-xs" style={{ color: "#16a34a" }}>Saved</span>
       )}
     </div>
   );
