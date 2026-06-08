@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { logUsage } from "@/lib/log-usage";
 import { loadCompanyHubspotContext } from "@/lib/watchlist/fetch-company-recap";
 import { loadClientsRoster, formatClientsRoster } from "@/lib/watchlist/clients-roster";
-import { getBriefs, type AeAnalysisContent, type HubspotRecapContent } from "@/lib/watchlist/briefs";
+import { getBriefs, type AeAnalysisContent, type HubspotRecapContent, type NewsContent } from "@/lib/watchlist/briefs";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -58,6 +58,7 @@ Règles de rédaction :
 - 5 à 9 phrases maximum, un seul objet (subject) court.
 - Ne jamais inventer un fait, un chiffre, un nom de client ou un engagement. Appuie-toi uniquement sur le contexte fourni.
 - Si une "histoire à raconter" (social proof) est fournie, intègre-la naturellement (ex : "on accompagne déjà X dans votre secteur"). Ne cite que des clients réellement listés.
+- Si des news récentes / signaux sont fournis (levée, nomination, expansion...), ancre l'accroche sur le trigger le plus pertinent et récent. N'utilise que des faits réellement présents dans le contexte.
 - Suis les instructions de l'utilisateur en priorité si elles sont fournies.
 - Termine par une signature simple avec le prénom de l'expéditeur et un call-to-action léger (ex : proposer un créneau de 20 min).
 - Pas de markdown dans le corps.
@@ -98,6 +99,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   ]);
 
   const ae = briefs?.ae_analysis?.content ?? null;
+  const news = briefs?.news?.content ?? null;
 
   const userPrompt = buildPrompt({
     company,
@@ -106,6 +108,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     recipients,
     hubspot,
     ae,
+    news,
     rosterText: formatClientsRoster(clientsRoster),
   });
 
@@ -144,9 +147,10 @@ function buildPrompt(input: {
   recipients: DraftRecipient[];
   hubspot: HubspotRecapContent | null;
   ae: AeAnalysisContent | null;
+  news: NewsContent | null;
   rosterText: string;
 }): string {
-  const { company, senderName, instructions, recipients, hubspot, ae, rosterText } = input;
+  const { company, senderName, instructions, recipients, hubspot, ae, news, rosterText } = input;
   const lines: string[] = [];
 
   lines.push(`Expéditeur : ${senderName} (Coachello).`);
@@ -185,6 +189,20 @@ function buildPrompt(input: {
       lines.push("Contacts prioritaires et angles :");
       for (const c of ae.priority_contacts.slice(0, 5)) {
         lines.push(`- ${c.name}${c.role ? ` (${c.role})` : ""} - angle : ${c.angle}`);
+      }
+    }
+  }
+
+  // News récentes / signaux marché (triés récents d'abord en amont)
+  if (news && (news.intel_summary || news.signals.length > 0)) {
+    lines.push("");
+    lines.push("## News récentes & signaux (fenêtre 90 jours, plus récents d'abord)");
+    if (news.intel_summary) lines.push(`Synthèse : ${news.intel_summary}`);
+    if (news.signals.length > 0) {
+      lines.push("Signaux :");
+      for (const s of news.signals.slice(0, 5)) {
+        const date = s.created_at ? ` [${s.created_at}]` : "";
+        lines.push(`- (${s.type})${date} ${s.title}${s.excerpt ? ` - ${s.excerpt}` : ""}`);
       }
     }
   }

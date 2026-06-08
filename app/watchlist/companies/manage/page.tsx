@@ -41,7 +41,7 @@ export default function WatchlistManagePage() {
         </Link>
 
         <h1 style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 600, color: COLORS.ink0, margin: 0, lineHeight: 1.2 }}>
-          <Cloud size={16} style={{ color: COLORS.ink3 }} /> HubSpot companies
+          <Cloud size={16} style={{ color: COLORS.ink3 }} /> HubSpot Sourcing
         </h1>
       </div>
 
