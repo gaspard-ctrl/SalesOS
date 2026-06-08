@@ -1,11 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { Target, Mail } from "lucide-react";
+import { Target, MailPlus, BookOpen } from "lucide-react";
 import { COLORS } from "@/lib/design/tokens";
 import { BriefSection } from "./brief-section";
 import { NotesEditor } from "./notes-editor";
-import { ProspectGmailModal } from "../../_components/prospect-gmail-modal";
+import type { DraftRecipient } from "./mail-drafter";
 import type {
   BriefRow,
   AeAnalysisContent,
@@ -21,6 +21,7 @@ export function AeAnalysisCard({
   onRefresh,
   isRefreshing = false,
   clientError = null,
+  onProspect,
 }: {
   companyId: string;
   notes: string | null;
@@ -29,16 +30,16 @@ export function AeAnalysisCard({
   onRefresh?: () => void;
   isRefreshing?: boolean;
   clientError?: string | null;
+  onProspect?: (recipients: DraftRecipient[]) => void;
 }) {
   const baseStatus = brief?.status ?? "idle";
   const status = isRefreshing && baseStatus !== "running" ? "running" : baseStatus;
   const content = brief?.content ?? null;
   const staleBadge = computeStaleBadge(brief, dependencies);
-  const [gmailTarget, setGmailTarget] = React.useState<{ name: string; email: string } | null>(null);
 
   return (
     <BriefSection
-      title="Analyse AE"
+      title="AE Analysis"
       icon={<Target size={14} />}
       status={clientError && status !== "running" ? "error" : status}
       completedAt={brief?.completed_at ?? null}
@@ -55,9 +56,40 @@ export function AeAnalysisCard({
             </p>
           )}
 
+          {content.story_to_tell && (
+            <div
+              style={{
+                marginBottom: 14,
+                padding: "10px 12px",
+                borderRadius: 8,
+                background: COLORS.brandTintSoft,
+                border: `1px solid ${COLORS.brandTint}`,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  color: COLORS.brandDark,
+                  marginBottom: 6,
+                }}
+              >
+                <BookOpen size={12} /> Story to tell
+              </div>
+              <p style={{ margin: 0, fontSize: 12, color: COLORS.ink1, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                {content.story_to_tell}
+              </p>
+            </div>
+          )}
+
           {content.priority_contacts.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <SectionLabel>🎯 Contacts à prospecter</SectionLabel>
+              <SectionLabel>🎯 Contacts to prospect</SectionLabel>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {content.priority_contacts.map((c, i) => (
                   <ContactRow
@@ -65,7 +97,9 @@ export function AeAnalysisCard({
                     index={i}
                     contact={c}
                     onProspect={
-                      c.email ? () => setGmailTarget({ name: c.name, email: c.email as string }) : undefined
+                      c.email && onProspect
+                        ? () => onProspect([{ name: c.name, email: c.email as string }])
+                        : undefined
                     }
                   />
                 ))}
@@ -73,24 +107,16 @@ export function AeAnalysisCard({
             </div>
           )}
 
-          {content.next_actions.length > 0 && <Block title="➡ Prochaines actions" items={content.next_actions} />}
-          {content.watch_outs.length > 0 && <Block title="⚠ Points de vigilance" items={content.watch_outs} />}
+          {content.next_actions.length > 0 && <Block title="➡ Next actions" items={content.next_actions} />}
+          {content.watch_outs.length > 0 && <Block title="⚠ Watch-outs" items={content.watch_outs} />}
         </div>
       ) : (
         <p style={{ margin: 0, fontSize: 12, color: COLORS.ink3 }}>
-          Aucune analyse pour le moment. Clique sur <strong>Générer</strong> en haut à droite.
+          No analysis yet. Click <strong>Generate</strong> in the top right.
         </p>
       )}
 
       <NotesEditor companyId={companyId} initialNotes={notes} />
-
-      {gmailTarget && (
-        <ProspectGmailModal
-          fullName={gmailTarget.name}
-          email={gmailTarget.email}
-          onClose={() => setGmailTarget(null)}
-        />
-      )}
     </BriefSection>
   );
 }
@@ -152,7 +178,7 @@ function ContactRow({
               cursor: "pointer",
             }}
           >
-            <Mail size={11} /> Prospecter
+            <MailPlus size={11} /> Prospecter
           </button>
         )}
       </div>
@@ -161,7 +187,7 @@ function ContactRow({
       )}
       {contact.angle && (
         <p style={{ margin: "4px 0 0", fontSize: 11, color: COLORS.ink1, lineHeight: 1.5 }}>
-          <strong style={{ color: COLORS.ink2 }}>Angle :</strong> {contact.angle}
+          <strong style={{ color: COLORS.ink2 }}>Angle:</strong> {contact.angle}
         </p>
       )}
     </div>
@@ -175,7 +201,7 @@ function computeStaleBadge(
   if (!ae || ae.status !== "ok" || !ae.completed_at || !deps) return null;
   const aeTs = new Date(ae.completed_at).getTime();
   const newsTs = deps.news?.completed_at ? new Date(deps.news.completed_at).getTime() : 0;
-  if (newsTs > aeTs) return "News rafraîchies après";
+  if (newsTs > aeTs) return "News refreshed after";
   return null;
 }
 

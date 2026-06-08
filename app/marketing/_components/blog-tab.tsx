@@ -140,21 +140,21 @@ export default function BlogTab() {
           </div>
         ) : singleData?.error ? (
           <div className="rounded-xl" style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: "20px 24px" }}>
-            <p className="text-sm font-semibold" style={{ color: "#dc2626" }}>Impossible de charger l&apos;article</p>
+            <p className="text-sm font-semibold" style={{ color: "#dc2626" }}>Failed to load article</p>
             <p className="text-xs mt-1" style={{ color: "#888" }}>
-              {singleData.error}{singleData.detail ? ` — ${singleData.detail}` : ""}
+              {singleData.error}{singleData.detail ? ` - ${singleData.detail}` : ""}
             </p>
             <button
               onClick={() => setOpenArticleId(null)}
               className="mt-3 text-xs font-medium px-3 py-1.5 rounded-lg"
               style={{ background: "#fff", color: "#dc2626", border: "1px solid #fecaca" }}
             >
-              ← Retour à la liste
+              ← Back to list
             </button>
           </div>
         ) : !article ? (
           <div className="rounded-xl" style={{ background: "#fafafa", border: "1px solid #eee", padding: "20px 24px" }}>
-            <p className="text-sm" style={{ color: "#888" }}>Article introuvable.</p>
+            <p className="text-sm" style={{ color: "#888" }}>Article not found.</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -230,10 +230,10 @@ export default function BlogTab() {
             ) : (
               <div className="rounded-lg py-8 px-6 text-center" style={{ background: "#fafafa", border: "1px dashed #e5e5e5" }}>
                 <p className="text-sm font-medium" style={{ color: "#555" }}>
-                  Article vide côté WordPress
+                  Empty article on WordPress
                 </p>
                 <p className="text-xs mt-1" style={{ color: "#888" }}>
-                  Ce post existe sur WP mais son champ content est vide (pas de corps d&apos;article ni de blocs ACF). Rédige le contenu sur WordPress puis recharge cette page.
+                  This post exists on WP but its content field is empty (no article body or ACF blocks). Write the content on WordPress, then reload this page.
                 </p>
                 <a
                   href={article.link}
@@ -243,7 +243,7 @@ export default function BlogTab() {
                   style={{ color: "#f01563", border: "1px solid #f01563", background: "#fff" }}
                 >
                   <ExternalLink size={12} />
-                  Ouvrir sur coachello.ai
+                  Open on coachello.ai
                 </a>
               </div>
             )}
@@ -457,8 +457,8 @@ export default function BlogTab() {
         <div className="rounded-xl flex items-start gap-3" style={{ background: "#fef2f2", border: "1px solid #fecaca", padding: "14px 18px" }}>
           <span className="text-sm shrink-0 mt-0.5">⚠</span>
           <div>
-            <p className="text-sm font-medium" style={{ color: "#dc2626" }}>Erreur de chargement</p>
-            <p className="text-xs mt-1" style={{ color: "#888" }}>{data.error}{data.detail ? ` — ${data.detail}` : ""}</p>
+            <p className="text-sm font-medium" style={{ color: "#dc2626" }}>Failed to load</p>
+            <p className="text-xs mt-1" style={{ color: "#888" }}>{data.error}{data.detail ? ` - ${data.detail}` : ""}</p>
           </div>
         </div>
       )}

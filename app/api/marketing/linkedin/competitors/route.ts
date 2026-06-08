@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { data, error } = await db
     .from("marketing_competitors")
@@ -19,10 +19,10 @@ export async function GET(_req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as { username: string; name?: string; category?: string } | null;
-  if (!body?.username) return NextResponse.json({ error: "username requis" }, { status: 400 });
+  if (!body?.username) return NextResponse.json({ error: "username required" }, { status: 400 });
 
   const username = body.username.trim().toLowerCase().replace(/^https?:\/\/(www\.)?linkedin\.com\/company\//, "").replace(/\/.*$/, "");
 

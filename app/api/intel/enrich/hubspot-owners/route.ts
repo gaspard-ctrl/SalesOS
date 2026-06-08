@@ -15,7 +15,7 @@ interface RawOwner {
 
 export async function GET(_req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { data: userRow } = await db
     .from("users")
@@ -34,6 +34,6 @@ export async function GET(_req: NextRequest) {
       .sort((a, b) => a.name.localeCompare(b.name));
     return NextResponse.json({ owners, myOwnerId: userRow?.hubspot_owner_id ?? null });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Error" }, { status: 500 });
   }
 }

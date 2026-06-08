@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // pouvoir assigner un AM/CS. La route admin (/api/admin/users) reste gated.
 export async function GET() {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { data, error } = await db
     .from("users")

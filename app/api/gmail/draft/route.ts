@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   try {
     accessToken = await getGmailAccessToken(user.id);
   } catch {
-    return NextResponse.json({ error: "Gmail non connecté" }, { status: 403 });
+    return NextResponse.json({ error: "Gmail not connected" }, { status: 403 });
   }
 
   const profileRes = await fetch("https://www.googleapis.com/gmail/v1/users/me/profile", {

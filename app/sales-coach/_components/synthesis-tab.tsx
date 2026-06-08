@@ -62,18 +62,18 @@ const AXES_LABELS = [
 
 const CLIENT_AXES_LABELS = [
   { key: "opening", label: "Opening & rapport" },
-  { key: "discovery", label: "Discovery (évolution)" },
-  { key: "active_listening", label: "Écoute active" },
+  { key: "discovery", label: "Discovery (evolution)" },
+  { key: "active_listening", label: "Active listening" },
   { key: "value_reinforcement", label: "Value reinforcement" },
   { key: "expansion_discovery", label: "Expansion discovery" },
   { key: "next_steps", label: "Next steps" },
 ] as const;
 
 const CUSTOMER_HEALTH_LABELS = [
-  { key: "relationship", label: "Relation" },
+  { key: "relationship", label: "Relationship" },
   { key: "adoption", label: "Adoption" },
   { key: "sentiment", label: "Sentiment" },
-  { key: "expansion_signals", label: "Signaux expansion" },
+  { key: "expansion_signals", label: "Expansion signals" },
   { key: "risk_flags", label: "Risk flags" },
 ] as const;
 
@@ -109,7 +109,7 @@ export function SynthesisTab({
       {/* SYNTHÈSE */}
       {typeof analysis.summary === "string" && analysis.summary.trim() && (
         <Card padding={18}>
-          <SectionHeader title="Synthèse" />
+          <SectionHeader title="Summary" />
           <p
             style={{
               fontSize: 14,
@@ -130,7 +130,7 @@ export function SynthesisTab({
             title={
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <CheckCircle2 size={14} style={{ color: COLORS.ok }} />
-                Points forts
+                Strengths
               </span>
             }
           />
@@ -152,7 +152,7 @@ export function SynthesisTab({
             title={
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <AlertTriangle size={14} style={{ color: COLORS.warn }} />
-                À travailler
+                To improve
               </span>
             }
           />
@@ -174,7 +174,7 @@ export function SynthesisTab({
             title={
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <Target size={14} style={{ color: COLORS.brand }} />
-                Top 3 actions pour le prochain call
+                Top 3 actions for the next call
               </span>
             }
           />
@@ -230,7 +230,7 @@ export function SynthesisTab({
               }}
             >
               <Mail size={12} />
-              Brouillon mail follow-up
+              Follow-up email draft
             </button>
           </div>
         </Card>
@@ -239,7 +239,7 @@ export function SynthesisTab({
       {/* Scores par axe */}
       <Card padding={16}>
         <SectionHeader
-          title="Scores par axe"
+          title="Scores by axis"
           right={
             <button
               onClick={onGoToAxes}
@@ -256,7 +256,7 @@ export function SynthesisTab({
                 padding: 0,
               }}
             >
-              Voir le détail
+              View details
               <ChevronRight size={12} />
             </button>
           }
@@ -344,7 +344,7 @@ export function SynthesisTab({
                   padding: 0,
                 }}
               >
-                Voir le détail
+                View details
                 <ChevronRight size={12} />
               </button>
             ) : null}
@@ -366,7 +366,7 @@ export function SynthesisTab({
                       lineHeight: 1.5,
                     }}
                   >
-                    {value || "Pas observable dans ce meeting"}
+                    {value || "Not observable in this meeting"}
                   </div>
                 </div>
               );
@@ -378,7 +378,7 @@ export function SynthesisTab({
       {!isClient && (analysis as SalesCoachAnalysis).meddic && (
         <Card padding={16}>
           <SectionHeader
-            title="Score MEDDIC"
+            title="MEDDIC Score"
             right={
               <button
                 onClick={onGoToMeddic}
@@ -395,7 +395,7 @@ export function SynthesisTab({
                   padding: 0,
                 }}
               >
-                Voir le détail
+                View details
                 <ChevronRight size={12} />
               </button>
             }
@@ -486,7 +486,7 @@ export function SynthesisTab({
       {/* Key moments */}
       {keyMoments.length > 0 && (
         <Card padding={16}>
-          <SectionHeader title={`Moments clés (${keyMoments.length})`} />
+          <SectionHeader title={`Key moments (${keyMoments.length})`} />
           <KeyMoments moments={keyMoments} />
         </Card>
       )}

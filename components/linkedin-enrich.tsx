@@ -55,22 +55,22 @@ export function LinkedInEnrich({
   const [profile, setProfile] = React.useState<EnrichedProfile | null>(null);
   const [error, setError] = React.useState("");
 
-  const fullName = [firstName, lastName].filter(Boolean).join(" ") || label || "ce profil";
+  const fullName = [firstName, lastName].filter(Boolean).join(" ") || label || "this profile";
 
   async function pollProfile(snapshotId: string) {
     for (let i = 0; i < MAX_POLLS; i++) {
       await new Promise((r) => setTimeout(r, POLL_INTERVAL));
       const res = await fetch(`/api/linkedin/enrich?snapshot_id=${encodeURIComponent(snapshotId)}`);
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Erreur scrape");
+      if (!res.ok) throw new Error(json.error || "Scrape error");
       if (json.ready) {
-        if (!json.profile) throw new Error("Profil introuvable");
+        if (!json.profile) throw new Error("Profile not found");
         setProfile(json.profile as EnrichedProfile);
         setPhase("done");
         return;
       }
     }
-    throw new Error("Délai dépassé (le scrape prend trop de temps)");
+    throw new Error("Timed out (the scrape is taking too long)");
   }
 
   async function scrape(url: string) {
@@ -83,10 +83,10 @@ export function LinkedInEnrich({
         body: JSON.stringify({ mode: "trigger", linkedinUrl: url }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Erreur scrape");
+      if (!res.ok) throw new Error(json.error || "Scrape error");
       await pollProfile(json.snapshotId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur inconnue");
+      setError(e instanceof Error ? e.message : "Unknown error");
       setPhase("error");
     }
   }
@@ -106,10 +106,10 @@ export function LinkedInEnrich({
         body: JSON.stringify({ mode: "search", firstName, lastName, company }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Erreur recherche");
+      if (!res.ok) throw new Error(json.error || "Search error");
       const found = (json.candidates ?? []) as Candidate[];
       if (found.length === 0) {
-        setError("Aucun profil LinkedIn trouvé. Ajoute la société ou vérifie le nom.");
+        setError("No LinkedIn profile found. Add the company or check the name.");
         setPhase("error");
       } else if (found.length === 1) {
         void scrape(found[0].profileURL); // un seul candidat → scrape direct
@@ -118,7 +118,7 @@ export function LinkedInEnrich({
         setPhase("choosing"); // plusieurs → l'utilisateur choisit
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur inconnue");
+      setError(e instanceof Error ? e.message : "Unknown error");
       setPhase("error");
     }
   }
@@ -128,11 +128,11 @@ export function LinkedInEnrich({
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <button onClick={start} style={btnStyle()}>
-          <Linkedin size={13} /> Enrichir LinkedIn{label ? ` — ${label}` : ""}
+          <Linkedin size={13} /> Enrich LinkedIn{label ? ` - ${label}` : ""}
         </button>
         {!company && (
           <span style={{ fontSize: 10, color: COLORS.ink3, display: "inline-flex", alignItems: "center", gap: 3 }}>
-            <AlertCircle size={10} /> Sans société, plusieurs homonymes possibles (tu pourras choisir).
+            <AlertCircle size={10} /> Without a company, there may be several namesakes (you can choose).
           </span>
         )}
       </div>
@@ -144,7 +144,7 @@ export function LinkedInEnrich({
     return (
       <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: COLORS.ink3 }}>
         <Loader2 size={13} className="animate-spin" />
-        {phase === "searching" ? `Recherche de ${fullName}…` : "Scraping du profil…"}
+        {phase === "searching" ? `Searching for ${fullName}…` : "Scraping profile…"}
       </div>
     );
   }
@@ -154,7 +154,7 @@ export function LinkedInEnrich({
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <span style={{ fontSize: 11, color: COLORS.ink3, display: "inline-flex", alignItems: "center", gap: 4 }}>
-          <Search size={11} /> Plusieurs profils pour « {fullName} » — choisis le bon :
+          <Search size={11} /> Several profiles for &quot;{fullName}&quot; - pick the right one:
         </span>
         {candidates.map((c) => (
           <button key={c.username} onClick={() => scrape(c.profileURL)} style={candidateStyle()}>
@@ -172,7 +172,7 @@ export function LinkedInEnrich({
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <span style={{ fontSize: 12, color: "#b91c1c" }}>{error}</span>
-        <button onClick={start} style={btnStyle()}>Réessayer</button>
+        <button onClick={start} style={btnStyle()}>Try again</button>
       </div>
     );
   }
@@ -193,12 +193,12 @@ function ProfileBlock({ profile: p }: { profile: EnrichedProfile }) {
         </div>
         <a href={p.profileUrl} target="_blank" rel="noreferrer"
            style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#0a66c2", fontSize: 11, fontWeight: 600, textDecoration: "none", flexShrink: 0 }}>
-          <Linkedin size={12} /> Voir <ExternalLink size={10} />
+          <Linkedin size={12} /> View <ExternalLink size={10} />
         </a>
       </div>
       {p.positions.length > 0 && (
         <div style={{ marginBottom: 10 }}>
-          <p style={uppercaseLabel()}>Parcours</p>
+          <p style={uppercaseLabel()}>Experience</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {p.positions.map((pos, i) => (
               <div key={i} style={{ fontSize: 12, color: COLORS.ink1, lineHeight: 1.4 }}>
@@ -211,7 +211,7 @@ function ProfileBlock({ profile: p }: { profile: EnrichedProfile }) {
       )}
       {p.skills.length > 0 && (
         <div style={{ marginBottom: 10 }}>
-          <p style={uppercaseLabel()}>Compétences</p>
+          <p style={uppercaseLabel()}>Skills</p>
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
             {p.skills.map((s) => (
               <span key={s} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: COLORS.bgSoft, color: COLORS.ink2 }}>{s}</span>
@@ -221,7 +221,7 @@ function ProfileBlock({ profile: p }: { profile: EnrichedProfile }) {
       )}
       {p.education.length > 0 && (
         <div style={{ marginBottom: 10 }}>
-          <p style={uppercaseLabel()}>Formation</p>
+          <p style={uppercaseLabel()}>Education</p>
           <p style={{ fontSize: 12, color: COLORS.ink1, margin: 0 }}>{p.education.join(" · ")}</p>
         </div>
       )}

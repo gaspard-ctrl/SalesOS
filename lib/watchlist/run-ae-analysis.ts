@@ -3,6 +3,11 @@ import { db } from "@/lib/db";
 import { logUsage } from "@/lib/log-usage";
 import { loadCompanyHubspotContext } from "@/lib/watchlist/fetch-company-recap";
 import {
+  loadClientsRoster,
+  formatClientsRoster,
+  type ClientRosterEntry,
+} from "@/lib/watchlist/clients-roster";
+import {
   finishBriefOk,
   finishBriefError,
   type AeAnalysisContent,
@@ -28,6 +33,7 @@ Règles :
 
 Réponds UNIQUEMENT via l'outil emit_ae_analysis avec :
 - strategy : 2 à 4 paragraphes courts. Comment aborder ce compte (état de la relation d'après les emails, momentum news/secteur, points d'entrée).
+- story_to_tell : une accroche de social proof prête à dire/écrire, basée sur le secteur du prospect ET notre liste de clients actuels fournie en contexte. Exemple : "On coache déjà X et Y, deux acteurs de votre secteur, sur exactement ce type d'enjeu." Cite uniquement des clients RÉELS de la liste fournie, idéalement du même secteur ou d'un secteur proche. Si aucun client de la liste n'est pertinent (secteur trop éloigné ou liste vide), renvoie une chaîne vide. N'invente jamais un client.
 - priority_contacts : liste classée. Pour chaque contact : name, role, rationale, angle, email (si connu), hubspot_id (si connu).
 - next_actions : 2 à 4 actions concrètes pour cette semaine.
 - watch_outs : risques ou choses à éviter (ex : contact froid, deal perdu récent, mauvais timing).
@@ -40,6 +46,11 @@ const ANALYSIS_TOOL = {
     type: "object" as const,
     properties: {
       strategy: { type: "string", description: "2 à 4 paragraphes : comment aborder ce compte" },
+      story_to_tell: {
+        type: "string",
+        description:
+          "Accroche de social proof basée sur le secteur du prospect et nos clients actuels réels. Chaîne vide si aucun client comparable.",
+      },
       priority_contacts: {
         type: "array",
         description: "Contacts à cibler, classés par priorité",
@@ -68,7 +79,7 @@ const ANALYSIS_TOOL = {
         required: ["emails", "news", "sector"],
       },
     },
-    required: ["strategy", "priority_contacts", "next_actions", "watch_outs", "sources_used"],
+    required: ["strategy", "story_to_tell", "priority_contacts", "next_actions", "watch_outs", "sources_used"],
   },
 };
 
@@ -101,14 +112,15 @@ export async function runAeAnalysis(input: {
       throw new Error("Compte introuvable");
     }
 
-    // Contexte HubSpot (emails/contacts/deals) + brief news.
-    const [hubspot, briefsRes] = await Promise.all([
+    // Contexte HubSpot (emails/contacts/deals) + brief news + roster clients.
+    const [hubspot, briefsRes, clientsRoster] = await Promise.all([
       loadCompanyHubspotContext(scopeCompanyId),
       db
         .from("watchlist_company_briefs")
         .select("*")
         .eq("scope_company_id", scopeCompanyId)
         .eq("kind", "news"),
+      loadClientsRoster(),
     ]);
 
     const newsBrief =
@@ -122,7 +134,7 @@ export async function runAeAnalysis(input: {
       sector: !!company.sector,
     };
 
-    const userPrompt = buildPrompt({ company, hubspot, news });
+    const userPrompt = buildPrompt({ company, hubspot, news, clientsRoster });
 
     const client = new Anthropic({ timeout: 120_000, maxRetries: 1 });
     const message = await client.messages.create({
@@ -143,6 +155,7 @@ export async function runAeAnalysis(input: {
     const parsed = toolBlock.input as Partial<AeAnalysisContent>;
     const content: AeAnalysisContent = {
       strategy: typeof parsed.strategy === "string" ? parsed.strategy : "",
+      story_to_tell: typeof parsed.story_to_tell === "string" ? parsed.story_to_tell : "",
       priority_contacts: Array.isArray(parsed.priority_contacts)
         ? (parsed.priority_contacts as unknown[])
             .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
@@ -186,8 +199,9 @@ function buildPrompt(input: {
   company: ScopeCompanyRow;
   hubspot: HubspotRecapContent;
   news: NewsContent | null;
+  clientsRoster: ClientRosterEntry[];
 }): string {
-  const { company, hubspot, news } = input;
+  const { company, hubspot, news, clientsRoster } = input;
   const lines: string[] = [];
 
   lines.push(`# Compte cible : ${company.name}`);
@@ -279,6 +293,14 @@ function buildPrompt(input: {
   if (!hasNews) {
     lines.push("Aucune news récente.");
   }
+
+  // Nos clients actuels (référence sociale pour l'histoire à raconter).
+  lines.push("");
+  lines.push("## Nos clients actuels (référence sociale par secteur)");
+  lines.push(
+    "Utilise cette liste pour construire story_to_tell. Ne cite que des clients de cette liste, jamais inventés.",
+  );
+  lines.push(formatClientsRoster(clientsRoster));
 
   return lines.join("\n");
 }

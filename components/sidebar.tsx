@@ -34,7 +34,7 @@ const nav: NavEntry[] = [
   { href: "/deals", label: "Deals", icon: Briefcase },
   { href: "/sales-coach", label: "Sales Coach", icon: GraduationCap },
   { href: "/clients", label: "Clients", icon: Handshake },
-  { href: "/prospecting", label: "Prospection", icon: Crosshair },
+  { href: "/prospecting", label: "Prospecting", icon: Crosshair },
   { href: "/mass-prospection", label: "Mass Prospection", icon: Target },
   // { href: "/watchlist", label: "Watch List", icon: Eye },
   { href: "/marketing", label: "Marketing", icon: Megaphone }
@@ -81,7 +81,7 @@ export default function Sidebar() {
       <button
         className="fixed top-4 left-4 z-50 md:hidden p-2 rounded-lg bg-white shadow-md"
         onClick={openMobile}
-        aria-label="Ouvrir le menu"
+        aria-label="Open menu"
         style={{ display: mobileOpen ? "none" : undefined }}
       >
         <Menu size={20} style={{ color: "#111" }} />
@@ -172,9 +172,9 @@ function SidebarBody({
           <button
             type="button"
             onClick={onToggle}
-            aria-label="Réduire la sidebar"
+            aria-label="Collapse sidebar"
             className="hidden md:inline-flex sidebar-bottom-link p-1 rounded-lg"
-            title="Réduire (Ctrl/⌘ B)"
+            title="Collapse (Ctrl/⌘ B)"
           >
             <ChevronLeft size={16} />
           </button>
@@ -183,7 +183,7 @@ function SidebarBody({
         <button
           className="md:hidden p-1 rounded-lg sidebar-bottom-link"
           onClick={onCloseMobile}
-          aria-label="Fermer le menu"
+          aria-label="Close menu"
         >
           <X size={18} />
         </button>
@@ -193,7 +193,7 @@ function SidebarBody({
       <nav
         className="flex-1 py-4 space-y-0.5 overflow-y-auto"
         style={{ padding: collapsed ? "16px 6px" : "16px 8px" }}
-        aria-label="Navigation principale"
+        aria-label="Main navigation"
       >
         {nav.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
@@ -223,10 +223,10 @@ function SidebarBody({
           <button
             type="button"
             onClick={onToggle}
-            aria-label="Déplier la sidebar"
+            aria-label="Expand sidebar"
             className="hidden md:flex w-full items-center justify-center sidebar-bottom-link rounded-lg"
             style={{ padding: "8px 0", marginBottom: 4 }}
-            title="Déplier (Ctrl/⌘ B)"
+            title="Expand (Ctrl/⌘ B)"
           >
             <ChevronRight size={16} />
           </button>

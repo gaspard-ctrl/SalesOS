@@ -41,14 +41,14 @@ function SalesCoachInner() {
         failed?: { id: string; error: string }[];
         error?: string;
       };
-      if (!res.ok) throw new Error(data.error ?? "Erreur");
+      if (!res.ok) throw new Error(data.error ?? "Error");
       const failedCount = data.failed?.length ?? 0;
       setRecoverMsg(
-        `${data.recovered ?? 0} relancée(s)${failedCount > 0 ? ` · ${failedCount} échec(s)` : ""}`,
+        `${data.recovered ?? 0} restarted${failedCount > 0 ? ` · ${failedCount} failed` : ""}`,
       );
       reload();
     } catch (e) {
-      setRecoverMsg(e instanceof Error ? e.message : "Erreur");
+      setRecoverMsg(e instanceof Error ? e.message : "Error");
     } finally {
       setRecovering(false);
     }
@@ -106,11 +106,11 @@ function SalesCoachInner() {
               }}
             >
               <RefreshCw size={11} />
-              Rafraîchir
+              Refresh
             </button>
           </div>
           <p style={{ fontSize: 11, color: COLORS.ink3, margin: 0, marginTop: 2 }}>
-            Debriefs automatiques après chaque meeting Claap.
+            Automatic debriefs after each Claap meeting.
           </p>
           <button
             onClick={() => setBackfillOpen(true)}
@@ -141,13 +141,13 @@ function SalesCoachInner() {
             }}
           >
             <Plus size={12} />
-            Analyser un meeting passé
+            Analyze a past meeting
           </button>
           {isAdmin && (
             <button
               onClick={recoverStuck}
               disabled={recovering}
-              title="Relance les analyses bloquées en pending ou analyzing (>5 min)"
+              title="Restarts analyses stuck in pending or analyzing (>5 min)"
               style={{
                 marginTop: 6,
                 width: "100%",
@@ -167,7 +167,7 @@ function SalesCoachInner() {
               }}
             >
               <LifeBuoy size={11} />
-              {recovering ? "Récupération…" : "Récupérer les analyses bloquées"}
+              {recovering ? "Recovering…" : "Recover stuck analyses"}
             </button>
           )}
           {recoverMsg && (
@@ -178,7 +178,7 @@ function SalesCoachInner() {
         </div>
         <div className="flex-1 overflow-hidden">
           {isLoading ? (
-            <div style={{ padding: "32px 16px", textAlign: "center", fontSize: 13, color: COLORS.ink3 }}>Chargement…</div>
+            <div style={{ padding: "32px 16px", textAlign: "center", fontSize: 13, color: COLORS.ink3 }}>Loading…</div>
           ) : error ? (
             <div style={{ padding: "32px 16px", textAlign: "center", fontSize: 13, color: COLORS.err }}>{error}</div>
           ) : (
@@ -215,7 +215,7 @@ function SalesCoachInner() {
             className="flex items-center justify-center h-full"
             style={{ fontSize: 13, color: COLORS.ink3 }}
           >
-            Sélectionne un meeting pour voir le debrief.
+            Select a meeting to view the debrief.
           </div>
         )}
       </div>
@@ -237,7 +237,7 @@ function SalesCoachInner() {
 function ViewToggle({ view, onChange }: { view: View; onChange: (v: View) => void }) {
   const items: { value: View; label: string }[] = [
     { value: "coaching", label: "Coaching" },
-    { value: "recaps", label: "Recaps Slack" },
+    { value: "recaps", label: "Slack recaps" },
   ];
   return (
     <div
@@ -279,7 +279,7 @@ export default function SalesCoachPage() {
           className="flex items-center justify-center h-full"
           style={{ fontSize: 13, color: COLORS.ink3 }}
         >
-          Chargement…
+          Loading…
         </div>
       }
     >

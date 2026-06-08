@@ -41,10 +41,10 @@ interface OutputResult {
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   if (!BRIGHTDATA_API_KEY) {
-    return NextResponse.json({ error: "Bright Data non configuré" }, { status: 500 });
+    return NextResponse.json({ error: "Bright Data not configured" }, { status: 500 });
   }
 
   const body = (await req.json().catch(() => ({}))) as PeopleSearchBody;
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
   const targetCount = Math.max(1, Math.min(200, body.count ?? 30));
 
   if (companies.length === 0 && jobTitles.length === 0) {
-    return NextResponse.json({ error: "Au moins une entreprise ou un poste requis" }, { status: 400 });
+    return NextResponse.json({ error: "At least one company or one role required" }, { status: 400 });
   }
 
   // Build combinations (cartesian) — limit to a reasonable number

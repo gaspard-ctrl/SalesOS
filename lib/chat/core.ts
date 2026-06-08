@@ -1265,7 +1265,7 @@ export async function runChat(args: {
 
   // Langue : on répond toujours dans la langue de la question, sans traduire.
   // S'applique aussi à la question de périmètre canal ci-dessous.
-  systemPrompt += `\n\nLANGUE\nRéponds toujours dans la langue de la dernière question de l'utilisateur (question en français → réponse en français, question en anglais → réponse en anglais, etc.). Ne traduis jamais. Cette règle vaut pour TOUT ce que tu écris, y compris la question de clarification de périmètre ci-dessous : reformule-la dans la langue de l'utilisateur. À défaut d'indice clair, utilise le français.`;
+  systemPrompt += `\n\nLANGUE\nRéponds toujours dans la langue de la dernière question de l'utilisateur (question en français → réponse en français, question en anglais → réponse en anglais, etc.). Ne traduis jamais. Cette règle vaut pour TOUT ce que tu écris, y compris la question de clarification de périmètre ci-dessous : reformule-la dans la langue de l'utilisateur. À défaut d'indice clair, utilise l'anglais.`;
 
   // Contexte canal : la question est posée dans un canal Slack précis. Si ce
   // canal est dédié à un client/compte (ex: #engie) et que le périmètre n'est

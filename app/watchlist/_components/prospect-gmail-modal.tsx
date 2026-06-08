@@ -65,14 +65,14 @@ export function ProspectGmailModal({
           <Mail size={16} style={{ color: COLORS.brand }} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: COLORS.ink0 }}>
-              Échanges Gmail · {fullName}
+              Gmail exchanges · {fullName}
             </h3>
             <p style={{ margin: 0, fontSize: 11, color: COLORS.ink3 }}>{email}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Fermer"
+            aria-label="Close"
             style={{ border: "none", background: "transparent", color: COLORS.ink3, cursor: "pointer" }}
           >
             <X size={18} />
@@ -85,10 +85,10 @@ export function ProspectGmailModal({
               <Loader2 size={20} className="animate-spin" style={{ color: COLORS.brand }} />
             </div>
           ) : error ? (
-            <p style={{ fontSize: 12, color: COLORS.err }}>Erreur Gmail : {error}</p>
+            <p style={{ fontSize: 12, color: COLORS.err }}>Gmail error: {error}</p>
           ) : messages.length === 0 ? (
             <p style={{ fontSize: 12, color: COLORS.ink3, textAlign: "center", padding: 16 }}>
-              Aucun échange trouvé sur Gmail pour cette adresse.
+              No exchanges found on Gmail for this address.
             </p>
           ) : (
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -109,7 +109,7 @@ export function ProspectGmailModal({
                     <span style={{ flexShrink: 0 }}>{formatDate(m.date)}</span>
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.ink0, marginBottom: 4 }}>
-                    {m.subject || "(sans objet)"}
+                    {m.subject || "(no subject)"}
                   </div>
                   <div style={{ fontSize: 11, color: COLORS.ink2, lineHeight: 1.5 }}>{m.snippet}</div>
                 </li>
@@ -143,7 +143,7 @@ export function ProspectGmailModal({
               textDecoration: "none",
             }}
           >
-            <ExternalLink size={12} /> Ouvrir dans Gmail
+            <ExternalLink size={12} /> Open in Gmail
           </a>
         </footer>
       </div>
@@ -154,7 +154,7 @@ export function ProspectGmailModal({
 function formatDate(raw: string): string {
   if (!raw) return "";
   try {
-    return new Date(raw).toLocaleDateString("fr-FR", {
+    return new Date(raw).toLocaleDateString("en-GB", {
       day: "2-digit",
       month: "short",
       year: "2-digit",

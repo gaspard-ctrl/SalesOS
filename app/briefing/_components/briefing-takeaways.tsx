@@ -9,7 +9,7 @@ export function BriefingTakeaways({ takeaways }: { takeaways: string[] }) {
   if (!Array.isArray(takeaways) || takeaways.length === 0) return null;
   return (
     <Card padding={16}>
-      <SectionHeader title="Points clés pour le meeting" />
+      <SectionHeader title="Key takeaways for the meeting" />
       <ol style={{ display: "flex", flexDirection: "column", gap: 8, margin: 0, padding: 0, listStyle: "none" }}>
         {takeaways.map((t, i) => (
           <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 13, color: COLORS.ink1 }}>

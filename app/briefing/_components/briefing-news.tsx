@@ -8,11 +8,11 @@ import { SectionHeader } from "@/components/ui/section-header";
 import type { BriefingResult } from "../_helpers";
 
 const CATEGORY_BADGES: Record<string, { label: string; bg: string; color: string }> = {
-  funding: { label: "Levée", bg: "#f0fdf4", color: "#16a34a" },
+  funding: { label: "Funding", bg: "#f0fdf4", color: "#16a34a" },
   acquisition: { label: "M&A", bg: "#f5f3ff", color: "#7c3aed" },
-  partnership: { label: "Partenariat", bg: "#eff6ff", color: "#2563eb" },
+  partnership: { label: "Partnership", bg: "#eff6ff", color: "#2563eb" },
   leadership: { label: "Leadership", bg: "#eef2ff", color: "#4f46e5" },
-  restructuring: { label: "Restructuration", bg: "#fef2f2", color: "#dc2626" },
+  restructuring: { label: "Restructuring", bg: "#fef2f2", color: "#dc2626" },
   coaching: { label: "Coaching", bg: "#fdf4ff", color: "#a21caf" },
   general: { label: "Press", bg: "#f3f4f6", color: "#6b7280" },
 };
@@ -21,7 +21,7 @@ export function BriefingNews({ briefing }: { briefing: BriefingResult }) {
   if (!Array.isArray(briefing.recentNews?.items) || briefing.recentNews.items.length === 0) return null;
   return (
     <Card padding={16}>
-      <SectionHeader title="Actualités récentes" />
+      <SectionHeader title="Recent news" />
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {briefing.recentNews.items.map((item, i) => {
           const cat =

@@ -36,7 +36,7 @@ function rangeCutoff(range: HubspotCriteria["createdRange"]): string | null {
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const c = (await req.json().catch(() => ({}))) as HubspotCriteria;
 
@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
       filters.push({ propertyName: "hs_object_id", operator: "IN", values: Array.from(contactIds) });
     } catch (e) {
       console.error("[hubspot-count] deal filter error:", e);
-      return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur deals" }, { status: 500 });
+      return NextResponse.json({ error: e instanceof Error ? e.message : "Deals error" }, { status: 500 });
     }
   }
 
@@ -209,6 +209,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     console.error("[hubspot-count] contact search error:", e);
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Error" }, { status: 500 });
   }
 }

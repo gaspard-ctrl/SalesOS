@@ -8,9 +8,9 @@ import type { BriefingResult } from "../_helpers";
 
 const STRATEGIC_TYPE_LABELS: Record<string, string> = {
   acquisition: "Acquisition",
-  partnership: "Partenariat",
-  merger: "Fusion",
-  divestiture: "Cession",
+  partnership: "Partnership",
+  merger: "Merger",
+  divestiture: "Divestiture",
 };
 
 export function BriefingCompanyProfile({ briefing }: { briefing: BriefingResult }) {
@@ -19,7 +19,7 @@ export function BriefingCompanyProfile({ briefing }: { briefing: BriefingResult 
   if (!briefing.companyProfile && briefing.companyInsights) {
     return (
       <Card padding={16}>
-        <SectionHeader title="Profil entreprise" />
+        <SectionHeader title="Company profile" />
         <p style={{ fontSize: 13, color: COLORS.ink1, margin: 0, lineHeight: 1.5 }}>
           {briefing.companyInsights}
         </p>
@@ -29,11 +29,11 @@ export function BriefingCompanyProfile({ briefing }: { briefing: BriefingResult 
 
   const cp = briefing.companyProfile!;
   const metrics = [
-    { label: "Revenu", value: cp.revenue },
-    { label: "Effectif", value: cp.headcount },
+    { label: "Revenue", value: cp.revenue },
+    { label: "Headcount", value: cp.headcount },
     { label: "Clients", value: cp.clients },
-    { label: "Modèle", value: cp.businessModel },
-    { label: "Marché", value: cp.industry },
+    { label: "Model", value: cp.businessModel },
+    { label: "Market", value: cp.industry },
   ].filter((m) => m.value);
 
   return (
@@ -66,7 +66,7 @@ export function BriefingCompanyProfile({ briefing }: { briefing: BriefingResult 
         >
           {cp.keyFact && (
             <p style={{ fontSize: 12, color: COLORS.ink1, margin: 0, lineHeight: 1.5 }}>
-              <strong style={{ color: COLORS.ink0, fontWeight: 600 }}>À noter : </strong>
+              <strong style={{ color: COLORS.ink0, fontWeight: 600 }}>Note: </strong>
               {cp.keyFact}
             </p>
           )}
@@ -96,7 +96,7 @@ export function BriefingCompanyProfile({ briefing }: { briefing: BriefingResult 
               marginTop: 0,
             }}
           >
-            Historique stratégique
+            Strategic history
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {briefing.strategicHistory.map((item, i) => (

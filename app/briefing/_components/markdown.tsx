@@ -11,9 +11,9 @@ const BADGE_COLORS: Record<string, { bg: string; color: string }> = {
 };
 
 const BADGE_LABELS: Record<string, string> = {
-  MEETING: "Réunion",
+  MEETING: "Meeting",
   EMAIL: "Email",
-  CALL: "Appel",
+  CALL: "Call",
   NOTE: "Note",
   CLAAP: "Claap",
 };

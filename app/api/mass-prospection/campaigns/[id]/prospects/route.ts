@@ -18,7 +18,7 @@ interface ProspectInput {
 // POST — add prospects to campaign (bulk, deduplicates by email)
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id } = await params;
 
@@ -29,10 +29,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
-  if (!campaign) return NextResponse.json({ error: "Campagne introuvable" }, { status: 404 });
+  if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
 
   const { prospects } = (await req.json()) as { prospects: ProspectInput[] };
-  if (!prospects?.length) return NextResponse.json({ error: "Aucun prospect fourni" }, { status: 400 });
+  if (!prospects?.length) return NextResponse.json({ error: "No prospect provided" }, { status: 400 });
 
   // Get existing emails in this campaign for dedup
   const { data: existing } = await db

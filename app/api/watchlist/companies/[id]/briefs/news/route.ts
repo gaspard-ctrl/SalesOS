@@ -22,7 +22,7 @@ export interface RefreshNewsResponse {
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) {
-    return NextResponse.json({ ok: false, error: "Non authentifié" }, { status: 401 });
+    return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
   }
 
   const { id } = await params;
@@ -34,7 +34,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .single();
 
   if (companyErr || !company) {
-    return NextResponse.json({ ok: false, error: "Compte introuvable" }, { status: 404 });
+    return NextResponse.json({ ok: false, error: "Account not found" }, { status: 404 });
   }
 
   // Lock 5 min anti double-dispatch

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 // PATCH — update email content after manual edit
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string; emailId: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id, emailId } = await params;
 
@@ -18,7 +18,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
-  if (!campaign) return NextResponse.json({ error: "Campagne introuvable" }, { status: 404 });
+  if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
 
   const body = await req.json();
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -42,7 +42,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 // DELETE — remove a prospect from campaign
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string; emailId: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id, emailId } = await params;
 
@@ -52,7 +52,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
-  if (!campaign) return NextResponse.json({ error: "Campagne introuvable" }, { status: 404 });
+  if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
 
   const { error } = await db
     .from("mass_campaign_emails")

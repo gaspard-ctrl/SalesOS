@@ -86,29 +86,29 @@ const AXES_LABELS: { key: keyof SalesCoachAnalysis["axes"]; label: string }[] = 
 ];
 
 const CLIENT_AXES_LABELS: { key: keyof ClientSalesCoachAnalysis["axes"]; label: string }[] = [
-  { key: "opening", label: "Opening & rapport relationnel" },
-  { key: "discovery", label: "Discovery (évolution des objectifs)" },
-  { key: "active_listening", label: "Écoute active" },
-  { key: "value_reinforcement", label: "Value reinforcement (ROI livré)" },
+  { key: "opening", label: "Opening & relationship rapport" },
+  { key: "discovery", label: "Discovery (goal evolution)" },
+  { key: "active_listening", label: "Active listening" },
+  { key: "value_reinforcement", label: "Value reinforcement (ROI delivered)" },
   { key: "expansion_discovery", label: "Expansion discovery" },
   { key: "next_steps", label: "Next steps & follow-through" },
 ];
 
 const CUSTOMER_HEALTH_LABELS: { key: keyof CustomerHealth; label: string }[] = [
-  { key: "relationship", label: "Relation & multi-threading" },
-  { key: "adoption", label: "Adoption produit" },
+  { key: "relationship", label: "Relationship & multi-threading" },
+  { key: "adoption", label: "Product adoption" },
   { key: "sentiment", label: "Sentiment" },
-  { key: "expansion_signals", label: "Signaux d'expansion" },
-  { key: "risk_flags", label: "Signaux de risque" },
+  { key: "expansion_signals", label: "Expansion signals" },
+  { key: "risk_flags", label: "Risk signals" },
 ];
 
 const MEDDIC_LABELS: { key: keyof SalesCoachAnalysis["meddic"]; label: string; short: string }[] = [
-  { key: "metrics", label: "Metrics — impact chiffrable", short: "M" },
-  { key: "economic_buyer", label: "Economic Buyer — budget holder", short: "EB" },
-  { key: "decision_criteria", label: "Decision Criteria — critères de choix", short: "DC" },
-  { key: "decision_process", label: "Decision Process — étapes d'achat", short: "DP" },
-  { key: "identify_pain", label: "Identify Pain — vraie douleur", short: "IP" },
-  { key: "champion", label: "Champion — relais interne", short: "C" },
+  { key: "metrics", label: "Metrics - quantifiable impact", short: "M" },
+  { key: "economic_buyer", label: "Economic Buyer - budget holder", short: "EB" },
+  { key: "decision_criteria", label: "Decision Criteria - selection criteria", short: "DC" },
+  { key: "decision_process", label: "Decision Process - buying steps", short: "DP" },
+  { key: "identify_pain", label: "Identify Pain - real pain", short: "IP" },
+  { key: "champion", label: "Champion - internal advocate", short: "C" },
 ];
 
 const EMPTY_AXIS: AxisScore = { score: 0, notes: "", evidence: "", explanation: "", recommendation: "" };
@@ -159,7 +159,7 @@ function AxisCard({
             size={13}
             style={{ transform: expanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}
           />
-          {expanded ? "Masquer le détail" : "Voir le détail"}
+          {expanded ? "Hide details" : "View details"}
         </button>
       )}
 
@@ -167,7 +167,7 @@ function AxisCard({
         <div className="mt-3">
           <div className="flex items-center gap-1 mb-1 text-[11px] uppercase tracking-wider font-medium" style={{ color: "#888" }}>
             <Quote size={10} />
-            Citation du meeting
+            Meeting quote
           </div>
           <div className="text-xs italic px-3 py-2 rounded border-l-2" style={{ color: "#555", background: "#fafafa", borderColor: "#f01563" }}>
             « {axis.evidence} »
@@ -179,7 +179,7 @@ function AxisCard({
         <div className="mt-3">
           <div className="flex items-center gap-1 mb-1 text-[11px] uppercase tracking-wider font-medium" style={{ color: "#888" }}>
             <Lightbulb size={10} />
-            Pourquoi cette note
+            Why this score
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#444" }}>{axis.explanation}</p>
         </div>
@@ -189,7 +189,7 @@ function AxisCard({
         <div className="mt-3 rounded-md px-3 py-2" style={{ background: "#fef2f4", border: "1px solid #fbd5de" }}>
           <div className="flex items-center gap-1 mb-1 text-[11px] uppercase tracking-wider font-semibold" style={{ color: "#f01563" }}>
             <ClipboardCheck size={11} />
-            Reco pour le prochain call
+            Tip for the next call
           </div>
           <p className="text-xs leading-relaxed" style={{ color: "#7a0e35" }}>{axis.recommendation}</p>
         </div>
@@ -278,7 +278,7 @@ function CompactScoreCard({
             lineHeight: 1.4,
           }}
         >
-          <span style={{ fontWeight: 600, color: COLORS.ink0 }}>Reco : </span>
+          <span style={{ fontWeight: 600, color: COLORS.ink0 }}>Tip: </span>
           {recommendation}
         </div>
       )}
@@ -332,15 +332,15 @@ function DealTopo({
     try {
       const res = await fetch(`/api/sales-coach/${analysisId}/resolve-deal`, { method: "POST" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Erreur");
+      if (!res.ok) throw new Error(data.error ?? "Error");
       if (data.dealId) {
-        setAutoResolveMsg(`Deal retrouvé : ${data.name ?? data.dealId}`);
+        setAutoResolveMsg(`Deal found: ${data.name ?? data.dealId}`);
         onDealUpdated();
       } else {
-        setAutoResolveMsg(data.reason === "no_match" ? "Aucun deal correspondant trouvé." : "Impossible de retrouver un deal.");
+        setAutoResolveMsg(data.reason === "no_match" ? "No matching deal found." : "Could not find a deal.");
       }
     } catch (e) {
-      setAutoResolveMsg(e instanceof Error ? e.message : "Erreur");
+      setAutoResolveMsg(e instanceof Error ? e.message : "Error");
     } finally {
       setAutoResolving(false);
     }
@@ -358,15 +358,15 @@ function DealTopo({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Erreur");
+        throw new Error(data.error ?? "Error");
       }
       setEditing(false);
       setDealInput("");
       onDealUpdated();
-      toast("Deal associé, ré-analyse lancée.", "success");
+      toast("Deal linked, re-analysis started.", "success");
       await reanalyze();
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Erreur", "error");
+      toast(e instanceof Error ? e.message : "Error", "error");
     } finally {
       setSaving(false);
     }
@@ -378,12 +378,12 @@ function DealTopo({
       const res = await fetch(`/api/sales-coach/${analysisId}/reanalyze`, { method: "POST" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Erreur");
+        throw new Error(data.error ?? "Error");
       }
       onDealUpdated();
-      toast("Ré-analyse lancée.", "success");
+      toast("Re-analysis started.", "success");
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Erreur", "error");
+      toast(e instanceof Error ? e.message : "Error", "error");
     } finally {
       setReanalyzing(false);
     }
@@ -401,15 +401,15 @@ function DealTopo({
         stage_label?: string | null;
         is_closed_won?: boolean | null;
       };
-      if (!res.ok) throw new Error(data.error ?? "Erreur");
+      if (!res.ok) throw new Error(data.error ?? "Error");
       onDealUpdated();
-      const closedWonLabel = data.is_closed_won === true ? "oui" : data.is_closed_won === false ? "non" : "?";
+      const closedWonLabel = data.is_closed_won === true ? "yes" : data.is_closed_won === false ? "no" : "?";
       toast(
-        `Snapshot rafraîchi. Audience : ${data.audience ?? "?"}, pipeline : ${data.pipeline_label ?? "?"}, stage : ${data.stage_label ?? "?"}, closed won : ${closedWonLabel}.`,
+        `Snapshot refreshed. Audience: ${data.audience ?? "?"}, pipeline: ${data.pipeline_label ?? "?"}, stage: ${data.stage_label ?? "?"}, closed won: ${closedWonLabel}.`,
         "success",
       );
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Erreur", "error");
+      toast(e instanceof Error ? e.message : "Error", "error");
     } finally {
       setRefreshingSnapshot(false);
     }
@@ -421,7 +421,7 @@ function DealTopo({
       <div className="rounded-lg p-4" style={{ background: "#fff", border: "1px dashed #e5e5e5" }}>
         <div className="flex items-center gap-2 text-xs flex-wrap" style={{ color: "#888" }}>
           <Building2 size={14} />
-          <span>Aucun deal HubSpot associé à ce meeting.</span>
+          <span>No HubSpot deal linked to this meeting.</span>
           {!editing && (
             <div className="ml-auto flex items-center gap-3">
               <button
@@ -429,19 +429,19 @@ function DealTopo({
                 disabled={autoResolving}
                 className="font-medium disabled:opacity-50 flex items-center gap-1"
                 style={{ color: "#6d28d9" }}
-                title="Retrouver le deal via les emails des participants"
+                title="Find the deal via participant emails"
               >
                 <RefreshCw size={11} className={autoResolving ? "animate-spin" : ""} />
-                {autoResolving ? "Recherche…" : "Retrouver automatiquement"}
+                {autoResolving ? "Searching…" : "Find automatically"}
               </button>
               <button onClick={() => setEditing(true)} className="font-medium" style={{ color: "#f01563" }}>
-                Associer un deal
+                Link a deal
               </button>
             </div>
           )}
         </div>
         {autoResolveMsg && (
-          <div className="mt-2 text-xs" style={{ color: autoResolveMsg.startsWith("Deal retrouvé") ? "#059669" : "#888" }}>
+          <div className="mt-2 text-xs" style={{ color: autoResolveMsg.startsWith("Deal found") ? "#059669" : "#888" }}>
             {autoResolveMsg}
           </div>
         )}
@@ -449,7 +449,7 @@ function DealTopo({
           <div className="mt-2 flex items-center gap-2">
             <input
               type="text"
-              placeholder="ID deal HubSpot (ex: 12345678)"
+              placeholder="HubSpot deal ID (e.g. 12345678)"
               value={dealInput}
               onChange={(e) => setDealInput(e.target.value)}
               className="text-xs px-2 py-1 rounded border outline-none flex-1"
@@ -462,14 +462,14 @@ function DealTopo({
               className="text-xs font-medium px-2.5 py-1 rounded disabled:opacity-50"
               style={{ background: "#f01563", color: "#fff" }}
             >
-              {saving ? "…" : "Enregistrer"}
+              {saving ? "…" : "Save"}
             </button>
             <button
               onClick={() => { setEditing(false); setDealInput(""); }}
               className="text-xs px-2 py-1"
               style={{ color: "#888" }}
             >
-              Annuler
+              Cancel
             </button>
           </div>
         )}
@@ -485,7 +485,7 @@ function DealTopo({
       return (
         <div className="rounded-lg p-3 flex items-center gap-2 text-xs" style={{ background: "#fff", border: "1px solid #eeeeee", color: "#888" }}>
           <RefreshCw size={13} className="animate-spin" />
-          <span>Chargement du deal HubSpot…</span>
+          <span>Loading HubSpot deal…</span>
         </div>
       );
     }
@@ -500,8 +500,8 @@ function DealTopo({
         >
           <Building2 size={14} />
           <span>
-            Compte <strong>{companySnapshot.name}</strong>
-            {lifecycle ? ` (lifecyclestage : ${lifecycle})` : ""} — deal HubSpot introuvable
+            Account <strong>{companySnapshot.name}</strong>
+            {lifecycle ? ` (lifecyclestage: ${lifecycle})` : ""} - HubSpot deal not found
             {dealId ? <> (id <code style={{ background: "#fde68a", padding: "0 4px", borderRadius: 3 }}>{dealId}</code>)</> : null}.
           </span>
           <button
@@ -511,7 +511,7 @@ function DealTopo({
             style={{ background: "#fff", color: "#92400e", border: "1px solid #fde68a" }}
           >
             <RefreshCw size={11} className={`inline mr-1 ${reanalyzing ? "animate-spin" : ""}`} />
-            {reanalyzing ? "Ré-analyse…" : "Ré-analyser"}
+            {reanalyzing ? "Re-analyzing…" : "Re-analyze"}
           </button>
         </div>
       );
@@ -519,7 +519,7 @@ function DealTopo({
     return (
       <div className="rounded-lg p-3 flex items-center gap-2 text-xs" style={{ background: "#fef3c7", border: "1px solid #fde68a", color: "#92400e" }}>
         <Building2 size={14} />
-        <span>Deal HubSpot <strong>{dealId}</strong> introuvable sur HubSpot (deal supprimé ou accès indisponible).</span>
+        <span>HubSpot deal <strong>{dealId}</strong> not found on HubSpot (deal deleted or access unavailable).</span>
         <button
           onClick={() => reanalyze()}
           disabled={reanalyzing}
@@ -527,14 +527,14 @@ function DealTopo({
           style={{ background: "#fff", color: "#92400e", border: "1px solid #fde68a" }}
         >
           <RefreshCw size={11} className={`inline mr-1 ${reanalyzing ? "animate-spin" : ""}`} />
-          {reanalyzing ? "Ré-analyse…" : "Ré-analyser"}
+          {reanalyzing ? "Re-analyzing…" : "Re-analyze"}
         </button>
       </div>
     );
   }
 
-  const close = snapshot.close_date ? new Date(snapshot.close_date).toLocaleDateString("fr-FR") : null;
-  const amount = snapshot.amount != null ? `${snapshot.amount.toLocaleString("fr-FR")}€` : null;
+  const close = snapshot.close_date ? new Date(snapshot.close_date).toLocaleDateString("en-GB") : null;
+  const amount = snapshot.amount != null ? `${snapshot.amount.toLocaleString("en-GB")}€` : null;
 
   return (
     <div
@@ -585,27 +585,27 @@ function DealTopo({
           disabled={refreshingSnapshot}
           className="flex items-center gap-1 text-[11px] font-medium disabled:opacity-50"
           style={{ color: "#888" }}
-          title="Re-fetch HubSpot deal (sans relancer Claude) — recalcule prospect/client"
+          title="Re-fetch HubSpot deal (without re-running Claude), recomputes prospect/client"
         >
           <RefreshCw size={10} className={refreshingSnapshot ? "animate-spin" : ""} />
-          {refreshingSnapshot ? "Rafraîchissement…" : "Rafraîchir deal"}
+          {refreshingSnapshot ? "Refreshing…" : "Refresh deal"}
         </button>
         <button
           onClick={() => reanalyze()}
           disabled={reanalyzing}
           className="flex items-center gap-1 text-[11px] font-medium disabled:opacity-50"
           style={{ color: "#888" }}
-          title="Ré-analyser le meeting avec les données deal à jour"
+          title="Re-analyze the meeting with up-to-date deal data"
         >
           <RefreshCw size={10} className={reanalyzing ? "animate-spin" : ""} />
-          {reanalyzing ? "Ré-analyse…" : "Ré-analyser"}
+          {reanalyzing ? "Re-analyzing…" : "Re-analyze"}
         </button>
         <a
           href={`/deals?id=${snapshot.id}`}
           className="flex items-center gap-1 text-[11px] font-medium"
           style={{ color: "#f01563" }}
         >
-          Voir le deal <ExternalLink size={10} />
+          View deal <ExternalLink size={10} />
         </a>
       </div>
     </div>
@@ -643,12 +643,12 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
     try {
       const res = await fetch(`/api/sales-coach/${analysisId}/resend-slack`, { method: "POST" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Erreur");
-      setSendResult({ ok: true, msg: "Envoyé sur Slack" });
+      if (!res.ok) throw new Error(data.error ?? "Error");
+      setSendResult({ ok: true, msg: "Sent to Slack" });
       await reload();
       onSlackSent?.();
     } catch (e) {
-      setSendResult({ ok: false, msg: e instanceof Error ? e.message : "Erreur" });
+      setSendResult({ ok: false, msg: e instanceof Error ? e.message : "Error" });
     } finally {
       setSending(false);
     }
@@ -659,11 +659,11 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
     try {
       const res = await fetch(`/api/sales-coach/${analysisId}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Erreur");
-      toast("Analyse supprimée.", "success");
+      if (!res.ok) throw new Error(data.error ?? "Error");
+      toast("Analysis deleted.", "success");
       onDeleted?.();
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Erreur", "error");
+      toast(e instanceof Error ? e.message : "Error", "error");
       setDeleting(false);
     }
   }
@@ -674,22 +674,22 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
     try {
       const res = await fetch(`/api/sales-coach/${analysisId}/reanalyze`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Erreur");
-      toast("Ré-analyse lancée.", "success");
+      if (!res.ok) throw new Error(data.error ?? "Error");
+      toast("Re-analysis started.", "success");
       await reload();
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Erreur", "error");
+      toast(e instanceof Error ? e.message : "Error", "error");
     } finally {
       setForcing(false);
     }
   }
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-full text-sm" style={{ color: "#888" }}>Chargement…</div>;
+    return <div className="flex items-center justify-center h-full text-sm" style={{ color: "#888" }}>Loading…</div>;
   }
 
   if (error || !detail) {
-    return <div className="flex items-center justify-center h-full text-sm" style={{ color: "#dc2626" }}>{error || "Analyse introuvable"}</div>;
+    return <div className="flex items-center justify-center h-full text-sm" style={{ color: "#dc2626" }}>{error || "Analysis not found"}</div>;
   }
 
   // Meeting Claap externe sans deal HubSpot résolu : on demande à l'utilisateur
@@ -715,27 +715,27 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
         {detail.status === "analyzing" && (
           <>
             <RefreshCw size={28} className="animate-spin mb-3" style={{ color: "#f01563" }} />
-            <div className="text-sm font-medium" style={{ color: "#111" }}>Analyse en cours…</div>
-            <div className="text-xs mt-1" style={{ color: "#888" }}>Le debrief sera disponible dans quelques instants.</div>
+            <div className="text-sm font-medium" style={{ color: "#111" }}>Analysis in progress…</div>
+            <div className="text-xs mt-1" style={{ color: "#888" }}>The debrief will be available in a few moments.</div>
           </>
         )}
         {detail.status === "pending" && (
           <>
-            <div className="text-sm font-medium" style={{ color: "#111" }}>En file d&apos;attente</div>
-            <div className="text-xs mt-1" style={{ color: "#888" }}>L&apos;analyse va démarrer.</div>
+            <div className="text-sm font-medium" style={{ color: "#111" }}>Queued</div>
+            <div className="text-xs mt-1" style={{ color: "#888" }}>The analysis is about to start.</div>
           </>
         )}
         {detail.status === "error" && (
           <>
             <AlertCircle size={28} className="mb-3" style={{ color: "#dc2626" }} />
-            <div className="text-sm font-medium" style={{ color: "#111" }}>Erreur</div>
-            <div className="text-xs mt-1" style={{ color: "#888" }}>{detail.error_message ?? "Erreur inconnue"}</div>
+            <div className="text-sm font-medium" style={{ color: "#111" }}>Error</div>
+            <div className="text-xs mt-1" style={{ color: "#888" }}>{detail.error_message ?? "Unknown error"}</div>
           </>
         )}
         {detail.status === "skipped" && (
           <>
-            <div className="text-sm font-medium" style={{ color: "#111" }}>Meeting non analysé</div>
-            <div className="text-xs mt-1" style={{ color: "#888" }}>Raison : {detail.error_message ?? "—"}</div>
+            <div className="text-sm font-medium" style={{ color: "#111" }}>Meeting not analyzed</div>
+            <div className="text-xs mt-1" style={{ color: "#888" }}>Reason: {detail.error_message ?? "-"}</div>
           </>
         )}
         <div className="mt-4 flex items-center gap-2">
@@ -750,10 +750,10 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
             >
               <RefreshCw size={12} className={forcing ? "animate-spin" : ""} />
               {forcing
-                ? "Lancement…"
+                ? "Starting…"
                 : detail.status === "pending"
-                  ? "Analyser maintenant"
-                  : "Analyser quand même"}
+                  ? "Analyze now"
+                  : "Analyze anyway"}
             </button>
           )}
           <button
@@ -763,7 +763,7 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
             style={{ background: "#fff", color: "#dc2626", border: "1px solid #fecaca" }}
           >
             <Trash2 size={12} />
-            {deleting ? "Suppression…" : "Supprimer cette analyse"}
+            {deleting ? "Deleting…" : "Delete this analysis"}
           </button>
         </div>
       </div>
@@ -775,7 +775,7 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
   const a = repairAnalysis(detail.analysis as AnySalesCoachAnalysis);
   const isClient = isClientAnalysis(a);
   const meetingDate = detail.meeting_started_at
-    ? new Date(detail.meeting_started_at).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" })
+    ? new Date(detail.meeting_started_at).toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short" })
     : "";
   // BOSCHE n'a de sens que pour les discoveries prospect.
   const isDisco = !isClient && isDiscoveryKind(detail.meeting_kind as Parameters<typeof isDiscoveryKind>[0]);
@@ -824,7 +824,7 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
                 </span>
               )}
               {a.meeting_kind_reasoning && (
-                <span title={`Classification : ${a.meeting_kind_reasoning}`} style={{ color: COLORS.ink3, cursor: "help" }}>
+                <span title={`Classification: ${a.meeting_kind_reasoning}`} style={{ color: COLORS.ink3, cursor: "help" }}>
                   <Info size={13} />
                 </span>
               )}
@@ -873,7 +873,7 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
                   <span>·</span>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                     <Users size={11} />
-                    avec {names.slice(0, 3).join(", ")}
+                    with {names.slice(0, 3).join(", ")}
                     {names.length > 3 ? ` +${names.length - 3}` : ""}
                   </span>
                 </>
@@ -884,7 +884,7 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
             <button
               onClick={resendSlack}
               disabled={sending}
-              title={detail.slack_sent_at ? `Envoyé le ${new Date(detail.slack_sent_at).toLocaleDateString("fr-FR")}` : undefined}
+              title={detail.slack_sent_at ? `Sent on ${new Date(detail.slack_sent_at).toLocaleDateString("en-GB")}` : undefined}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -912,12 +912,12 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
               }}
             >
               <Send size={13} />
-              {sending ? "Envoi…" : detail.slack_sent_at ? "Re-Slack" : "Slack"}
+              {sending ? "Sending…" : detail.slack_sent_at ? "Re-Slack" : "Slack"}
             </button>
             <button
               onClick={() => forceAnalyze()}
               disabled={forcing}
-              title="Refaire l'analyse de ce meeting"
+              title="Re-run the analysis for this meeting"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -945,13 +945,13 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
               }}
             >
               <RefreshCw size={13} className={forcing ? "animate-spin" : ""} />
-              {forcing ? "Relance…" : "Ré-analyser"}
+              {forcing ? "Re-running…" : "Re-analyze"}
             </button>
             <button
               onClick={deleteAnalysis}
               disabled={deleting}
-              aria-label="Supprimer l'analyse"
-              title="Supprimer l'analyse"
+              aria-label="Delete analysis"
+              title="Delete analysis"
               style={{
                 width: 36,
                 height: 36,
@@ -1005,7 +1005,7 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
           active={tab}
           onChange={(k) => setTab(k as TabId)}
           tabs={[
-            { key: "synthese", label: "Synthèse", icon: Sparkles },
+            { key: "synthese", label: "Summary", icon: Sparkles },
             { key: "axes", label: "6 axes", icon: Target },
             ...(isClient
               ? [{ key: "customer_health", label: "Customer Health", icon: TrendingUp }]
@@ -1013,7 +1013,7 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
                   { key: "meddic", label: "MEDDIC", icon: TrendingUp },
                   ...(isDisco ? [{ key: "bosche", label: "BOSCHE", icon: TrendingUp }] : []),
                 ]),
-            { key: "history", label: `Historique${history.length > 0 ? ` (${history.length})` : ""}`, icon: History },
+            { key: "history", label: `History${history.length > 0 ? ` (${history.length})` : ""}`, icon: History },
             { key: "transcript", label: "Transcript", icon: FileText },
           ]}
         />
@@ -1051,7 +1051,7 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
               <div className="rounded-lg p-4" style={{ background: "#fef2f4", border: "1px solid #f01563" }}>
                 <div className="flex items-center gap-1.5 mb-2">
                   <TrendingUp size={14} style={{ color: "#f01563" }} />
-                  <div className="text-sm font-semibold" style={{ color: "#f01563" }}>Top priorités pour le prochain call</div>
+                  <div className="text-sm font-semibold" style={{ color: "#f01563" }}>Top priorities for the next call</div>
                 </div>
                 <ol className="space-y-1.5 pl-1">
                   {coachingPriorities.map((p, i) => (
@@ -1068,7 +1068,7 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
               <div className="rounded-lg p-4" style={{ background: "#fff", border: "1px solid #eeeeee" }}>
                 <div className="flex items-center gap-1.5 mb-2">
                   <AlertCircle size={14} style={{ color: "#dc2626" }} />
-                  <div className="text-sm font-semibold" style={{ color: "#111" }}>Risques identifiés</div>
+                  <div className="text-sm font-semibold" style={{ color: "#111" }}>Identified risks</div>
                 </div>
                 <ul className="space-y-1 text-sm" style={{ color: "#333" }}>
                   {risks.map((r, i) => <li key={i}>• {r}</li>)}
@@ -1083,11 +1083,11 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
           return (
             <div className="space-y-3">
               <div className="rounded-lg p-3 text-xs" style={{ background: "#eef2ff", border: "1px solid #c7d2fe", color: "#3730a3" }}>
-                <strong>MEDDIC</strong> — framework de qualification appliqué à tous types de meetings. Les dimensions marquées N/A ne sont pas observables dans ce type de call, mais la reco reste pertinente.
+                <strong>MEDDIC</strong> - qualification framework applied to all meeting types. Dimensions marked N/A are not observable in this type of call, but the recommendation still applies.
               </div>
               {!prospect.meddic && (
                 <div className="rounded-lg p-4 text-sm" style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}>
-                  Analyse MEDDIC non disponible pour ce meeting (analyse générée avant l&apos;ajout du framework, ou incomplete). Ré-analyse le meeting via &quot;Analyser un meeting passé&quot; pour obtenir les scores MEDDIC.
+                  MEDDIC analysis not available for this meeting (analysis generated before the framework was added, or incomplete). Re-analyze the meeting via &quot;Analyze a past meeting&quot; to get the MEDDIC scores.
                 </div>
               )}
               {prospect.meddic && (
@@ -1126,11 +1126,11 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
                 className="rounded-lg p-3 text-xs"
                 style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", color: "#065f46" }}
               >
-                <strong>Customer Health</strong> — lecture qualitative de l&apos;état du compte (relation, adoption, sentiment, signaux d&apos;expansion, risques). Sert à orienter le prochain touchpoint CS, pas à scorer le compte.
+                <strong>Customer Health</strong> - qualitative read of the account state (relationship, adoption, sentiment, expansion signals, risks). Used to guide the next CS touchpoint, not to score the account.
               </div>
               {!ch && (
                 <div className="rounded-lg p-4 text-sm" style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}>
-                  Lecture Customer Health non disponible. Re-lance l&apos;analyse pour la générer.
+                  Customer Health read not available. Re-run the analysis to generate it.
                 </div>
               )}
               {ch && CUSTOMER_HEALTH_LABELS.map(({ key, label }) => {
@@ -1149,7 +1149,7 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
                       className="text-sm leading-relaxed"
                       style={{ color: isEmpty ? "#888" : "#333", fontStyle: isEmpty ? "italic" : "normal" }}
                     >
-                      {value || "Pas observable dans ce meeting"}
+                      {value || "Not observable in this meeting"}
                     </p>
                   </div>
                 );
@@ -1167,23 +1167,23 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
               {bosche.trigger_identified ? (
                 <div className="rounded-lg p-4" style={{ background: "#fff", border: "1px solid #f01563" }}>
                   <div className="text-xs font-medium uppercase tracking-wider" style={{ color: "#f01563" }}>
-                    Trigger Coachello détecté
+                    Coachello trigger detected
                   </div>
                   <div className="text-base font-semibold mt-1" style={{ color: "#111" }}>
                     {bosche.trigger_identified}
                   </div>
                   <div className="text-xs mt-2 flex items-center gap-1.5" style={{ color: "#666" }}>
-                    <span>Critères de sortie :</span>
+                    <span>Exit criteria:</span>
                     {bosche.exit_criteria_met ? (
-                      <span className="font-medium" style={{ color: "#059669" }}>✓ remplis</span>
+                      <span className="font-medium" style={{ color: "#059669" }}>✓ met</span>
                     ) : (
-                      <span className="font-medium" style={{ color: "#dc2626" }}>✗ non remplis</span>
+                      <span className="font-medium" style={{ color: "#dc2626" }}>✗ not met</span>
                     )}
                   </div>
                 </div>
               ) : (
                 <div className="rounded-lg p-4 text-sm" style={{ background: "#fafafa", color: "#888", border: "1px dashed #e5e5e5" }}>
-                  Pas de trigger BOSCHE clairement identifié.
+                  No BOSCHE trigger clearly identified.
                 </div>
               )}
 
@@ -1217,16 +1217,16 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
             <div>
               <div className="flex items-center gap-1.5 mb-2">
                 <History size={14} style={{ color: "#111" }} />
-                <h3 className="text-sm font-semibold" style={{ color: "#111" }}>Meetings Claap précédents sur ce deal</h3>
+                <h3 className="text-sm font-semibold" style={{ color: "#111" }}>Previous Claap meetings on this deal</h3>
               </div>
               {history.length === 0 ? (
                 <div className="rounded-lg p-3 text-xs" style={{ background: "#fafafa", color: "#888", border: "1px dashed #e5e5e5" }}>
-                  Aucun autre meeting analysé sur ce deal.
+                  No other meeting analyzed on this deal.
                 </div>
               ) : (
                 <div className="space-y-2">
                   {history.map((h) => {
-                    const d = h.meeting_started_at ? new Date(h.meeting_started_at).toLocaleDateString("fr-FR") : "?";
+                    const d = h.meeting_started_at ? new Date(h.meeting_started_at).toLocaleDateString("en-GB") : "?";
                     const kind = getMeetingKindLabel(h.meeting_kind);
                     return (
                       <a
@@ -1259,11 +1259,11 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
                   <Building2 size={14} style={{ color: "#111" }} />
-                  <h3 className="text-sm font-semibold" style={{ color: "#111" }}>Engagements HubSpot ({detail.deal_snapshot.engagements.length})</h3>
+                  <h3 className="text-sm font-semibold" style={{ color: "#111" }}>HubSpot engagements ({detail.deal_snapshot.engagements.length})</h3>
                 </div>
                 <div className="space-y-2">
                   {detail.deal_snapshot.engagements.map((e, i) => {
-                    const d = e.date ? new Date(e.date).toLocaleDateString("fr-FR") : "?";
+                    const d = e.date ? new Date(e.date).toLocaleDateString("en-GB") : "?";
                     const typeColors: Record<string, { bg: string; fg: string }> = {
                       meeting: { bg: "#dbeafe", fg: "#1e40af" },
                       call: { bg: "#dcfce7", fg: "#166534" },
@@ -1306,13 +1306,13 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
               <>
                 {detail.transcript_text}
                 <div className="mt-4 text-[11px]" style={{ color: "#888" }}>
-                  {detail.transcript_text.length.toLocaleString("fr-FR")} caractères
+                  {detail.transcript_text.length.toLocaleString("en-GB")} characters
                 </div>
               </>
             ) : (
               <span style={{ color: "#888" }}>
                 <MessageSquare size={14} className="inline mr-1" />
-                Transcription non disponible.
+                Transcript not available.
               </span>
             )}
           </div>

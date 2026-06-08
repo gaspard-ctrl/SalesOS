@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const user = await getAuthenticatedUser();
   if (!user) {
     return NextResponse.json(
-      { hubspot_company_id: null, contacts: [], error: "Non authentifié" },
+      { hubspot_company_id: null, contacts: [], error: "Not authenticated" },
       { status: 401 },
     );
   }
@@ -29,7 +29,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .maybeSingle();
   if (!company) {
     return NextResponse.json(
-      { hubspot_company_id: null, contacts: [], error: "Compte introuvable" },
+      { hubspot_company_id: null, contacts: [], error: "Account not found" },
       { status: 404 },
     );
   }
@@ -39,7 +39,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ hubspot_company_id, contacts });
   } catch (e) {
     return NextResponse.json(
-      { hubspot_company_id: null, contacts: [], error: e instanceof Error ? e.message : "Erreur HubSpot" },
+      { hubspot_company_id: null, contacts: [], error: e instanceof Error ? e.message : "HubSpot error" },
       { status: 500 },
     );
   }

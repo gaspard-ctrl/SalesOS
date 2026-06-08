@@ -22,7 +22,7 @@ export default function LeadSourceWidget() {
           color: "#888",
         }}
       >
-        <Loader2 size={16} className="animate-spin" /> Chargement des origines…
+        <Loader2 size={16} className="animate-spin" /> Loading sources…
       </div>
     );
   }
@@ -43,14 +43,14 @@ export default function LeadSourceWidget() {
       }}
     >
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "#111" }}>Origine des leads validés</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "#111" }}>Validated leads by source</div>
         <div style={{ fontSize: 12, color: "#888" }}>{total} leads</div>
       </div>
 
       {buckets.length === 0 ? (
         <div style={{ fontSize: 12, color: "#888" }}>
-          Aucune origine extraite pour la période. Vérifie que &quot;How did you hear about us&quot; est
-          présent sur les captures envoyées.
+          No source extracted for the period. Check that &quot;How did you hear about us&quot; is
+          present in the submitted screenshots.
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

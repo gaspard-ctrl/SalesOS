@@ -67,27 +67,27 @@ export function CrossPageActions({ company }: { company: WatchCompanyDetail }) {
           color: COLORS.ink3,
         }}
       >
-        🔗 Ouvrir dans
+        🔗 Open in
       </h3>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <ActionLink
           href="/watchlist/lists"
           icon={<List size={12} />}
-          label="Gestion des listes"
-          sub="Créer une liste de prospects"
+          label="List management"
+          sub="Create a prospect list"
         />
         <ActionLink
           onClick={goToMassProspection}
           icon={loadingProspection ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
           label="Mass Prospection"
-          sub={loadingProspection ? "Chargement des contacts…" : "Contacts HubSpot présélectionnés"}
+          sub={loadingProspection ? "Loading contacts…" : "HubSpot contacts preselected"}
           disabled={loadingProspection}
         />
         <ActionLink
           href="/sales-coach"
           icon={<GraduationCap size={12} />}
           label="Sales Coach"
-          sub="Analyser un deal"
+          sub="Analyze a deal"
         />
       </div>
     </section>

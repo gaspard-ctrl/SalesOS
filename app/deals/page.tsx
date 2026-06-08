@@ -41,7 +41,7 @@ const DealCard = memo(function DealCard({
     >
       <div style={{ marginBottom: 4 }}>
         <span style={{ fontWeight: 600, fontSize: 13, color: COLORS.ink0, lineHeight: 1.3 }}>
-          {deal.dealname || "Sans nom"}
+          {deal.dealname || "Untitled"}
         </span>
       </div>
       <div style={{ fontSize: 12, color: COLORS.ink2, marginBottom: 6 }}>
@@ -69,7 +69,7 @@ const DealCard = memo(function DealCard({
             {deal.score!.total}
           </span>
         ) : (
-          <span style={{ fontSize: 11, color: COLORS.ink3, fontStyle: "italic" }}>Non scoré</span>
+          <span style={{ fontSize: 11, color: COLORS.ink3, fontStyle: "italic" }}>Unscored</span>
         )}
       </div>
     </div>
@@ -129,7 +129,7 @@ const KanbanColumn = memo(function KanbanColumn({
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
         {deals.length === 0 ? (
           <div style={{ textAlign: "center", fontSize: 11, color: COLORS.ink5, padding: "16px 0" }}>
-            Aucun deal
+            No deal
           </div>
         ) : (
           deals.map((deal) => (
@@ -206,7 +206,7 @@ function DealsPageInner() {
     try {
       const r = await fetch(`/api/deals/details?id=${deal.id}`);
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "Erreur");
+      if (!r.ok) throw new Error(data.error ?? "Error");
       setDetails(data);
     } catch (e) {
       console.error(e);
@@ -352,7 +352,7 @@ function DealsPageInner() {
           <button
             type="button"
             onClick={closeDeal}
-            aria-label="Retour au pipeline"
+            aria-label="Back to pipeline"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -394,7 +394,7 @@ function DealsPageInner() {
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Rechercher un deal…"
+            placeholder="Search a deal…"
             style={{
               width: "100%",
               paddingLeft: 32,
@@ -417,7 +417,7 @@ function DealsPageInner() {
             setAppliedQuery(searchQuery);
             reload();
           }}
-          aria-label="Rafraîchir"
+          aria-label="Refresh"
           style={{
             padding: "6px 10px",
             borderRadius: 8,
@@ -455,13 +455,13 @@ function DealsPageInner() {
                 </>
               ) : (
                 <>
-                  <Zap size={12} /> Scorer tous les deals
+                  <Zap size={12} /> Score all deals
                 </>
               )}
             </button>
             {scoreResult && !scoring && (
               <span style={{ fontSize: 11, color: COLORS.ink2 }}>
-                {scoreResult.scored}/{scoreResult.total} scorés
+                {scoreResult.scored}/{scoreResult.total} scored
               </span>
             )}
           </>
@@ -470,14 +470,14 @@ function DealsPageInner() {
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           {lastGlobalScoringAt && (
             <span
-              title={new Date(lastGlobalScoringAt).toLocaleString("fr-FR")}
+              title={new Date(lastGlobalScoringAt).toLocaleString("en-GB")}
               style={{ fontSize: 11, color: COLORS.ink3 }}
             >
-              Dernier scoring : {timeAgo(lastGlobalScoringAt)}
+              Last scoring: {timeAgo(lastGlobalScoringAt)}
             </span>
           )}
           <StatPill label="Pipeline" value={`${(pipelineTotal / 1000).toFixed(0)}k€`} />
-          <StatPill label="Pondéré" value={`${(weightedTotal / 1000).toFixed(0)}k€`} />
+          <StatPill label="Weighted" value={`${(weightedTotal / 1000).toFixed(0)}k€`} />
           <StatPill label="Deals" value={metricsDeals.length} />
         </div>
       </div>
@@ -499,7 +499,7 @@ function DealsPageInner() {
           {error ? (
             <div style={{ padding: 32, color: COLORS.err, fontSize: 14 }}>{error}</div>
           ) : loading ? (
-            <div style={{ padding: 32, color: COLORS.ink3, fontSize: 14 }}>Chargement…</div>
+            <div style={{ padding: 32, color: COLORS.ink3, fontSize: 14 }}>Loading…</div>
           ) : isListMode ? (
             <DealListGrouped
               stages={stages}
@@ -539,7 +539,7 @@ function DealsPageInner() {
                       fontSize: 14,
                     }}
                   >
-                    Aucun pipeline trouvé dans HubSpot
+                    No pipeline found in HubSpot
                   </div>
                 )}
               </div>
@@ -552,7 +552,7 @@ function DealsPageInner() {
           <div
             role="separator"
             aria-orientation="vertical"
-            aria-label="Redimensionner la liste des deals"
+            aria-label="Resize the deals list"
             onMouseDown={startResize}
             onDoubleClick={() => {
               setListWidth(LIST_DEFAULT);
@@ -606,7 +606,7 @@ export default function DealsPage() {
           className="flex items-center justify-center h-full"
           style={{ fontSize: 13, color: COLORS.ink3 }}
         >
-          Chargement…
+          Loading…
         </div>
       }
     >

@@ -117,7 +117,7 @@ export default function LeadHubspotLeadSide({ analysis }: { analysis: LeadAnalys
           fontStyle: "italic",
         }}
       >
-        Lead HubSpot trouvé — pas encore de deal
+        HubSpot lead found - no deal yet
       </div>
     </aside>
   );

@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 // avec des champs vides (les lignes vides sont juste surlignées sur la fiche).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id } = await params;
 

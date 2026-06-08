@@ -13,7 +13,7 @@ interface RawPipeline {
 
 export async function GET(_req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
     const data = await hubspotFetch<{ results: RawPipeline[] }>("/crm/v3/pipelines/deals");
@@ -32,6 +32,6 @@ export async function GET(_req: NextRequest) {
     }));
     return NextResponse.json({ pipelines });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Error" }, { status: 500 });
   }
 }

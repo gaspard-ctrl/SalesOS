@@ -46,8 +46,8 @@ export function DealNewsCard({ dealId }: { dealId: string }) {
   if (loading && !data) {
     return (
       <Card padding={16}>
-        <SectionHeader title="Actualités" right={<NewsTag />} />
-        <p style={{ fontSize: 12, color: COLORS.ink3, margin: 0 }}>Recherche en cours…</p>
+        <SectionHeader title="News" right={<NewsTag />} />
+        <p style={{ fontSize: 12, color: COLORS.ink3, margin: 0 }}>Searching…</p>
       </Card>
     );
   }
@@ -57,7 +57,7 @@ export function DealNewsCard({ dealId }: { dealId: string }) {
 
   return (
     <Card padding={16}>
-      <SectionHeader title="Actualités" right={<NewsTag />} />
+      <SectionHeader title="News" right={<NewsTag />} />
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {items.map((item, i) => (
           <div
@@ -93,7 +93,7 @@ export function DealNewsCard({ dealId }: { dealId: string }) {
               </a>
               {item.date && (
                 <span style={{ fontSize: 11, color: COLORS.ink4 }}>
-                  {new Date(item.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}
+                  {new Date(item.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                 </span>
               )}
             </div>
@@ -108,7 +108,7 @@ function NewsTag() {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: COLORS.ink3 }}>
       <Newspaper size={11} />
-      <span style={{ fontSize: 10, fontWeight: 600 }}>Signaux business</span>
+      <span style={{ fontSize: 10, fontWeight: 600 }}>Business signals</span>
     </span>
   );
 }

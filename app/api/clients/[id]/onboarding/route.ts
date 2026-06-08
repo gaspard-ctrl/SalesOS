@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 // Init depuis le template + items deja persistes si la colonne est vide.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id } = await params;
 
@@ -28,7 +28,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const isToggle = typeof key === "string" && typeof done === "boolean";
   const isDismiss = typeof dismissed === "boolean";
   if (!isToggle && !isDismiss) {
-    return NextResponse.json({ error: "key+done ou dismissed requis" }, { status: 400 });
+    return NextResponse.json({ error: "key+done or dismissed required" }, { status: 400 });
   }
 
   const { data: row, error: rowErr } = await db
@@ -36,7 +36,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .select("onboarding_checklist")
     .eq("id", id)
     .single();
-  if (rowErr || !row) return NextResponse.json({ error: "Client introuvable" }, { status: 404 });
+  if (rowErr || !row) return NextResponse.json({ error: "Client not found" }, { status: 404 });
 
   const current = (row.onboarding_checklist ?? null) as OnboardingChecklist | null;
 

@@ -20,10 +20,10 @@ async function hubspot(path: string, method = "GET", body?: unknown) {
 
 export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const id = req.nextUrl.searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "ID manquant" }, { status: 400 });
+  if (!id) return NextResponse.json({ error: "ID missing" }, { status: 400 });
 
   const [contactData, engagementsData, companiesData] = await Promise.allSettled([
     hubspot(

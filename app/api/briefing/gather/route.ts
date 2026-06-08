@@ -81,7 +81,7 @@ async function searchTavily(query: string, days = 30) {
 export async function POST(req: NextRequest) {
   try {
     const user = await getAuthenticatedUser();
-    if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
     const { eventId, eventTitle, attendees, company, forceRefresh } = await req.json() as {
       eventId: string;

@@ -32,7 +32,7 @@ export async function GET() {
     return NextResponse.json({ connected: false, reason: "error", detail: msg });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes("Gmail non connecté")) {
+    if (msg.includes("Gmail not connected")) {
       return NextResponse.json({ connected: false, reason: "not_connected" });
     }
     return NextResponse.json({ connected: false, reason: "error", detail: msg });

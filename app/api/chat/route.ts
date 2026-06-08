@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) {
     return new Response(
-      `data: ${JSON.stringify({ type: "error", message: "Non authentifié." })}\n\n`,
+      `data: ${JSON.stringify({ type: "error", message: "Not authenticated." })}\n\n`,
       { status: 401, headers: { "Content-Type": "text/event-stream" } }
     );
   }
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
         if (error instanceof ChatAuthError) {
           send({ type: "error", message: error.message });
         } else {
-          send({ type: "error", message: error instanceof Error ? error.message : "Erreur inconnue" });
+          send({ type: "error", message: error instanceof Error ? error.message : "Unknown error" });
         }
       } finally {
         controller.close();

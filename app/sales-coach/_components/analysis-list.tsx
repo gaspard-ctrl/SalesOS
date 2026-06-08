@@ -68,7 +68,7 @@ function StatusIcon({ status }: { status: SalesCoachStatus }) {
 function formatDate(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
-  return d.toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 export default function AnalysisList({
@@ -121,7 +121,7 @@ export default function AnalysisList({
           />
           <input
             type="text"
-            placeholder="Chercher un meeting…"
+            placeholder="Search a meeting…"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             style={{
@@ -156,7 +156,7 @@ export default function AnalysisList({
                 transition: "all 0.15s",
               }}
             >
-              {v === "mine" ? "Mes meetings" : "Tous"}
+              {v === "mine" ? "My meetings" : "All"}
             </button>
           ))}
         </div>
@@ -178,7 +178,7 @@ export default function AnalysisList({
               flex: 1,
               minWidth: 0,
             }}
-            title="Date min"
+            title="From date"
           />
           <span style={{ fontSize: 11, color: COLORS.ink3 }}>→</span>
           <input
@@ -196,7 +196,7 @@ export default function AnalysisList({
               flex: 1,
               minWidth: 0,
             }}
-            title="Date max"
+            title="To date"
           />
           {hasDateFilter && (
             <button
@@ -209,7 +209,7 @@ export default function AnalysisList({
                 border: "none",
                 cursor: "pointer",
               }}
-              title="Effacer les dates"
+              title="Clear dates"
             >
               ✕
             </button>
@@ -221,7 +221,7 @@ export default function AnalysisList({
       <div className="flex-1 overflow-y-auto" style={{ padding: 8 }}>
         {filtered.length === 0 && (
           <div style={{ padding: "32px 16px", textAlign: "center", fontSize: 13, color: COLORS.ink3 }}>
-            Aucune analyse pour le moment. Les debriefs apparaîtront ici après chaque meeting Claap.
+            No analysis yet. Debriefs will appear here after each Claap meeting.
           </div>
         )}
         {filtered.map((a) => {
@@ -282,7 +282,7 @@ export default function AnalysisList({
                       minWidth: 0,
                     }}
                   >
-                    {primary ? primary.name : a.meeting_title ?? "Meeting sans titre"}
+                    {primary ? primary.name : a.meeting_title ?? "Untitled meeting"}
                   </span>
                 </div>
                 <div
@@ -306,7 +306,7 @@ export default function AnalysisList({
                         color: "#92400e",
                       }}
                     >
-                      Deal manquant
+                      Missing deal
                     </span>
                   )}
                   {a.audience === "client" && (

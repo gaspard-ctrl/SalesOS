@@ -34,16 +34,16 @@ export function HubspotOwnerInput({ initialValue }: { initialValue: string | nul
     <div className="flex items-center gap-2 mt-3">
       <input
         type="text"
-        value={detecting ? "Détection…" : value}
+        value={detecting ? "Detecting…" : value}
         readOnly={detecting}
-        placeholder="ex: 12345678"
+        placeholder="e.g. 12345678"
         className="text-xs px-3 py-1.5 border rounded-lg outline-none"
         style={{ borderColor: "#e5e5e5", color: "#555", width: 200, background: detecting ? "#f9f9f9" : "#fff" }}
         onChange={(e) => setValue(e.target.value)}
         onBlur={(e) => save(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
       />
-      {saved && <span className="text-xs" style={{ color: "#16a34a" }}>Enregistré</span>}
+      {saved && <span className="text-xs" style={{ color: "#16a34a" }}>Saved</span>}
     </div>
   );
 }

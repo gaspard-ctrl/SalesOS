@@ -12,7 +12,7 @@ import type { BriefingResult, GatheredData } from "../_helpers";
 function meetingKindLabel(briefing: BriefingResult): string | null {
   if (briefing.isSalesMeeting === false) return null;
   if (briefing.meetingType === "discovery") return "Discovery";
-  if (briefing.meetingType === "follow_up") return "Suivi";
+  if (briefing.meetingType === "follow_up") return "Follow-up";
   return null;
 }
 
@@ -34,14 +34,14 @@ export function BriefingHeader({
   const company = briefing.identity?.company || "";
   const kindLabel = meetingKindLabel(briefing);
   const dateStr = selectedEvent.start
-    ? new Date(selectedEvent.start).toLocaleDateString("fr-FR", {
+    ? new Date(selectedEvent.start).toLocaleDateString("en-GB", {
         weekday: "long",
         day: "numeric",
         month: "long",
       })
     : "";
   const timeStr = selectedEvent.start && selectedEvent.start.includes("T")
-    ? new Date(selectedEvent.start).toLocaleTimeString("fr-FR", {
+    ? new Date(selectedEvent.start).toLocaleTimeString("en-GB", {
         hour: "2-digit",
         minute: "2-digit",
       })
@@ -49,7 +49,7 @@ export function BriefingHeader({
 
   const deal = rawData?.deals?.[0];
   const amount = deal?.amount
-    ? `${Number(deal.amount).toLocaleString("fr-FR")} €`
+    ? `${Number(deal.amount).toLocaleString("en-GB")} €`
     : null;
 
   return (
@@ -134,7 +134,7 @@ export function BriefingHeader({
           {dateStr && (
             <span>
               {dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}
-              {timeStr ? ` — ${timeStr}` : ""}
+              {timeStr ? ` - ${timeStr}` : ""}
             </span>
           )}
           {deal && (
@@ -164,7 +164,7 @@ export function BriefingHeader({
                   textDecoration: "none",
                 }}
               >
-                Rejoindre <ExternalLink size={10} />
+                Join <ExternalLink size={10} />
               </a>
             </>
           )}
@@ -173,19 +173,19 @@ export function BriefingHeader({
       <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
         <IconButton
           icon={Linkedin}
-          aria-label="Voir LinkedIn"
+          aria-label="View LinkedIn"
           onClick={onLinkedIn}
         />
         <IconButton
           icon={Mail}
-          aria-label="Télécharger le debrief"
+          aria-label="Download debrief"
           onClick={onDownloadDraft}
         />
         <IconButton
           icon={Sparkles}
           variant="brand"
-          label="Demander à l'IA"
-          aria-label="Demander à l'IA"
+          label="Ask AI"
+          aria-label="Ask AI"
           onClick={onAskAI}
         />
       </div>

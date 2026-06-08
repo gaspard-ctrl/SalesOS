@@ -9,7 +9,7 @@ const PURPLE = "#8b5cf6";
 const RED = "#ef4444";
 
 function formatAmount(n: number): string {
-  return n.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + "€";
+  return n.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + "€";
 }
 
 function pct(num: number, denom: number): string {
@@ -34,7 +34,7 @@ export default function LeadsKpiRow() {
           color: "#888",
         }}
       >
-        <Loader2 size={16} className="animate-spin" /> Chargement des KPI…
+        <Loader2 size={16} className="animate-spin" /> Loading KPIs…
       </div>
     );
   }
@@ -52,25 +52,25 @@ export default function LeadsKpiRow() {
       <KpiCard
         label="% leads → disco"
         value={pct(f.disco, f.validated)}
-        subtitle={`${f.disco} / ${f.validated} validés`}
+        subtitle={`${f.disco} / ${f.validated} validated`}
         color={BLUE}
       />
       <KpiCard
         label="% leads → won"
         value={pct(f.closedWon, f.validated)}
-        subtitle={`${f.closedWon} / ${f.validated} validés`}
+        subtitle={`${f.closedWon} / ${f.validated} validated`}
         color={GREEN}
       />
       <KpiCard
-        label="Pipeline ouvert"
+        label="Open pipeline"
         value={formatAmount(openPipelineAmount)}
-        subtitle="Deals en cours"
+        subtitle="Deals in progress"
         color={PURPLE}
       />
       <KpiCard
         label="Closed lost"
         value={formatAmount(closedLostAmount)}
-        subtitle={`${f.closedLost} deal${f.closedLost > 1 ? "s" : ""} perdu${f.closedLost > 1 ? "s" : ""}`}
+        subtitle={`${f.closedLost} deal${f.closedLost > 1 ? "s" : ""} lost`}
         color={RED}
       />
     </div>

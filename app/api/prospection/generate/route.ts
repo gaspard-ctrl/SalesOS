@@ -26,7 +26,7 @@ interface ContactInfo {
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { contactInfo, recentNews, companyContext, coachingNeed, angle, userInstructions, qcmType, qcmLength, qcmTone, qcmObjectif } = await req.json() as {
     contactInfo: ContactInfo;

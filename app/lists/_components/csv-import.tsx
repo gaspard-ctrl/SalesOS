@@ -51,18 +51,18 @@ export function CsvImport({ onImport, isImporting }: CsvImportProps) {
   async function handleFile(file: File) {
     setParseError(null);
     if (!file.name.toLowerCase().endsWith(".csv") && file.type !== "text/csv") {
-      setParseError("Le fichier doit être un .csv");
+      setParseError("The file must be a .csv");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setParseError("Fichier trop volumineux (max 5 Mo)");
+      setParseError("File too large (max 5 MB)");
       return;
     }
     try {
       const text = await file.text();
       const result = parseCsv(text);
       if (result.rows.length === 0) {
-        setParseError("Aucune ligne de données détectée");
+        setParseError("No data rows detected");
         return;
       }
       setParsed(result);
@@ -75,7 +75,7 @@ export function CsvImport({ onImport, isImporting }: CsvImportProps) {
         .map(({ i }) => i);
       setSelectedRows(new Set(validIdx));
     } catch (e) {
-      setParseError(e instanceof Error ? e.message : "Erreur de parsing");
+      setParseError(e instanceof Error ? e.message : "Parsing error");
     }
   }
 
@@ -193,11 +193,11 @@ export function CsvImport({ onImport, isImporting }: CsvImportProps) {
         />
         <Upload size={32} color={COLORS.ink3} style={{ marginBottom: 12 }} />
         <p style={{ fontSize: 14, fontWeight: 600, color: COLORS.ink0, margin: 0 }}>
-          Glisse un CSV ici, ou clique pour parcourir
+          Drop a CSV here, or click to browse
         </p>
         <p style={{ fontSize: 12, color: COLORS.ink3, margin: "6px 0 0" }}>
-          Colonnes requises : Prénom, Nom, Entreprise actuelle. LinkedIn, email
-          et headline sont optionnels.
+          Required columns: First name, Last name, Current company. LinkedIn, email
+          and headline are optional.
         </p>
         {parseError && (
           <p
@@ -239,13 +239,12 @@ export function CsvImport({ onImport, isImporting }: CsvImportProps) {
             {fileName}
           </div>
           <div style={{ fontSize: 11, color: COLORS.ink3 }}>
-            {stats.total} ligne{stats.total > 1 ? "s" : ""} · {stats.valid} valide
-            {stats.valid > 1 ? "s" : ""}
+            {stats.total} row{stats.total > 1 ? "s" : ""} · {stats.valid} valid
             {stats.invalid > 0 && (
               <>
                 {" · "}
                 <span style={{ color: COLORS.warn }}>
-                  {stats.invalid} incomplète{stats.invalid > 1 ? "s" : ""}
+                  {stats.invalid} incomplete
                 </span>
               </>
             )}
@@ -267,7 +266,7 @@ export function CsvImport({ onImport, isImporting }: CsvImportProps) {
             gap: 4,
           }}
         >
-          <X size={12} /> Changer de fichier
+          <X size={12} /> Change file
         </button>
       </div>
 
@@ -291,7 +290,7 @@ export function CsvImport({ onImport, isImporting }: CsvImportProps) {
             gap: 6,
           }}
         >
-          Mapping des colonnes
+          Column mapping
           {!requiredOk && (
             <span
               style={{
@@ -304,7 +303,7 @@ export function CsvImport({ onImport, isImporting }: CsvImportProps) {
               }}
             >
               <AlertTriangle size={12} />
-              Prénom, Nom et Entreprise sont obligatoires
+              First name, Last name and Company are required
             </span>
           )}
         </div>
@@ -336,7 +335,7 @@ export function CsvImport({ onImport, isImporting }: CsvImportProps) {
                 }}
                 title={h}
               >
-                {h || `Colonne ${i + 1}`}
+                {h || `Column ${i + 1}`}
               </div>
               <select
                 value={mapping[i] ?? "ignore"}
@@ -379,7 +378,7 @@ export function CsvImport({ onImport, isImporting }: CsvImportProps) {
       >
         <span style={{ fontSize: 12, color: COLORS.ink2 }}>
           <strong style={{ color: COLORS.ink0 }}>{stats.selected}</strong>/
-          {stats.total} sélectionné{stats.selected > 1 ? "s" : ""}
+          {stats.total} selected
         </span>
         <button
           type="button"
@@ -387,10 +386,10 @@ export function CsvImport({ onImport, isImporting }: CsvImportProps) {
           disabled={!requiredOk}
           style={smBtn(requiredOk)}
         >
-          Cocher toutes les valides
+          Select all valid
         </button>
         <button type="button" onClick={deselectAll} style={smBtn(true)}>
-          Tout décocher
+          Deselect all
         </button>
         <div style={{ marginLeft: "auto" }}>
           <button
@@ -418,7 +417,7 @@ export function CsvImport({ onImport, isImporting }: CsvImportProps) {
             }}
           >
             {isImporting && <Loader2 size={13} />}
-            Ajouter à la liste ({stats.selected})
+            Add to list ({stats.selected})
           </button>
         </div>
       </div>
@@ -492,7 +491,7 @@ export function CsvImport({ onImport, isImporting }: CsvImportProps) {
                       }}
                     >
                       <AlertTriangle size={9} />
-                      Incomplet
+                      Incomplete
                     </span>
                   )}
                 </div>
@@ -541,7 +540,7 @@ export function CsvImport({ onImport, isImporting }: CsvImportProps) {
                         fontStyle: "italic",
                       }}
                     >
-                      Sans LinkedIn
+                      No LinkedIn
                     </span>
                   )}
                 </div>

@@ -37,7 +37,7 @@ function ConfidenceDot({ confidence, source }: { confidence: number; source: Cli
 }
 
 function renderSourceLabel(source: ClientFieldSource | null): string {
-  if (!source) return "—";
+  if (!source) return "-";
   if (source.kind === "manual") return `Manual edit${source.userEmail ? ` · ${source.userEmail}` : ""}`;
   if (source.kind === "inferred") return "Inferred";
   if (source.kind === "claap") return `Claap${source.recordingId ? ` · ${source.recordingId}` : ""}`;

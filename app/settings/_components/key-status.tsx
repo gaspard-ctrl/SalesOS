@@ -19,7 +19,7 @@ export function KeyStatus({ active }: { active: boolean }) {
         className="w-1.5 h-1.5 rounded-full inline-block"
         style={{ background: "#854d0e" }}
       />
-      Non configurée
+      Not configured
     </span>
   );
 }

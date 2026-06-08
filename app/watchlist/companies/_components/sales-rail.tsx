@@ -77,7 +77,7 @@ export function SalesRail({
           <button
             type="button"
             onClick={onConfigure}
-            title="Configurer les sales affichés"
+            title="Configure shown sales reps"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -92,7 +92,7 @@ export function SalesRail({
               cursor: "pointer",
             }}
           >
-            <Settings2 size={12} /> Configurer
+            <Settings2 size={12} /> Configure
           </button>
         )}
       </div>
@@ -101,7 +101,7 @@ export function SalesRail({
         {/* Non attribué */}
         {showUnassigned && (
           <RepDropZone
-            label="Non attribué"
+            label="Unassigned"
             accent={COLORS.warn}
             count={unassignedCount}
             maxCount={maxCount}
@@ -116,7 +116,7 @@ export function SalesRail({
 
         {reps.length === 0 && (
           <div style={{ padding: "10px 8px", fontSize: 11, color: COLORS.ink3 }}>
-            Aucun sales dans le roster. Clique sur <strong>Configurer</strong> pour en ajouter.
+            No sales reps in the roster. Click <strong>Configure</strong> to add some.
           </div>
         )}
 
@@ -162,7 +162,7 @@ export function SalesRail({
               }}
             >
               {showOff ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              Hors roster ({offRoster.length})
+              Off roster ({offRoster.length})
             </button>
             {showOff && (
               <div style={{ display: "flex", flexDirection: "column", gap: 4, opacity: 0.85 }}>

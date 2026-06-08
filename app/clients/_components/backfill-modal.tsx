@@ -36,13 +36,13 @@ async function fetcher<T>(url: string): Promise<T> {
 }
 
 function fmtAmount(n: number | null): string {
-  if (n == null) return "—";
+  if (n == null) return "-";
   return `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k€`;
 }
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+  if (!iso) return "-";
+  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 export function BackfillModal({
@@ -143,7 +143,7 @@ export function BackfillModal({
       if (body.singleClientId) setConfirmClientId(body.singleClientId);
       onDone();
     } catch (e) {
-      setImportError(e instanceof Error ? e.message : "Erreur");
+      setImportError(e instanceof Error ? e.message : "Error");
     } finally {
       setImporting(false);
     }
@@ -192,21 +192,21 @@ export function BackfillModal({
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: COLORS.ink0 }}>
-            Importer des closed-won
+            Import closed-won deals
           </h2>
           <button
             type="button"
             onClick={onClose}
             style={{ background: "none", border: "none", cursor: "pointer", color: COLORS.ink3, padding: 4 }}
-            aria-label="Fermer"
+            aria-label="Close"
           >
             <X size={18} />
           </button>
         </div>
 
         <p style={{ fontSize: 12, color: COLORS.ink2, marginBottom: 12, lineHeight: 1.5 }}>
-          Coche les deals à importer. Crée une fiche client en attente
-          d&apos;enrichissement. Tu lances Claude ensuite, fiche par fiche.
+          Check the deals to import. Creates a client profile pending enrichment.
+          You then run Claude, one profile at a time.
         </p>
 
         {/* Search bar */}
@@ -224,7 +224,7 @@ export function BackfillModal({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Rechercher un deal (nom, owner, id)…"
+            placeholder="Search a deal (name, owner, id)…"
             disabled={isLoading}
             style={{
               width: "100%",
@@ -256,12 +256,12 @@ export function BackfillModal({
             }}
           >
             <span>
-              {selected.size} sélectionné(s) sur {filtered.length} affiché(s)
+              {selected.size} selected of {filtered.length} shown
               {data && (
                 <>
-                  {" "}· {candidates.length} disponibles
+                  {" "}· {candidates.length} available
                   {data.alreadyImported > 0 && (
-                    <span style={{ color: COLORS.ink4 }}> · {data.alreadyImported} déjà importés</span>
+                    <span style={{ color: COLORS.ink4 }}> · {data.alreadyImported} already imported</span>
                   )}
                 </>
               )}
@@ -281,7 +281,7 @@ export function BackfillModal({
                 padding: 0,
               }}
             >
-              Cocher les {filtered.length} affichés
+              Check the {filtered.length} shown
             </button>
             {selected.size > 0 && (
               <button
@@ -296,7 +296,7 @@ export function BackfillModal({
                   padding: 0,
                 }}
               >
-                Tout décocher
+                Clear all
               </button>
             )}
           </div>
@@ -315,15 +315,15 @@ export function BackfillModal({
         >
           {isLoading ? (
             <div style={{ padding: 20, textAlign: "center", color: COLORS.ink3, fontSize: 13 }}>
-              Chargement des closed-won HubSpot…
+              Loading HubSpot closed-won…
             </div>
           ) : candidatesError ? (
             <div style={{ padding: 20, textAlign: "center", color: COLORS.err, fontSize: 13 }}>
-              {candidatesError instanceof Error ? candidatesError.message : "Erreur"}
+              {candidatesError instanceof Error ? candidatesError.message : "Error"}
             </div>
           ) : filtered.length === 0 ? (
             <div style={{ padding: 20, textAlign: "center", color: COLORS.ink3, fontSize: 13 }}>
-              {query ? "Aucun deal ne matche cette recherche." : "Aucun deal à importer."}
+              {query ? "No deal matches this search." : "No deal to import."}
             </div>
           ) : (
             filtered.map((c) => {
@@ -382,7 +382,7 @@ export function BackfillModal({
                       {c.name}
                     </div>
                     <div style={{ fontSize: 11, color: COLORS.ink3, marginTop: 1 }}>
-                      {c.owner_name || "Sans owner"} · #{c.id}
+                      {c.owner_name || "No owner"} · #{c.id}
                     </div>
                   </div>
                   <span style={{ fontSize: 12, color: COLORS.ink1, fontVariantNumeric: "tabular-nums", textAlign: "right" }}>
@@ -410,13 +410,13 @@ export function BackfillModal({
               flexShrink: 0,
             }}
           >
-            <strong>{result.imported}</strong> deal(s) importé(s)
-            {result.alreadyExisted > 0 && <>, <strong>{result.alreadyExisted}</strong> déjà présent(s)</>}
-            {result.errors > 0 && <>, <strong>{result.errors}</strong> erreur(s)</>}.
+            <strong>{result.imported}</strong> deal(s) imported
+            {result.alreadyExisted > 0 && <>, <strong>{result.alreadyExisted}</strong> already present</>}
+            {result.errors > 0 && <>, <strong>{result.errors}</strong> error(s)</>}.
             {result.imported > 1 && (
               <div style={{ marginTop: 4, color: COLORS.ink2 }}>
-                Confirme les meetings depuis chaque fiche (les AE ont été notifiés sur Slack), puis l&apos;analyse
-                démarre.
+                Confirm the meetings from each profile (the AEs have been notified on Slack), then the analysis
+                starts.
               </div>
             )}
           </div>
@@ -453,7 +453,7 @@ export function BackfillModal({
               cursor: importing ? "not-allowed" : "pointer",
             }}
           >
-            {result ? "Fermer" : "Annuler"}
+            {result ? "Close" : "Cancel"}
           </button>
           {!result && (
             <button
@@ -475,7 +475,7 @@ export function BackfillModal({
               }}
             >
               {importing ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-              {importing ? "Importation…" : `Importer ${selected.size || ""} deal${selected.size > 1 ? "s" : ""}`.trim()}
+              {importing ? "Importing…" : `Import ${selected.size || ""} deal${selected.size > 1 ? "s" : ""}`.trim()}
             </button>
           )}
         </div>

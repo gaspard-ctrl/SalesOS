@@ -18,7 +18,7 @@ const EDITABLE_BLOCKS = new Set(["deal_recap", "coach_brief", "health"]);
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id } = await params;
 
@@ -31,12 +31,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { block, value } = body;
   if (!block || !EDITABLE_BLOCKS.has(block)) {
-    return NextResponse.json({ error: `bloc non éditable: ${block}` }, { status: 400 });
+    return NextResponse.json({ error: `non-editable block: ${block}` }, { status: 400 });
   }
   // Les 3 blocs sont des objets JSONB. On refuse les valeurs non-objet pour
   // éviter d'écraser la colonne avec un scalaire par erreur.
   if (value === null || typeof value !== "object") {
-    return NextResponse.json({ error: "value doit être un objet" }, { status: 400 });
+    return NextResponse.json({ error: "value must be an object" }, { status: 400 });
   }
 
   const { error: updateErr } = await db

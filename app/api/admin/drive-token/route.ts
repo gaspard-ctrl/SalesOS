@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const user = await getAuthenticatedUser();
-  if (!user || !isAdmin(user)) return NextResponse.json({ error: "Interdit" }, { status: 403 });
+  if (!user || !isAdmin(user)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { data } = await db
     .from("user_integrations")
@@ -18,7 +18,7 @@ export async function GET() {
     .single();
 
   if (!data?.connected) {
-    return NextResponse.json({ error: "Gmail non connecté. Connecte Gmail d'abord." }, { status: 404 });
+    return NextResponse.json({ error: "Gmail not connected. Connect Gmail first." }, { status: 404 });
   }
 
   const refreshToken = decrypt({

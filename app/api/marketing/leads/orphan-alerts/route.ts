@@ -35,7 +35,7 @@ async function slackPost(channel: string, text: string): Promise<void> {
 
 function formatDigest(orphans: OrphanRow[]): string {
   const lines: string[] = [
-    `:warning: *${orphans.length} lead${orphans.length > 1 ? "s" : ""} orphelin${orphans.length > 1 ? "s" : ""}* (validé${orphans.length > 1 ? "s" : ""} il y a plus de 7 jours, sans deal HubSpot associé)`,
+    `:warning: *${orphans.length} orphan lead${orphans.length > 1 ? "s" : ""}* (validated more than 7 days ago, no associated HubSpot deal)`,
     ``,
   ];
   for (const o of orphans) {
@@ -43,11 +43,11 @@ function formatDigest(orphans: OrphanRow[]): string {
     const company = o.analysis?.extracted_company ?? "?";
     const email = o.analysis?.extracted_email ?? "?";
     const since = o.validated_at
-      ? new Date(o.validated_at).toLocaleDateString("fr-FR")
+      ? new Date(o.validated_at).toLocaleDateString("en-GB")
       : "?";
     const author = o.author_name ?? "?";
     const link = o.slack_permalink ? ` <${o.slack_permalink}|→ Slack>` : "";
-    lines.push(`• *${name}* — ${company} — ${email} (validé le ${since} par ${author})${link}`);
+    lines.push(`• *${name}* - ${company} - ${email} (validated on ${since} by ${author})${link}`);
   }
   return lines.join("\n");
 }

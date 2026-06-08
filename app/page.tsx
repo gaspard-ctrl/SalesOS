@@ -73,25 +73,25 @@ export default function IntelligencePage() {
   const [showHistory, setShowHistory] = useState(false);
 
   const TOOL_LABELS = useMemo<Record<string, string>>(() => ({
-    search_contacts:           "Recherche de contacts…",
-    search_deals:              "Recherche de deals…",
-    get_deals:                 "Chargement du pipeline…",
-    get_companies:             "Chargement des entreprises…",
-    get_contact_details:       "Détails du contact…",
-    get_contact_activity:      "Historique des échanges…",
-    get_deal_activity:         "Historique du deal…",
-    get_deal_contacts:         "Contacts associés au deal…",
-    search_slack:              "Recherche dans Slack…",
-    get_slack_channel_history: "Lecture du canal Slack…",
-    send_slack_message:        "Envoi du message Slack…",
-    web_search:                "Recherche web…",
-    search_drive:              "Recherche dans Google Drive…",
-    read_drive_file:           "Lecture du document…",
-    list_drive_folder:         "Navigation dans Drive…",
-    search_gmail:              "Recherche dans tes emails…",
-    read_gmail_message:        "Lecture de l'email…",
-    search_claap_meetings:     "Recherche des meetings Claap…",
-    get_claap_meeting_transcript: "Lecture du transcript Claap…",
+    search_contacts:           "Searching contacts…",
+    search_deals:              "Searching deals…",
+    get_deals:                 "Loading pipeline…",
+    get_companies:             "Loading companies…",
+    get_contact_details:       "Contact details…",
+    get_contact_activity:      "Exchange history…",
+    get_deal_activity:         "Deal history…",
+    get_deal_contacts:         "Contacts associated with the deal…",
+    search_slack:              "Searching Slack…",
+    get_slack_channel_history: "Reading Slack channel…",
+    send_slack_message:        "Sending Slack message…",
+    web_search:                "Searching the web…",
+    search_drive:              "Searching Google Drive…",
+    read_drive_file:           "Reading document…",
+    list_drive_folder:         "Browsing Drive…",
+    search_gmail:              "Searching your emails…",
+    read_gmail_message:        "Reading email…",
+    search_claap_meetings:     "Searching Claap meetings…",
+    get_claap_meeting_transcript: "Reading Claap transcript…",
   }), []);
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -255,7 +255,7 @@ export default function IntelligencePage() {
                 }).catch(() => {});
               }
             } else if (event.type === "error") {
-              setMessages((prev) => [...prev, { role: "assistant", content: `Erreur : ${event.message}` }]);
+              setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${event.message}` }]);
               setStreamingText("");
               setLoading(false);
             }
@@ -269,9 +269,9 @@ export default function IntelligencePage() {
       setToolSteps([]);
       setLoading(false);
     } catch (err) {
-      const detail = err instanceof Error ? err.message : "Erreur inconnue";
+      const detail = err instanceof Error ? err.message : "Unknown error";
       console.error("[Chat] client error:", detail);
-      setMessages((prev) => [...prev, { role: "assistant", content: `Erreur de connexion : ${detail}` }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: `Connection error: ${detail}` }]);
       setStreamingText("");
       setToolSteps([]);
       setLoading(false);
@@ -283,7 +283,7 @@ export default function IntelligencePage() {
       {messages.length > 0 && activeTab === "conversation" && (
         <button
           onClick={startNewConversation}
-          aria-label="Nouvelle conversation"
+          aria-label="New conversation"
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -309,12 +309,12 @@ export default function IntelligencePage() {
           }}
         >
           <Plus size={13} />
-          Nouveau
+          New
         </button>
       )}
       <button
         onClick={() => setShowHistory(true)}
-        aria-label="Voir l'historique des conversations"
+        aria-label="View conversation history"
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -340,7 +340,7 @@ export default function IntelligencePage() {
         }}
       >
         <History size={13} />
-        Historique
+        History
       </button>
     </div>
   );
@@ -397,7 +397,7 @@ export default function IntelligencePage() {
                       <div className="flex items-center gap-2 mt-1 px-2 py-1 rounded-lg" style={{ background: "#fff7ed", border: "1px solid #fed7aa" }}>
                         <span className="text-xs">⚠️</span>
                         <span className="text-xs font-medium" style={{ color: "#c2410c" }}>
-                          Requête coûteuse : ~{(costWarning * 100).toFixed(1)}¢ jusqu&apos;ici
+                          Expensive request: ~{(costWarning * 100).toFixed(1)}¢ so far
                         </span>
                       </div>
                     )}
@@ -409,7 +409,7 @@ export default function IntelligencePage() {
                           ))}
                         </div>
                         {toolSteps.length > 0 && (
-                          <span className="text-xs" style={{ color: "#bbb" }}>en cours…</span>
+                          <span className="text-xs" style={{ color: "#bbb" }}>in progress…</span>
                         )}
                       </div>
                     )}
@@ -467,16 +467,16 @@ export default function IntelligencePage() {
 
 function ConnectorsTabPlaceholder() {
   const items = [
-    { icon: Database, name: "HubSpot", desc: "Contacts, deals, companies, activités" },
-    { icon: Mail, name: "Gmail", desc: "Recherche et lecture d'emails" },
-    { icon: MessageSquare, name: "Slack", desc: "Recherche, lecture de canaux, envoi de message" },
-    { icon: FolderOpen, name: "Google Drive", desc: "Recherche, lecture de fichiers" },
-    { icon: Linkedin, name: "LinkedIn", desc: "Profils, entreprises, posts (via Bright Data)" },
-    { icon: Globe, name: "Web", desc: "Recherche web temps réel" },
+    { icon: Database, name: "HubSpot", desc: "Contacts, deals, companies, activities" },
+    { icon: Mail, name: "Gmail", desc: "Search and read emails" },
+    { icon: MessageSquare, name: "Slack", desc: "Search, read channels, send messages" },
+    { icon: FolderOpen, name: "Google Drive", desc: "Search and read files" },
+    { icon: Linkedin, name: "LinkedIn", desc: "Profiles, companies, posts (via Bright Data)" },
+    { icon: Globe, name: "Web", desc: "Real-time web search" },
   ];
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "12px 0", display: "flex", flexDirection: "column", gap: 12 }}>
-      <SectionHeader title="Connecteurs" />
+      <SectionHeader title="Connectors" />
       {items.map(({ icon: Icon, name, desc }) => (
         <Card key={name} padding={14}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -513,7 +513,7 @@ function ConnectorsTabPlaceholder() {
               }}
             >
               <Check size={12} strokeWidth={3} />
-              Connecté
+              Connected
             </span>
           </div>
         </Card>

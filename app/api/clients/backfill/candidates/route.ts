@@ -14,10 +14,10 @@ export const maxDuration = 30;
 // Limité à 500 résultats (les plus récents) pour pas exploser le front.
 export async function GET(_req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   if (!process.env.HUBSPOT_ACCESS_TOKEN) {
-    return NextResponse.json({ error: "HUBSPOT_ACCESS_TOKEN manquant" }, { status: 500 });
+    return NextResponse.json({ error: "HUBSPOT_ACCESS_TOKEN missing" }, { status: 500 });
   }
 
   try {

@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) {
     return new Response(
-      `data: ${JSON.stringify({ type: "error", message: "Non authentifié." })}\n\n`,
+      `data: ${JSON.stringify({ type: "error", message: "Not authenticated." })}\n\n`,
       { status: 401, headers: { "Content-Type": "text/event-stream" } }
     );
   }
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   const { context, question } = await req.json();
   if (!question?.trim()) {
     return new Response(
-      `data: ${JSON.stringify({ type: "error", message: "Question manquante." })}\n\n`,
+      `data: ${JSON.stringify({ type: "error", message: "Question missing." })}\n\n`,
       { status: 400, headers: { "Content-Type": "text/event-stream" } }
     );
   }
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
     if (!keyRow?.is_active) {
       return new Response(
-        `data: ${JSON.stringify({ type: "error", message: "Ton accès Claude n'est pas encore configuré. Contacte Arthur." })}\n\n`,
+        `data: ${JSON.stringify({ type: "error", message: "Your Claude access is not configured yet. Contact Arthur." })}\n\n`,
         { status: 402, headers: { "Content-Type": "text/event-stream" } }
       );
     }
@@ -74,7 +74,7 @@ DONNÉES CONTEXTUELLES :
 ${typeof context === "string" ? context : JSON.stringify(context, null, 2)}
 
 RÈGLES :
-- Réponds en français, de manière concise et actionnable.
+- Réponds dans la langue de la question et des données (anglais par défaut si incertain), de manière concise et actionnable.
 - Base-toi UNIQUEMENT sur les données fournies. Si l'information n'est pas disponible, dis-le.
 - Utilise des bullet points et du markdown léger pour la lisibilité.
 - Sois direct — pas de formules de politesse inutiles.`;
@@ -101,7 +101,7 @@ RÈGLES :
 
         logUsage(user.id, model, message.usage.input_tokens, message.usage.output_tokens, "ask-context");
       } catch (e) {
-        send({ type: "error", message: e instanceof Error ? e.message : "Erreur inconnue" });
+        send({ type: "error", message: e instanceof Error ? e.message : "Unknown error" });
       } finally {
         controller.close();
       }

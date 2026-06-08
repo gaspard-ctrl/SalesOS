@@ -10,7 +10,7 @@ const COLS =
 
 export async function GET(_req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { data, error } = await db
     .from("scope_companies")
@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as {
     name?: string;
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     notes?: string | null;
   } | null;
   if (!body || typeof body.name !== "string" || !body.name.trim()) {
-    return NextResponse.json({ error: "name requis" }, { status: 400 });
+    return NextResponse.json({ error: "name required" }, { status: 400 });
   }
 
   const payload = {
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
   if (error) {
     if (error.code === "23505") {
-      return NextResponse.json({ error: "Entreprise déjà présente" }, { status: 409 });
+      return NextResponse.json({ error: "Company already exists" }, { status: 409 });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -63,14 +63,14 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as { ids?: unknown } | null;
   const ids = Array.isArray(body?.ids)
     ? body!.ids.filter((v): v is string => typeof v === "string" && v.length > 0)
     : [];
   if (ids.length === 0) {
-    return NextResponse.json({ error: "ids requis" }, { status: 400 });
+    return NextResponse.json({ error: "ids required" }, { status: 400 });
   }
 
   const { error } = await db.from("scope_companies").delete().in("id", ids);

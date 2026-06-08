@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const [userRes, globalGuide] = await Promise.all([
     db.from("users").select("user_prompt, name").eq("id", user.id).maybeSingle(),
@@ -23,7 +23,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { userInstructions } = await req.json();
 
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     .eq("id", user.id);
 
   if (error) {
-    return NextResponse.json({ error: "Erreur lors de la sauvegarde" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to save" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

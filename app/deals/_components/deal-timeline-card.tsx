@@ -56,7 +56,7 @@ const AI_EVENT_STYLE: Record<AnalysisEventType, { icon: LucideIcon; fg: string; 
 
 function shortDate(ts: number): string {
   if (!ts) return "";
-  return new Date(ts).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "2-digit" });
+  return new Date(ts).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
 }
 
 function eventToItem(e: DealEvent, i: number): TimelineItem {
@@ -82,7 +82,7 @@ function meetingToItem(m: DealMeeting): TimelineItem {
     ts: Number.isNaN(ts) ? 0 : ts,
     dateLabel: shortDate(ts),
     label: meetingKindBadge(m.meeting_kind),
-    fullTitle: m.meeting_title ?? "Réunion Claap",
+    fullTitle: m.meeting_title ?? "Claap meeting",
     icon: Video,
     fg,
     bg,
@@ -100,7 +100,7 @@ function aiEventToItem(e: AnalysisEvent, i: number): TimelineItem | null {
     ts,
     dateLabel: shortDate(ts),
     label: e.label,
-    fullTitle: e.description ? `${e.label} — ${e.description}` : e.label,
+    fullTitle: e.description ? `${e.label} - ${e.description}` : e.label,
     icon: style.icon,
     fg: style.fg,
     bg: style.bg,
@@ -222,7 +222,7 @@ export function DealEventsTimeline({
       <Card padding={16}>
         <SectionHeader title="Timeline" />
         <div style={{ fontSize: 12, color: COLORS.ink3, fontStyle: "italic" }}>
-          Aucun événement marquant sur ce deal.
+          No notable events on this deal.
         </div>
       </Card>
     );

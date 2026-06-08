@@ -33,7 +33,7 @@ const RED = "#ef4444";
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString("fr-FR", {
+  return d.toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -68,7 +68,7 @@ function StatusBadge({ status }: { status: LeadValidationStatus }) {
       }}
     >
       {validated ? <Check size={11} /> : <X size={11} />}
-      {validated ? "Validé" : "Rejeté"}
+      {validated ? "Validated" : "Rejected"}
     </span>
   );
 }
@@ -138,7 +138,7 @@ function LeadCard({
     >
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>
-          {lead.author_name ?? "(auteur inconnu)"}
+          {lead.author_name ?? "(unknown author)"}
         </div>
         <div style={{ fontSize: 12, color: "#888" }}>{formatDate(lead.posted_at)}</div>
         {lead.slack_permalink && (
@@ -261,7 +261,7 @@ function LeadCard({
             ) : (
               <RefreshCw size={14} />
             )}
-            Réanalyser
+            Re-analyze
           </button>
         )}
         {lead.validation_status === "pending" ? (
@@ -282,7 +282,7 @@ function LeadCard({
                 opacity: busy ? 0.6 : 1,
               }}
             >
-              <X size={14} /> Rejeter
+              <X size={14} /> Reject
             </button>
             <button
               onClick={onOpenValidation}
@@ -300,7 +300,7 @@ function LeadCard({
                 opacity: busy ? 0.6 : 1,
               }}
             >
-              <Check size={14} /> Valider
+              <Check size={14} /> Validate
             </button>
           </>
         ) : (
@@ -310,7 +310,7 @@ function LeadCard({
                 onClick={() => {
                   if (
                     window.confirm(
-                      "Marquer ce lead comme rejeté ? Le deal HubSpot associé ne sera pas modifié.",
+                      "Mark this lead as rejected? The associated HubSpot deal will not be changed.",
                     )
                   ) {
                     onValidate("rejected");
@@ -330,7 +330,7 @@ function LeadCard({
                   opacity: busy ? 0.6 : 1,
                 }}
               >
-                <X size={14} /> Marquer comme rejeté
+                <X size={14} /> Mark as rejected
               </button>
             )}
             <button
@@ -349,7 +349,7 @@ function LeadCard({
                 opacity: busy ? 0.6 : 1,
               }}
             >
-              <Undo2 size={14} /> Remettre en attente
+              <Undo2 size={14} /> Reset to pending
             </button>
           </>
         )}
@@ -388,12 +388,12 @@ export default function LeadsManagementPage() {
       if (!silent) {
         setSyncMessage(
           inserted > 0
-            ? `${inserted} nouveau${inserted > 1 ? "x" : ""} lead${inserted > 1 ? "s" : ""}`
-            : "Aucun nouveau lead",
+            ? `${inserted} new lead${inserted > 1 ? "s" : ""}`
+            : "No new leads",
         );
       }
     } catch (e) {
-      setSyncMessage(`Erreur sync : ${e instanceof Error ? e.message : "inconnue"}`);
+      setSyncMessage(`Sync error: ${e instanceof Error ? e.message : "unknown"}`);
     } finally {
       setSyncing(false);
     }
@@ -411,7 +411,7 @@ export default function LeadsManagementPage() {
     try {
       await validateLead(lead.id, status);
     } catch (e) {
-      setSyncMessage(`Erreur : ${e instanceof Error ? e.message : "inconnue"}`);
+      setSyncMessage(`Error: ${e instanceof Error ? e.message : "unknown"}`);
     } finally {
       setBusyId(null);
     }
@@ -422,7 +422,7 @@ export default function LeadsManagementPage() {
     try {
       await analyzeLead(lead.id);
     } catch (e) {
-      setSyncMessage(`Erreur analyse : ${e instanceof Error ? e.message : "inconnue"}`);
+      setSyncMessage(`Analysis error: ${e instanceof Error ? e.message : "unknown"}`);
     } finally {
       setBusyId(null);
     }
@@ -431,22 +431,22 @@ export default function LeadsManagementPage() {
   const handleReanalyzeAll = async () => {
     if (
       !window.confirm(
-        "Réanalyser tous les leads validés ? Cela peut prendre plusieurs minutes et coûte des tokens Claude.",
+        "Re-analyze all validated leads? This can take several minutes and uses Claude tokens.",
       )
     ) {
       return;
     }
     setReanalyzingAll(true);
-    setReanalyzeProgress("Démarrage…");
+    setReanalyzeProgress("Starting…");
     try {
       const result = await reanalyzeAll((p) => {
-        setReanalyzeProgress(`${p.processed} traités · ${p.ok} OK · ${p.errors} erreurs`);
+        setReanalyzeProgress(`${p.processed} processed · ${p.ok} OK · ${p.errors} errors`);
       });
       setReanalyzeProgress(
-        `Terminé : ${result.totalProcessed} leads (${result.totalOk} OK, ${result.totalErrors} erreurs)`,
+        `Done: ${result.totalProcessed} leads (${result.totalOk} OK, ${result.totalErrors} errors)`,
       );
     } catch (e) {
-      setReanalyzeProgress(`Erreur : ${e instanceof Error ? e.message : "inconnue"}`);
+      setReanalyzeProgress(`Error: ${e instanceof Error ? e.message : "unknown"}`);
     } finally {
       setReanalyzingAll(false);
     }
@@ -470,10 +470,10 @@ export default function LeadsManagementPage() {
             background: "#fff",
           }}
         >
-          <ArrowLeft size={14} /> Retour aux leads
+          <ArrowLeft size={14} /> Back to leads
         </Link>
         <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0, color: "#111" }}>
-          Gestion des leads
+          Lead management
         </h1>
       </div>
 
@@ -481,25 +481,25 @@ export default function LeadsManagementPage() {
         <FilterButton
           active={filter === "pending"}
           onClick={() => setFilter("pending")}
-          label="À valider"
+          label="To validate"
           count={counts.pending}
         />
         <FilterButton
           active={filter === "validated"}
           onClick={() => setFilter("validated")}
-          label="Validés"
+          label="Validated"
           count={counts.validated}
         />
         <FilterButton
           active={filter === "rejected"}
           onClick={() => setFilter("rejected")}
-          label="Rejetés"
+          label="Rejected"
           count={counts.rejected}
         />
         <FilterButton
           active={filter === "all"}
           onClick={() => setFilter("all")}
-          label="Tous"
+          label="All"
         />
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -528,7 +528,7 @@ export default function LeadsManagementPage() {
             ) : (
               <Sparkles size={14} />
             )}
-            Réanalyser tout
+            Re-analyze all
           </button>
           <button
             onClick={() => runSync(false)}
@@ -561,7 +561,7 @@ export default function LeadsManagementPage() {
             color: "#888",
           }}
         >
-          <Loader2 size={16} className="animate-spin" style={{ marginRight: 8 }} /> Chargement…
+          <Loader2 size={16} className="animate-spin" style={{ marginRight: 8 }} /> Loading…
         </div>
       ) : leads.length === 0 ? (
         <div
@@ -578,7 +578,7 @@ export default function LeadsManagementPage() {
           }}
         >
           <Inbox size={32} />
-          <div style={{ fontSize: 14 }}>Aucun lead dans cette catégorie</div>
+          <div style={{ fontSize: 14 }}>No leads in this category</div>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

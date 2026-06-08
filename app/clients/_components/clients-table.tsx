@@ -23,13 +23,13 @@ export type ClientListItem = {
 };
 
 function fmtAmount(n: number | null): string {
-  if (n == null) return "—";
+  if (n == null) return "-";
   return `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k€`;
 }
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+  if (!iso) return "-";
+  return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function StatusPill({
@@ -40,20 +40,20 @@ function StatusPill({
   amCsNotifiedAt: string | null;
 }) {
   const map: Record<ClientListItem["enrichment_status"], { fg: string; bg: string; label: string }> = {
-    pending: { fg: COLORS.ink2, bg: COLORS.bgSoft, label: "En attente" },
-    awaiting_meetings: { fg: COLORS.brand, bg: COLORS.brandTint, label: "Meetings à confirmer" },
-    running: { fg: COLORS.info, bg: COLORS.infoBg, label: "Enrichissement…" },
+    pending: { fg: COLORS.ink2, bg: COLORS.bgSoft, label: "Pending" },
+    awaiting_meetings: { fg: COLORS.brand, bg: COLORS.brandTint, label: "Meetings to confirm" },
+    running: { fg: COLORS.info, bg: COLORS.infoBg, label: "Enriching…" },
     // Une fois enrichi, l'étape suivante est la validation par l'AE (remplir les
     // champs requis + assigner/notifier l'AM et le CS). On reflète ce sous-état :
     // "À valider" tant que l'AM/CS ne sont pas notifiés, "Transmis AM/CS" ensuite.
-    done: { fg: COLORS.ok, bg: COLORS.okBg, label: "Enrichi" },
-    error: { fg: COLORS.err, bg: COLORS.errBg, label: "Erreur" },
+    done: { fg: COLORS.ok, bg: COLORS.okBg, label: "Enriched" },
+    error: { fg: COLORS.err, bg: COLORS.errBg, label: "Error" },
   };
   const s =
     status === "done"
       ? amCsNotifiedAt
-        ? { fg: COLORS.ok, bg: COLORS.okBg, label: "Transmis AM/CS" }
-        : { fg: COLORS.warn, bg: COLORS.warnBg, label: "À valider" }
+        ? { fg: COLORS.ok, bg: COLORS.okBg, label: "Handed over to AM/CS" }
+        : { fg: COLORS.warn, bg: COLORS.warnBg, label: "To validate" }
       : map[status];
   return (
     <span
@@ -87,9 +87,9 @@ export function ClientsTable({ clients }: { clients: ClientListItem[] }) {
           fontSize: 14,
         }}
       >
-        Aucun client à afficher.
+        No clients to display.
         <div style={{ fontSize: 12, color: COLORS.ink3, marginTop: 6 }}>
-          Les clients sont créés automatiquement quand un deal HubSpot passe en closed-won.
+          Clients are created automatically when a HubSpot deal moves to closed-won.
         </div>
       </div>
     );
@@ -119,13 +119,13 @@ export function ClientsTable({ clients }: { clients: ClientListItem[] }) {
           letterSpacing: 0.4,
         }}
       >
-        <div>Compte</div>
+        <div>Account</div>
         <div>Owner</div>
-        <div>Montant HubSpot</div>
-        <div>Montant billé</div>
-        <div>Signé le</div>
+        <div>HubSpot amount</div>
+        <div>Billed amount</div>
+        <div>Signed on</div>
         <div>Health</div>
-        <div>Statut</div>
+        <div>Status</div>
       </div>
       {clients.map((c) => (
         <Link
@@ -169,7 +169,7 @@ export function ClientsTable({ clients }: { clients: ClientListItem[] }) {
             </div>
           </div>
           <div style={{ fontSize: 12, color: COLORS.ink1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {c.owner_name || c.owner_email || "—"}
+            {c.owner_name || c.owner_email || "-"}
           </div>
           <div style={{ fontSize: 12, color: COLORS.ink1, fontVariantNumeric: "tabular-nums" }}>
             {fmtAmount(c.deal_amount)}

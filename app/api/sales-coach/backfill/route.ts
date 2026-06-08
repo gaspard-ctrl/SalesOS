@@ -20,7 +20,7 @@ type Body = {
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   if (!process.env.CLAAP_API_TOKEN) {
     return NextResponse.json({ error: "CLAAP_API_TOKEN not configured" }, { status: 500 });

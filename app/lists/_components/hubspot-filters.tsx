@@ -6,11 +6,11 @@ import { COLORS } from "@/lib/design/tokens";
 import type { HubspotCriteria, HubspotOwner } from "@/lib/intel-types";
 
 const RANGES: { value: NonNullable<HubspotCriteria["createdRange"]>; label: string }[] = [
-  { value: "7d", label: "7j" },
-  { value: "30d", label: "30j" },
-  { value: "90d", label: "90j" },
-  { value: "year", label: "Année" },
-  { value: "all", label: "Tout" },
+  { value: "7d", label: "7d" },
+  { value: "30d", label: "30d" },
+  { value: "90d", label: "90d" },
+  { value: "year", label: "Year" },
+  { value: "all", label: "All" },
   { value: "custom", label: "Custom" },
 ];
 
@@ -51,13 +51,13 @@ export function HubspotFilters({
     <div style={formStyle()}>
       {/* Recherche libre */}
       <div>
-        <Label>Recherche libre</Label>
+        <Label>Free search</Label>
         <div style={{ position: "relative" }}>
           <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: COLORS.ink3 }} />
           <input
             value={c.q ?? ""}
             onChange={(e) => set({ q: e.target.value })}
-            placeholder="Nom, email, téléphone…"
+            placeholder="Name, email, phone…"
             style={{
               width: "100%",
               paddingLeft: 32,
@@ -83,10 +83,10 @@ export function HubspotFilters({
             onClick={() => set({ owner: myOwnerId ? [myOwnerId] : undefined })}
             style={chip(c.owner?.length === 1 && c.owner[0] === myOwnerId)}
           >
-            Moi seulement
+            Only me
           </button>
           <button type="button" onClick={() => set({ owner: undefined })} style={chip(!c.owner || c.owner.length === 0)}>
-            Tous
+            All
           </button>
           <OwnersDropdown
             owners={owners}
@@ -101,11 +101,11 @@ export function HubspotFilters({
         <div>
           <LabelWithHelp
             label="Companies (watchlist)"
-            help="Restreint aux contacts associés (dans HubSpot) à une company de votre watchlist. Ce sont les mêmes contacts que ceux affichés sur la fiche de la company."
+            help="Restricts to contacts associated (in HubSpot) with a company from your watchlist. These are the same contacts shown on the company page."
           />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             <button type="button" onClick={() => set({ companies: undefined })} style={chip(!c.companies || c.companies.length === 0)}>
-              Toutes
+              All
             </button>
             <CompaniesDropdown
               companies={scopeCompanies}
@@ -118,7 +118,7 @@ export function HubspotFilters({
 
       {/* Date d'ajout */}
       <div>
-        <Label>Date d&apos;ajout (du contact)</Label>
+        <Label>Date added (contact)</Label>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
           {RANGES.map((r) => (
             <button key={r.value} type="button" onClick={() => set({ createdRange: r.value })} style={chip(c.createdRange === r.value)}>
@@ -136,21 +136,21 @@ export function HubspotFilters({
 
       {/* Engagement */}
       <div>
-        <LabelWithHelp label="Engagement" help="Filtre basé sur la date du dernier contact loggé dans HubSpot (notes_last_contacted)." />
+        <LabelWithHelp label="Engagement" help="Filter based on the date of the last contact logged in HubSpot (notes_last_contacted)." />
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
           <button
             type="button"
             onClick={() => set({ neverContacted: false, daysSinceLastContact: undefined })}
             style={chip(!c.neverContacted && !c.daysSinceLastContact)}
           >
-            Tous
+            All
           </button>
           <button
             type="button"
             onClick={() => set({ neverContacted: !c.neverContacted, daysSinceLastContact: undefined })}
             style={chip(!!c.neverContacted)}
           >
-            Jamais contacté
+            Never contacted
           </button>
           {[30, 90, 180].map((d) => (
             <button
@@ -159,7 +159,7 @@ export function HubspotFilters({
               onClick={() => set({ daysSinceLastContact: c.daysSinceLastContact === d ? undefined : d, neverContacted: false })}
               style={chip(c.daysSinceLastContact === d)}
             >
-              &gt;{d}j
+              &gt;{d}d
             </button>
           ))}
         </div>
@@ -167,12 +167,12 @@ export function HubspotFilters({
 
       {/* Tri */}
       <div>
-        <Label>Tri</Label>
+        <Label>Sort</Label>
         <select value={c.sort ?? "createdate-desc"} onChange={(e) => set({ sort: e.target.value as HubspotCriteria["sort"] })} style={inp()}>
-          <option value="createdate-desc">Date d&apos;ajout (récent)</option>
-          <option value="lastcontacted-desc">Dernier contact (récent)</option>
-          <option value="lastcontacted-asc">Pas contacté depuis longtemps</option>
-          <option value="alpha">Alphabétique (nom)</option>
+          <option value="createdate-desc">Date added (recent)</option>
+          <option value="lastcontacted-desc">Last contact (recent)</option>
+          <option value="lastcontacted-asc">Not contacted in a long time</option>
+          <option value="alpha">Alphabetical (name)</option>
         </select>
       </div>
 
@@ -196,12 +196,12 @@ export function HubspotFilters({
             padding: 0,
           }}
         >
-          {advancedOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />} Filtres avancés
+          {advancedOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />} Advanced filters
         </button>
         {advancedOpen && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 8 }}>
             <div>
-              <Label>Industrie</Label>
+              <Label>Industry</Label>
               <input
                 value={(c.industry ?? []).join(", ")}
                 onChange={(e) => set({ industry: parseList(e.target.value) })}
@@ -210,9 +210,9 @@ export function HubspotFilters({
               />
             </div>
             <div>
-              <Label>Pays</Label>
+              <Label>Country</Label>
               <select value={(c.country ?? [])[0] ?? ""} onChange={(e) => set({ country: e.target.value ? [e.target.value] : undefined })} style={inp()}>
-                <option value="">Tous</option>
+                <option value="">All</option>
                 {COUNTRY_PRESETS.map((co) => (
                   <option key={co} value={co}>
                     {co}
@@ -221,7 +221,7 @@ export function HubspotFilters({
               </select>
             </div>
             <div style={{ gridColumn: "span 2" }}>
-              <Label>Taille entreprise</Label>
+              <Label>Company size</Label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {COMPANY_SIZES.map((s) => {
                   const sel = c.companysize?.includes(s) ?? false;
@@ -248,13 +248,13 @@ export function HubspotFilters({
                 onChange={(e) => set({ hasLinkedin: e.target.value === "yes" ? true : e.target.value === "no" ? false : undefined })}
                 style={inp()}
               >
-                <option value="">Tous</option>
-                <option value="yes">A un LinkedIn</option>
-                <option value="no">Pas de LinkedIn</option>
+                <option value="">All</option>
+                <option value="yes">Has a LinkedIn</option>
+                <option value="no">No LinkedIn</option>
               </select>
             </div>
             <div>
-              <Label>Limite (par page)</Label>
+              <Label>Limit (per page)</Label>
               <input
                 type="number"
                 min={10}
@@ -304,7 +304,7 @@ function OwnersDropdown({
     else onChange([...selected, id]);
   };
 
-  const label = selected.length === 0 ? "Choisir des owners…" : `${selected.length} owner${selected.length > 1 ? "s" : ""} sélectionné${selected.length > 1 ? "s" : ""}`;
+  const label = selected.length === 0 ? "Choose owners…" : `${selected.length} owner${selected.length > 1 ? "s" : ""} selected`;
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -352,7 +352,7 @@ function OwnersDropdown({
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Rechercher un owner…"
+              placeholder="Search an owner…"
               style={{ flex: 1, fontSize: 12, border: "none", outline: "none", background: "transparent", padding: 0 }}
             />
             {selected.length > 0 && (
@@ -361,13 +361,13 @@ function OwnersDropdown({
                 onClick={() => onChange([])}
                 style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, border: `1px solid ${COLORS.line}`, background: COLORS.bgSoft, color: COLORS.ink2, cursor: "pointer" }}
               >
-                Vider
+                Clear
               </button>
             )}
           </div>
           <div style={{ overflowY: "auto", padding: 4 }}>
             {filtered.length === 0 ? (
-              <p style={{ padding: 12, fontSize: 11, color: COLORS.ink3, margin: 0, textAlign: "center" }}>Aucun owner.</p>
+              <p style={{ padding: 12, fontSize: 11, color: COLORS.ink3, margin: 0, textAlign: "center" }}>No owners.</p>
             ) : (
               filtered.map((o) => {
                 const sel = selected.includes(o.id);
@@ -424,7 +424,7 @@ function CompaniesDropdown({
     else onChange([...selected, id]);
   };
 
-  const label = selected.length === 0 ? "Choisir des companies…" : `${selected.length} company${selected.length > 1 ? "s" : ""} sélectionnée${selected.length > 1 ? "s" : ""}`;
+  const label = selected.length === 0 ? "Choose companies…" : `${selected.length} compan${selected.length > 1 ? "ies" : "y"} selected`;
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -472,7 +472,7 @@ function CompaniesDropdown({
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Rechercher une company…"
+              placeholder="Search a company…"
               style={{ flex: 1, fontSize: 12, border: "none", outline: "none", background: "transparent", padding: 0 }}
             />
             {selected.length < companies.length && (
@@ -481,7 +481,7 @@ function CompaniesDropdown({
                 onClick={() => onChange(companies.map((co) => co.id))}
                 style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, border: `1px solid ${COLORS.brand}`, background: COLORS.brandTint, color: COLORS.brand, cursor: "pointer", whiteSpace: "nowrap" }}
               >
-                Tout sélectionner
+                Select all
               </button>
             )}
             {selected.length > 0 && (
@@ -490,13 +490,13 @@ function CompaniesDropdown({
                 onClick={() => onChange([])}
                 style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, border: `1px solid ${COLORS.line}`, background: COLORS.bgSoft, color: COLORS.ink2, cursor: "pointer" }}
               >
-                Vider
+                Clear
               </button>
             )}
           </div>
           <div style={{ overflowY: "auto", padding: 4 }}>
             {filtered.length === 0 ? (
-              <p style={{ padding: 12, fontSize: 11, color: COLORS.ink3, margin: 0, textAlign: "center" }}>Aucune company.</p>
+              <p style={{ padding: 12, fontSize: 11, color: COLORS.ink3, margin: 0, textAlign: "center" }}>No companies.</p>
             ) : (
               filtered.map((co) => {
                 const sel = selected.includes(co.id);

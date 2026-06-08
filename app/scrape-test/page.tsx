@@ -30,9 +30,9 @@ export default function ScrapeTestPage() {
     <div style={{ maxWidth: 860, margin: "0 auto", padding: "32px 20px" }}>
       <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>Bright Data · Lab</h1>
       <p style={{ color: "#6b7280", fontSize: 14, marginBottom: 20 }}>
-        Banc d&apos;essai de l&apos;API Bright Data. Onglet <strong>SERP Google</strong> : interroge tous les verticaux Google
-        (Web, News, Trends, Maps, Shopping, Images) via la zone <code>salesos_serp</code> — le cœur intel / marché /
-        veille. Onglet <strong>LinkedIn</strong> : scrape de profils.
+        Bright Data API testbed. <strong>Google SERP</strong> tab: query all Google verticals
+        (Web, News, Trends, Maps, Shopping, Images) via the <code>salesos_serp</code> zone - the core of intel / market /
+        monitoring. <strong>LinkedIn</strong> tab: profile scraping.
       </p>
 
       {/* Onglets en pilule */}
@@ -76,42 +76,42 @@ const ENGINES: {
     key: "web",
     label: "Web",
     icon: Globe,
-    hint: "Résultats organiques + knowledge graph (fiche entreprise), people-also-ask, recherches liées.",
+    hint: "Organic results + knowledge graph (company card), people-also-ask, related searches.",
     examples: ["Salesforce", "best CRM software 2026", "Datadog headquarters"],
   },
   {
     key: "news",
     label: "News",
     icon: Newspaper,
-    hint: "Veille société / marché : articles récents (titre, source, date, extrait).",
+    hint: "Company / market monitoring: recent articles (title, source, date, excerpt).",
     examples: ["Datadog layoffs", "OpenAI funding round", "Salesforce acquisition"],
   },
   {
     key: "trends",
     label: "Trends",
     icon: TrendingUp,
-    hint: "Intérêt dans le temps (best-effort : Google Trends renvoie souvent du brut).",
+    hint: "Interest over time (best-effort: Google Trends often returns raw data).",
     examples: ["CRM software", "AI agents", "cold email"],
   },
   {
     key: "maps",
     label: "Maps / Local",
     icon: MapIcon,
-    hint: "Présence locale : entreprises, adresses, notes, avis, téléphone.",
+    hint: "Local presence: businesses, addresses, ratings, reviews, phone.",
     examples: ["SaaS companies Paris", "coworking Lyon", "marketing agency London"],
   },
   {
     key: "shopping",
     label: "Shopping",
     icon: ShoppingBag,
-    hint: "Pricing concurrent : produits, prix, marchands.",
+    hint: "Competitor pricing: products, prices, merchants.",
     examples: ["macbook pro 16", "standing desk", "office chair ergonomic"],
   },
   {
     key: "images",
     label: "Images",
     icon: ImageIcon,
-    hint: "Images : URLs sources, miniatures.",
+    hint: "Images: source URLs, thumbnails.",
     examples: ["Salesforce logo", "Datadog office", "org chart"],
   },
 ];
@@ -120,8 +120,8 @@ const COUNTRIES = [
   { code: "us", label: "🇺🇸 US" },
   { code: "fr", label: "🇫🇷 France" },
   { code: "gb", label: "🇬🇧 UK" },
-  { code: "de", label: "🇩🇪 Allemagne" },
-  { code: "es", label: "🇪🇸 Espagne" },
+  { code: "de", label: "🇩🇪 Germany" },
+  { code: "es", label: "🇪🇸 Spain" },
   { code: "ca", label: "🇨🇦 Canada" },
 ];
 const LANGS = ["en", "fr", "de", "es", "it"];
@@ -168,7 +168,7 @@ function SerpTab() {
       if (!res.ok && json.error) throw new Error(json.error);
       setResp(json);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue");
+      setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoading(false);
     }
@@ -223,7 +223,7 @@ function SerpTab() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Requête…"
+          placeholder="Query…"
           style={{ ...inputStyle, flex: "2 1 260px" }}
         />
         <select value={country} onChange={(e) => setCountry(e.target.value)} style={selectStyle}>
@@ -246,7 +246,7 @@ function SerpTab() {
           max={100}
           value={num}
           onChange={(e) => setNum(Number(e.target.value))}
-          title="Nombre de résultats"
+          title="Number of results"
           style={{ ...inputStyle, flex: "0 0 70px", minWidth: 70 }}
         />
         <button
@@ -268,13 +268,13 @@ function SerpTab() {
           }}
         >
           {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-          {loading ? "…" : "Lancer"}
+          {loading ? "…" : "Run"}
         </button>
       </form>
 
       {/* Chips d'exemples */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20 }}>
-        <span style={{ fontSize: 12, color: "#9ca3af", alignSelf: "center" }}>Exemples :</span>
+        <span style={{ fontSize: 12, color: "#9ca3af", alignSelf: "center" }}>Examples:</span>
         {current.examples.map((ex) => (
           <button
             key={ex}
@@ -324,7 +324,7 @@ function SerpResult({ resp }: { resp: SerpResponse }) {
           HTTP {resp.status}
         </span>
         <span style={{ color: "#6b7280" }}>{resp.ms} ms</span>
-        {!resp.isJson && <span style={{ color: "#b45309" }}>réponse non-JSON (affichée en brut)</span>}
+        {!resp.isJson && <span style={{ color: "#b45309" }}>non-JSON response (shown raw)</span>}
       </div>
 
       {/* Bloc parsé lisible */}
@@ -332,19 +332,19 @@ function SerpResult({ resp }: { resp: SerpResponse }) {
 
       {/* Inspecteur de requête */}
       <details open style={{ marginTop: 18 }}>
-        <summary style={{ cursor: "pointer", fontSize: 13, color: "#6b7280", fontWeight: 500 }}>Inspecteur de requête</summary>
+        <summary style={{ cursor: "pointer", fontSize: 13, color: "#6b7280", fontWeight: 500 }}>Request inspector</summary>
         <div style={{ marginTop: 8, fontSize: 12, color: "#374151" }}>
           <div style={{ marginBottom: 6 }}>
-            <strong>Zone :</strong> <code>{resp.request.zone}</code>
+            <strong>Zone:</strong> <code>{resp.request.zone}</code>
           </div>
           <div style={{ marginBottom: 6 }}>
-            <strong>URL Google :</strong>{" "}
+            <strong>Google URL:</strong>{" "}
             <a href={resp.request.googleUrl} target="_blank" rel="noopener noreferrer" style={{ color: BRAND, wordBreak: "break-all" }}>
               {resp.request.googleUrl}
             </a>
           </div>
           <div>
-            <strong>Body envoyé à /request :</strong>
+            <strong>Body sent to /request:</strong>
             <pre style={preStyle}>{JSON.stringify(resp.request.sentBody, null, 2)}</pre>
           </div>
         </div>
@@ -352,7 +352,7 @@ function SerpResult({ resp }: { resp: SerpResponse }) {
 
       {/* JSON brut complet */}
       <details style={{ marginTop: 12 }}>
-        <summary style={{ cursor: "pointer", fontSize: 13, color: "#6b7280", fontWeight: 500 }}>Réponse brute (JSON complet)</summary>
+        <summary style={{ cursor: "pointer", fontSize: 13, color: "#6b7280", fontWeight: 500 }}>Raw response (full JSON)</summary>
         <pre style={preStyle}>
           {typeof resp.raw === "string" ? resp.raw : JSON.stringify(resp.raw, null, 2)}
         </pre>
@@ -364,7 +364,7 @@ function SerpResult({ resp }: { resp: SerpResponse }) {
 // ── Renderers dédiés par moteur (fallback générique sinon) ─────────────────
 function ParsedView({ engine, parsed }: { engine: Engine; parsed: Record<string, unknown> | null }) {
   if (!parsed || Object.keys(parsed).length === 0) {
-    return <div style={{ color: "#6b7280", fontSize: 14 }}>Aucun champ structuré reconnu — voir la réponse brute ci-dessous.</div>;
+    return <div style={{ color: "#6b7280", fontSize: 14 }}>No structured field recognized - see the raw response below.</div>;
   }
 
   const asArr = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
@@ -381,7 +381,7 @@ function ParsedView({ engine, parsed }: { engine: Engine; parsed: Record<string,
             <div style={{ fontWeight: 600, fontSize: 15 }}>{str(knowledge.name) || str(knowledge.title)}</div>
             {!!str(knowledge.description) && <div style={{ fontSize: 13, color: "#374151", marginTop: 4 }}>{str(knowledge.description)}</div>}
             <details style={{ marginTop: 6 }}>
-              <summary style={{ cursor: "pointer", fontSize: 12, color: "#6b7280" }}>tous les champs</summary>
+              <summary style={{ cursor: "pointer", fontSize: 12, color: "#6b7280" }}>all fields</summary>
               <pre style={preStyle}>{JSON.stringify(knowledge, null, 2)}</pre>
             </details>
           </div>
@@ -395,7 +395,7 @@ function ParsedView({ engine, parsed }: { engine: Engine; parsed: Record<string,
             snippet={str(o.description) || str(o.snippet)}
           />
         ))}
-        <CountNote n={organic.length} label="résultats organiques" />
+        <CountNote n={organic.length} label="organic results" />
       </div>
     );
   }
@@ -436,7 +436,7 @@ function ParsedView({ engine, parsed }: { engine: Engine; parsed: Record<string,
             </div>
           </div>
         ))}
-        <CountNote n={local.length} label="établissements" />
+        <CountNote n={local.length} label="places" />
       </div>
     );
   }
@@ -455,7 +455,7 @@ function ParsedView({ engine, parsed }: { engine: Engine; parsed: Record<string,
             </div>
           </div>
         ))}
-        <CountNote n={items.length} label="produits" />
+        <CountNote n={items.length} label="products" />
       </div>
     );
   }
@@ -553,15 +553,15 @@ function LinkedInTab() {
 
   async function poll(snapshotId: string): Promise<Profile[]> {
     for (let i = 0; i < MAX_POLLS; i++) {
-      if (cancelRef.current) throw new Error("Annulé");
-      setStatusMsg(`Scraping en cours… (${i * (POLL_INTERVAL / 1000)}s)`);
+      if (cancelRef.current) throw new Error("Cancelled");
+      setStatusMsg(`Scraping in progress… (${i * (POLL_INTERVAL / 1000)}s)`);
       await new Promise((r) => setTimeout(r, POLL_INTERVAL));
       const res = await fetch(`/api/brightdata/scrape?snapshot_id=${encodeURIComponent(snapshotId)}`);
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || `Erreur ${res.status}`);
+      if (!res.ok) throw new Error(json.error || `Error ${res.status}`);
       if (json.ready) return (json.profiles as Profile[]) ?? [];
     }
-    throw new Error("Délai dépassé : le scrape prend trop de temps");
+    throw new Error("Timed out: the scrape is taking too long");
   }
 
   const canSubmit = linkedinUrl.trim() ? true : !!(firstName.trim() && lastName.trim());
@@ -573,7 +573,7 @@ function LinkedInTab() {
     setLoading(true);
     cancelRef.current = false;
     try {
-      setStatusMsg(linkedinUrl.trim() ? "Déclenchement du scrape…" : "Recherche du profil LinkedIn…");
+      setStatusMsg(linkedinUrl.trim() ? "Triggering the scrape…" : "Searching for the LinkedIn profile…");
       const res = await fetch("/api/brightdata/scrape", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -585,15 +585,15 @@ function LinkedInTab() {
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || `Erreur ${res.status}`);
+      if (!res.ok) throw new Error(json.error || `Error ${res.status}`);
 
-      if (json.count) setResolvedUrl(`${json.count} profil(s) trouvé(s), scraping en cours…`);
+      if (json.count) setResolvedUrl(`${json.count} profile(s) found, scraping in progress…`);
       const results = await poll(json.snapshotId);
       setProfiles(results);
       setStatusMsg("");
       setResolvedUrl("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue");
+      setError(err instanceof Error ? err.message : "Unknown error");
       setStatusMsg("");
     } finally {
       setLoading(false);
@@ -603,15 +603,15 @@ function LinkedInTab() {
   return (
     <div>
       <p style={{ color: "#6b7280", fontSize: 14, marginBottom: 20 }}>
-        Renseigne un nom (+ société optionnelle) : on retrouve <strong>tous</strong> les profils LinkedIn correspondants
-        via la SERP API Bright Data (Google), puis on les scrape. Tu peux aussi coller directement une URL{" "}
-        <code>linkedin.com/in/…</code>.
+        Enter a name (+ optional company): we find <strong>all</strong> matching LinkedIn profiles
+        via the Bright Data SERP API (Google), then scrape them. You can also paste a{" "}
+        <code>linkedin.com/in/…</code> URL directly.
       </p>
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>
-        <input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Prénom *" style={inputStyle} disabled={!!linkedinUrl.trim()} />
-        <input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Nom *" style={inputStyle} disabled={!!linkedinUrl.trim()} />
-        <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Société (optionnel)" style={inputStyle} disabled={!!linkedinUrl.trim()} />
+        <input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name *" style={inputStyle} disabled={!!linkedinUrl.trim()} />
+        <input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name *" style={inputStyle} disabled={!!linkedinUrl.trim()} />
+        <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Company (optional)" style={inputStyle} disabled={!!linkedinUrl.trim()} />
         <button
           type="submit"
           disabled={loading || !canSubmit}
@@ -631,13 +631,13 @@ function LinkedInTab() {
           }}
         >
           {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-          {loading ? "Recherche…" : "Scraper"}
+          {loading ? "Searching…" : "Scrape"}
         </button>
       </form>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
         <Linkedin size={14} color="#9ca3af" />
-        <input value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)} placeholder="… ou URL LinkedIn directe (https://www.linkedin.com/in/…)" style={{ ...inputStyle, flex: 1 }} />
+        <input value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)} placeholder="… or direct LinkedIn URL (https://www.linkedin.com/in/…)" style={{ ...inputStyle, flex: 1 }} />
       </div>
 
       {resolvedUrl && <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 12 }}>{resolvedUrl}</div>}
@@ -647,7 +647,7 @@ function LinkedInTab() {
           <Loader2 size={14} className="animate-spin" />
           {statusMsg}
           <button onClick={() => { cancelRef.current = true; }} style={{ marginLeft: 8, color: BRAND, background: "none", border: "none", cursor: "pointer", fontSize: 13 }}>
-            <X size={13} style={{ display: "inline", verticalAlign: "middle" }} /> Annuler
+            <X size={13} style={{ display: "inline", verticalAlign: "middle" }} /> Cancel
           </button>
         </div>
       )}
@@ -656,12 +656,12 @@ function LinkedInTab() {
         <div style={{ background: "#fef2f2", color: "#b91c1c", padding: "12px 16px", borderRadius: 8, fontSize: 14, marginBottom: 16 }}>{error}</div>
       )}
 
-      {profiles && profiles.length === 0 && <div style={{ color: "#6b7280", fontSize: 14 }}>Aucun profil trouvé.</div>}
+      {profiles && profiles.length === 0 && <div style={{ color: "#6b7280", fontSize: 14 }}>No profile found.</div>}
 
       {profiles && profiles.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {profiles.map((p, i) => {
-            const name = p.name || [p.first_name, p.last_name].filter(Boolean).join(" ") || "Profil";
+            const name = p.name || [p.first_name, p.last_name].filter(Boolean).join(" ") || "Profile";
             const co = companyName(p);
             const loc = p.city || p.location || "";
             return (
@@ -683,7 +683,7 @@ function LinkedInTab() {
                   </div>
                   {(p.url || p.input_url) && (
                     <a href={p.url || p.input_url} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 8, fontSize: 13, color: BRAND, textDecoration: "none" }}>
-                      <Linkedin size={13} /> Voir le profil
+                      <Linkedin size={13} /> View profile
                     </a>
                   )}
                 </div>
@@ -695,7 +695,7 @@ function LinkedInTab() {
 
       {profiles && profiles.length > 0 && (
         <details style={{ marginTop: 20 }}>
-          <summary style={{ cursor: "pointer", fontSize: 13, color: "#6b7280" }}>Données brutes (JSON)</summary>
+          <summary style={{ cursor: "pointer", fontSize: 13, color: "#6b7280" }}>Raw data (JSON)</summary>
           <pre style={preStyle}>{JSON.stringify(profiles, null, 2)}</pre>
         </details>
       )}

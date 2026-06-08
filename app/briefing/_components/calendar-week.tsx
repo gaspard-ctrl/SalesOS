@@ -5,8 +5,8 @@ import { Calendar } from "lucide-react";
 import type { CalendarEvent } from "@/lib/google-calendar";
 import { externalAttendees, eventTime } from "../_helpers";
 
-const DAY_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
-const MONTH_SHORT = ["jan", "fév", "mar", "avr", "mai", "jun", "jul", "aoû", "sep", "oct", "nov", "déc"];
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export function CalendarWeek({
   events,
@@ -33,10 +33,10 @@ export function CalendarWeek({
       >
         <Calendar size={20} style={{ color: "#f01563", margin: "0 auto 8px" }} />
         <p style={{ fontSize: 12, fontWeight: 600, color: "#c01252", margin: 0, marginBottom: 4 }}>
-          Calendar non connecté
+          Calendar not connected
         </p>
         <p style={{ fontSize: 12, color: "#c01252", margin: 0, marginBottom: 12 }}>
-          Reconnecte Google pour activer l&apos;accès Calendar.
+          Reconnect Google to enable Calendar access.
         </p>
         <a
           href="/api/gmail/connect"
@@ -51,7 +51,7 @@ export function CalendarWeek({
             textDecoration: "none",
           }}
         >
-          Reconnecter Google →
+          Reconnect Google →
         </a>
       </div>
     );
@@ -170,12 +170,12 @@ export function CalendarWeek({
                     <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
                       {isInternal && (
                         <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 999, background: "#f1f5f9", color: "#475569" }}>
-                          Interne
+                          Internal
                         </span>
                       )}
                       {event.meetingLink && (
                         <span style={{ fontSize: 8, padding: "1px 4px", borderRadius: 999, background: "#eff6ff", color: "#1d4ed8" }}>
-                          Visio
+                          Video
                         </span>
                       )}
                     </div>

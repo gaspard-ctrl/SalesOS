@@ -13,7 +13,7 @@ export interface WatchSalesRep {
 
 export async function GET(_req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const [companiesRes, repsRes] = await Promise.all([
     db.from("scope_companies").select("owner"),

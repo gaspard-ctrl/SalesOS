@@ -33,7 +33,7 @@ export default function LeadSourceEditor({ source, onChange, disabled }: Props) 
         type="button"
         onClick={() => !disabled && setEditing(true)}
         disabled={disabled}
-        title="Modifier l'origine"
+        title="Edit source"
         style={{
           background: "transparent",
           border: "1px dashed #d4d4d4",
@@ -45,7 +45,7 @@ export default function LeadSourceEditor({ source, onChange, disabled }: Props) 
           fontStyle: source ? "normal" : "italic",
         }}
       >
-        📣 {source ?? "Inconnu"}
+        📣 {source ?? "Unknown"}
       </button>
     );
   }
@@ -68,7 +68,7 @@ export default function LeadSourceEditor({ source, onChange, disabled }: Props) 
           color: "#222",
         }}
       >
-        <option value="">Inconnu</option>
+        <option value="">Unknown</option>
         {LEAD_SOURCE_CATEGORIES.map((c) => (
           <option key={c} value={c}>
             {c}

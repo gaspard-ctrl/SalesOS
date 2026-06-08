@@ -75,11 +75,11 @@ export default function MarketingLinkedinPage() {
     try {
       const r = await fetch(`/api/marketing/linkedin/posts?username=${encodeURIComponent(c.username)}`);
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "Erreur");
+      if (!r.ok) throw new Error(data.error ?? "Error");
       setDetails(data.details ?? null);
       setPosts(data.posts ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur");
+      setError(e instanceof Error ? e.message : "Error");
       setDetails(null);
       setPosts([]);
     } finally {
@@ -98,10 +98,10 @@ export default function MarketingLinkedinPage() {
         body: JSON.stringify({ username: active.username, name: active.name }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "Erreur");
+      if (!r.ok) throw new Error(data.error ?? "Error");
       setAnalysis(data.analysis);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur");
+      setError(e instanceof Error ? e.message : "Error");
     } finally {
       setAnalyzing(false);
     }
@@ -129,7 +129,7 @@ export default function MarketingLinkedinPage() {
   }
 
   async function removeCompetitor(id: string) {
-    if (!confirm("Supprimer ce concurrent ?")) return;
+    if (!confirm("Delete this competitor?")) return;
     const r = await fetch(`/api/marketing/linkedin/competitors/${id}`, { method: "DELETE" });
     if (r.ok) {
       if (active?.id === id) {
@@ -146,7 +146,7 @@ export default function MarketingLinkedinPage() {
       {/* Sidebar */}
       <aside style={{ width: 320, flexShrink: 0, background: COLORS.bgCard, borderRight: `1px solid ${COLORS.line}`, display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "12px 16px", borderBottom: `1px solid ${COLORS.line}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink0, margin: 0 }}>Concurrents</h2>
+          <h2 style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink0, margin: 0 }}>Competitors</h2>
           <button
             type="button"
             onClick={() => setAdding((a) => !a)}
@@ -162,7 +162,7 @@ export default function MarketingLinkedinPage() {
               gap: 4,
             }}
           >
-            <Plus size={12} /> Ajouter
+            <Plus size={12} /> Add
           </button>
         </div>
         {adding && (
@@ -180,14 +180,14 @@ export default function MarketingLinkedinPage() {
             <input
               value={usernameInput}
               onChange={(e) => setUsernameInput(e.target.value)}
-              placeholder="username LinkedIn (ex: coachhub)"
+              placeholder="LinkedIn username (e.g. coachhub)"
               style={inp()}
               required
             />
             <input
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
-              placeholder="Nom affiché (ex: CoachHub)"
+              placeholder="Display name (e.g. CoachHub)"
               style={inp()}
             />
             <select value={categoryInput} onChange={(e) => setCategoryInput(e.target.value)} style={inp()}>
@@ -208,13 +208,13 @@ export default function MarketingLinkedinPage() {
                 cursor: "pointer",
               }}
             >
-              Ajouter
+              Add
             </button>
           </form>
         )}
         <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
           {competitors.length === 0 && (
-            <p style={{ padding: 16, fontSize: 12, color: COLORS.ink3, margin: 0 }}>Aucun concurrent. Ajoute CoachHub, BetterUp, etc.</p>
+            <p style={{ padding: 16, fontSize: 12, color: COLORS.ink3, margin: 0 }}>No competitors yet. Add CoachHub, BetterUp, etc.</p>
           )}
           {competitors.map((c) => {
             const isActive = active?.id === c.id;
@@ -251,7 +251,7 @@ export default function MarketingLinkedinPage() {
                     e.stopPropagation();
                     void removeCompetitor(c.id);
                   }}
-                  aria-label="Supprimer"
+                  aria-label="Delete"
                   style={{ border: "none", background: "transparent", cursor: "pointer", color: COLORS.ink3, padding: 2 }}
                 >
                   <Trash2 size={12} />
@@ -314,7 +314,7 @@ export default function MarketingLinkedinPage() {
               }}
             >
               {analyzing ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
-              {analyzing ? "Analyse en cours…" : "Analyser la stratégie"}
+              {analyzing ? "Analyzing…" : "Analyze strategy"}
             </button>
           )}
         </div>
@@ -327,7 +327,7 @@ export default function MarketingLinkedinPage() {
           )}
 
           {!active && (
-            <p style={{ color: COLORS.ink3, fontSize: 13 }}>Sélectionne un concurrent pour voir ses posts et stats.</p>
+            <p style={{ color: COLORS.ink3, fontSize: 13 }}>Select a competitor to see their posts and stats.</p>
           )}
 
           {active && (
@@ -335,9 +335,9 @@ export default function MarketingLinkedinPage() {
               {/* Stats */}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
                 {details?.followerCount && <StatPill label="Followers" value={fmtCount(details.followerCount)} />}
-                {details?.employeeCount && <StatPill label="Employés" value={fmtCount(details.employeeCount)} />}
-                {details?.industry && <StatPill label="Secteur" value={details.industry} />}
-                {details?.headquarters && <StatPill label="Siège" value={details.headquarters} />}
+                {details?.employeeCount && <StatPill label="Employees" value={fmtCount(details.employeeCount)} />}
+                {details?.industry && <StatPill label="Industry" value={details.industry} />}
+                {details?.headquarters && <StatPill label="Headquarters" value={details.headquarters} />}
               </div>
 
               {details?.description && (
@@ -356,22 +356,22 @@ export default function MarketingLinkedinPage() {
                   }}
                 >
                   <h3 style={{ fontSize: 13, fontWeight: 600, color: "#1e40af", margin: 0, marginBottom: 12 }}>
-                    Analyse stratégique
+                    Strategic analysis
                   </h3>
                   {analysis.recommendation && (
                     <p style={{ fontSize: 12, color: "#1e40af", marginBottom: 12 }}>
-                      <strong>Opportunité : </strong>
+                      <strong>Opportunity: </strong>
                       {analysis.recommendation}
                     </p>
                   )}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     {analysis.themes && (
-                      <Section label="Thèmes">{analysis.themes.join(" · ")}</Section>
+                      <Section label="Themes">{analysis.themes.join(" · ")}</Section>
                     )}
-                    {analysis.tonality && <Section label="Ton">{analysis.tonality}</Section>}
+                    {analysis.tonality && <Section label="Tone">{analysis.tonality}</Section>}
                     {analysis.ctas && <Section label="CTAs">{analysis.ctas.join(" · ")}</Section>}
                     {analysis.differentiators && (
-                      <Section label="Différenciateurs">{analysis.differentiators.join(" · ")}</Section>
+                      <Section label="Differentiators">{analysis.differentiators.join(" · ")}</Section>
                     )}
                   </div>
                 </div>
@@ -379,11 +379,11 @@ export default function MarketingLinkedinPage() {
 
               {/* Posts feed */}
               <h3 style={{ fontSize: 12, fontWeight: 700, color: COLORS.ink3, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>
-                Derniers posts
+                Latest posts
               </h3>
-              {loadingPosts && <p style={{ color: COLORS.ink3, fontSize: 13 }}>Chargement…</p>}
+              {loadingPosts && <p style={{ color: COLORS.ink3, fontSize: 13 }}>Loading…</p>}
               {!loadingPosts && posts.length === 0 && (
-                <p style={{ color: COLORS.ink3, fontSize: 13 }}>Aucun post trouvé.</p>
+                <p style={{ color: COLORS.ink3, fontSize: 13 }}>No posts found.</p>
               )}
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {posts.map((p, i) => (

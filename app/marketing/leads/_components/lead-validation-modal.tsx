@@ -101,7 +101,7 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
         setSalesUsers(data.users ?? []);
         setMyUserId(data.myUserId ?? null);
       })
-      .catch(() => setError("Impossible de charger les sales"))
+      .catch(() => setError("Failed to load sales reps"))
       .finally(() => setLoadingUsers(false));
   }, [lead]);
 
@@ -130,14 +130,14 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
     fetch(`/api/marketing/leads/${lead.id}/analyze`, { method: "POST" })
       .then(async (r) => {
         const data = (await r.json()) as AnalyzeResponse;
-        if (!r.ok) throw new Error(data.error ?? "Analyse échouée");
+        if (!r.ok) throw new Error(data.error ?? "Analysis failed");
         return data.analysis ?? null;
       })
       .then((a) => {
         setAnalysis(a);
         setForm(buildForm(a, myUserId));
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Analyse échouée"))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Analysis failed"))
       .finally(() => setLoadingAnalysis(false));
   }, [lead, myUserId]);
 
@@ -182,7 +182,7 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
       });
       const data = (await res.json()) as FinalizeResponse;
       if (!res.ok || !data.ok) {
-        throw new Error(data.error ?? "Création du deal échouée");
+        throw new Error(data.error ?? "Deal creation failed");
       }
       if (data.slackWarnings && data.slackWarnings.length > 0) {
         setWarnings(data.slackWarnings);
@@ -190,7 +190,7 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
       onSuccess();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur inconnue");
+      setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setSubmitting(false);
     }
@@ -227,7 +227,7 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h2 style={{ fontSize: 18, fontWeight: 600, color: "#111", margin: 0 }}>
-            Valider le lead et créer le deal
+            Validate lead and create deal
           </h2>
           <button
             onClick={onClose}
@@ -238,7 +238,7 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
               color: "#888",
               padding: 4,
             }}
-            aria-label="Fermer"
+            aria-label="Close"
           >
             <X size={18} />
           </button>
@@ -258,7 +258,7 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
             }}
           >
             <Loader2 size={16} className="animate-spin" />
-            Analyse Claude en cours, extraction des coordonnées du prospect…
+            Claude analysis in progress, extracting the prospect&apos;s details…
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -269,7 +269,7 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
                 disabled={loadingUsers || submitting}
                 style={inputStyle()}
               >
-                <option value="">{loadingUsers ? "Chargement…" : "Sélectionner un sales"}</option>
+                <option value="">{loadingUsers ? "Loading…" : "Select a sales rep"}</option>
                 {salesUsers.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name}
@@ -278,19 +278,19 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
               </select>
               {missingHubspotOwner && (
                 <div style={{ fontSize: 11, color: "#b45309", marginTop: 4 }}>
-                  Ce user n&apos;a pas de hubspot_owner_id configuré. Ajoute-le dans /admin avant
-                  de créer le deal.
+                  This user has no hubspot_owner_id configured. Add it in /admin before
+                  creating the deal.
                 </div>
               )}
               {missingSlackDisplay && !missingHubspotOwner && (
                 <div style={{ fontSize: 11, color: "#b45309", marginTop: 4 }}>
-                  Ce user n&apos;a pas de slack_display_name. Le tag Slack utilisera son nom en
-                  texte brut (pas de notification).
+                  This user has no slack_display_name. The Slack tag will use their name as
+                  plain text (no notification).
                 </div>
               )}
             </Field>
 
-            <Field label="Nom de l'entreprise" required>
+            <Field label="Company name" required>
               <input
                 type="text"
                 value={form.companyName}
@@ -309,7 +309,7 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
               />
             </Field>
 
-            <Field label="Contact (nom)">
+            <Field label="Contact (name)">
               <input
                 type="text"
                 value={form.contactName}
@@ -329,7 +329,7 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
               />
             </Field>
 
-            <Field label="Nom du deal" required>
+            <Field label="Deal name" required>
               <input
                 type="text"
                 value={form.dealName}
@@ -339,11 +339,11 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
               />
             </Field>
 
-            <Field label="Origine du lead">
+            <Field label="Lead source">
               <input
                 type="text"
                 value={form.source}
-                placeholder="Ex: LinkedIn, Recommandation, Site web…"
+                placeholder="e.g. LinkedIn, Referral, Website…"
                 onChange={(e) => setForm((prev) => ({ ...prev, source: e.target.value }))}
                 disabled={submitting}
                 style={inputStyle()}
@@ -351,7 +351,7 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
               {analysis?.extracted_source && (
                 <div style={{ fontSize: 11, color: "#888", marginTop: 4 }}>
                   <Sparkles size={11} style={{ verticalAlign: "middle", marginRight: 4 }} />
-                  Extrait par Claude : <em>{analysis.extracted_source}</em>
+                  Extracted by Claude: <em>{analysis.extracted_source}</em>
                 </div>
               )}
             </Field>
@@ -367,7 +367,7 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
                   border: "1px solid #eee",
                 }}
               >
-                <strong style={{ color: "#888" }}>Notes Claude :</strong> {analysis.extraction_notes}
+                <strong style={{ color: "#888" }}>Claude notes:</strong> {analysis.extraction_notes}
               </div>
             )}
           </div>
@@ -397,7 +397,7 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
               borderRadius: 6,
             }}
           >
-            Deal créé, mais Slack a renvoyé : {warnings.join(" · ")}
+            Deal created, but Slack returned: {warnings.join(" · ")}
           </div>
         )}
 
@@ -424,7 +424,7 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
               cursor: submitting ? "not-allowed" : "pointer",
             }}
           >
-            Annuler
+            Cancel
           </button>
           <button
             onClick={handleSubmit}
@@ -444,18 +444,18 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
             }}
           >
             {submitting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-            Créer le deal et valider
+            Create deal and validate
           </button>
         </div>
 
         <div style={{ fontSize: 11, color: "#888", textAlign: "center" }}>
-          Cela créera la company, le contact, le deal sur HubSpot
-          (pipeline par défaut, stage Discovery) et notifiera le owner sur Slack.
+          This will create the company, contact, and deal on HubSpot
+          (default pipeline, Discovery stage) and notify the owner on Slack.
         </div>
 
         {!error && !loadingAnalysis && analysis?.extracted_email && (
           <div style={{ fontSize: 11, color: ACCENT, textAlign: "center" }}>
-            Analyse Claude OK : prospect identifié
+            Claude analysis OK: prospect identified
           </div>
         )}
       </div>

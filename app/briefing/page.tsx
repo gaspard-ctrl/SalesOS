@@ -152,9 +152,9 @@ export default function BriefingPage() {
         >
           <div>
             <h1 style={{ fontSize: 18, fontWeight: 700, color: COLORS.ink0, margin: 0, letterSpacing: "-0.01em" }}>
-              Meetings à venir
+              Upcoming meetings
             </h1>
-            <p style={{ fontSize: 12, color: COLORS.ink3, margin: 0, marginTop: 2 }}>7 prochains jours</p>
+            <p style={{ fontSize: 12, color: COLORS.ink3, margin: 0, marginTop: 2 }}>Next 7 days</p>
           </div>
           <Calendar size={18} style={{ color: COLORS.ink3 }} />
         </div>
@@ -229,7 +229,7 @@ export default function BriefingPage() {
                     }}
                   >
                     <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#f5f5f5" }} />
-                    <p style={{ fontSize: 12, color: COLORS.ink4, margin: 0 }}>Recherche dans {src}</p>
+                    <p style={{ fontSize: 12, color: COLORS.ink4, margin: 0 }}>Searching {src}</p>
                   </div>
                 ))}
               </div>
@@ -249,7 +249,7 @@ export default function BriefingPage() {
                 }}
               >
                 <div className="animate-ping" style={{ width: 8, height: 8, borderRadius: "50%", background: COLORS.brand }} />
-                <p style={{ fontSize: 12, color: "#c01252", margin: 0 }}>Claude analyse les données…</p>
+                <p style={{ fontSize: 12, color: "#c01252", margin: 0 }}>Claude is analyzing the data…</p>
               </div>
             )}
 
@@ -265,7 +265,7 @@ export default function BriefingPage() {
                   fontSize: 13,
                 }}
               >
-                Erreur lors de la récupération des données. Réessaie dans un moment.
+                Failed to fetch the data. Try again in a moment.
               </div>
             )}
 
@@ -285,7 +285,7 @@ export default function BriefingPage() {
                 }}
               >
                 <ScrollText size={16} />
-                Le briefing en cache est incomplet. Clique sur <strong>Rafraîchir</strong> pour relancer l&apos;analyse.
+                The cached briefing is incomplete. Click <strong>Refresh</strong> to run the analysis again.
               </div>
             )}
 
@@ -390,14 +390,14 @@ export default function BriefingPage() {
                             }
                           : undefined,
                       }}
-                      placeholder="Poser une question sur ce meeting…"
+                      placeholder="Ask a question about this meeting…"
                     />
                   </div>
                 )}
 
                 {draftSent && (
                   <p style={{ fontSize: 11, color: COLORS.ok, textAlign: "center", margin: 0 }}>
-                    Debrief téléchargé ✓
+                    Debrief downloaded ✓
                   </p>
                 )}
 

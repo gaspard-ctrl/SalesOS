@@ -145,39 +145,39 @@ export function formatMeetingPillLabel(event: CalendarEvent, ext: ReturnType<typ
 
 export function formatBriefingForSlack(briefing: BriefingResult, eventTitle: string): string {
   const lines: string[] = [
-    `*Briefing — ${eventTitle}*`,
+    `*Briefing - ${eventTitle}*`,
     "",
-    `*${briefing.identity?.name}* — ${briefing.identity?.role} @ ${briefing.identity?.company}`,
-    `Statut CRM : ${briefing.identity?.hubspotStage || "—"} | Dernier contact : ${briefing.identity?.lastContact || "—"}`,
+    `*${briefing.identity?.name}* - ${briefing.identity?.role} @ ${briefing.identity?.company}`,
+    `CRM status: ${briefing.identity?.hubspotStage || "-"} | Last contact: ${briefing.identity?.lastContact || "-"}`,
   ];
   if (briefing.isSalesMeeting !== false && briefing.meetingType) {
-    lines.push("", `Type : ${briefing.meetingType === "discovery" ? "Découverte" : "Point de suivi"}`);
+    lines.push("", `Type: ${briefing.meetingType === "discovery" ? "Discovery" : "Follow-up"}`);
   }
-  if (briefing.objective) lines.push("", `*Objectif* : ${briefing.objective}`);
+  if (briefing.objective) lines.push("", `*Objective:* ${briefing.objective}`);
   if (briefing.meetingTakeaways?.length) {
-    lines.push("", `*Points clés* :`, ...briefing.meetingTakeaways.map((t, i) => `${i + 1}. ${t}`));
+    lines.push("", `*Key takeaways:*`, ...briefing.meetingTakeaways.map((t, i) => `${i + 1}. ${t}`));
   }
   if (briefing.companyProfile) {
     const cp = briefing.companyProfile;
     const pl = [
-      cp.revenue ? `CA : ${cp.revenue}` : null,
-      cp.headcount ? `Effectifs : ${cp.headcount}` : null,
-      cp.clients ? `Clients : ${cp.clients}` : null,
-      cp.businessModel ? `Modèle : ${cp.businessModel}` : null,
-      cp.industry ? `Secteur : ${cp.industry}` : null,
+      cp.revenue ? `Revenue: ${cp.revenue}` : null,
+      cp.headcount ? `Headcount: ${cp.headcount}` : null,
+      cp.clients ? `Clients: ${cp.clients}` : null,
+      cp.businessModel ? `Model: ${cp.businessModel}` : null,
+      cp.industry ? `Sector: ${cp.industry}` : null,
     ].filter(Boolean);
-    if (pl.length > 0) lines.push("", `*Entreprise* :`, ...pl.map((l) => `• ${l}`));
+    if (pl.length > 0) lines.push("", `*Company:*`, ...pl.map((l) => `• ${l}`));
   } else if (briefing.companyInsights) {
-    lines.push("", `*Entreprise* : ${briefing.companyInsights}`);
+    lines.push("", `*Company:* ${briefing.companyInsights}`);
   }
-  if (briefing.contextSummary) lines.push("", `*Contexte* :`, briefing.contextSummary);
-  if (briefing.personInsights) lines.push("", `*Interlocuteur* : ${briefing.personInsights}`);
+  if (briefing.contextSummary) lines.push("", `*Context:*`, briefing.contextSummary);
+  if (briefing.personInsights) lines.push("", `*Contact:* ${briefing.personInsights}`);
   if (briefing.recentNews?.items?.length) {
-    lines.push("", `*Actualités* :`, ...briefing.recentNews.items.slice(0, 4).map((i) => `• [${i.type}] ${i.text}`));
+    lines.push("", `*News:*`, ...briefing.recentNews.items.slice(0, 4).map((i) => `• [${i.type}] ${i.text}`));
   }
   if (briefing.questionsToAsk?.length) {
-    lines.push("", `*Questions à poser* :`, ...briefing.questionsToAsk.map((q, i) => `${i + 1}. ${q}`));
+    lines.push("", `*Questions to ask:*`, ...briefing.questionsToAsk.map((q, i) => `${i + 1}. ${q}`));
   }
-  if (briefing.nextStep) lines.push("", `*Prochaine étape* : ${briefing.nextStep}`);
+  if (briefing.nextStep) lines.push("", `*Next step:* ${briefing.nextStep}`);
   return lines.join("\n");
 }

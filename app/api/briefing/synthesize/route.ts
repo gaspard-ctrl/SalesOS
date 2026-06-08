@@ -197,7 +197,7 @@ const briefingTool: Anthropic.Tool = {
 export async function POST(req: NextRequest) {
   try {
     const user = await getAuthenticatedUser();
-    if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
     const { eventId, eventTitle, eventStart, attendees, rawData } = await req.json() as {
       eventId: string;
@@ -235,7 +235,7 @@ export async function POST(req: NextRequest) {
         db.from("guide_defaults").select("content").eq("key", "model_preferences").single(),
       ]);
       if (!keyRes.data?.is_active) {
-        return NextResponse.json({ error: "Clé Claude non configurée" }, { status: 402 });
+        return NextResponse.json({ error: "Claude key not configured" }, { status: 402 });
       }
       claudeApiKey = decrypt({ encryptedKey: keyRes.data.encrypted_key, iv: keyRes.data.iv, authTag: keyRes.data.auth_tag });
       const adminBriefing = globalGuide.data?.content ?? DEFAULT_BRIEFING_GUIDE;

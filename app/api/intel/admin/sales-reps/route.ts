@@ -25,7 +25,7 @@ export interface RosterResponse {
 //     + non attribués + owners hors roster. Utilisé par le board d'attribution.
 export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const withCounts = req.nextUrl.searchParams.get("withCounts") === "1";
   const manage = req.nextUrl.searchParams.get("manage") === "1";
@@ -152,7 +152,7 @@ export async function GET(req: NextRequest) {
 // POST /api/intel/admin/sales-reps — ajoute (ou réactive) un rep dans le roster.
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as {
     name?: string;
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
     hubspot_owner_id?: string | null;
   } | null;
   const name = body?.name?.trim();
-  if (!name) return NextResponse.json({ error: "name requis" }, { status: 400 });
+  if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
 
   const patch = {
     name,
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
     .select("id, name, email, hubspot_owner_id, in_roster")
     .single();
   if (error) {
-    if (error.code === "23505") return NextResponse.json({ error: "Sales déjà présent" }, { status: 409 });
+    if (error.code === "23505") return NextResponse.json({ error: "Sales rep already exists" }, { status: 409 });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ rep: data });

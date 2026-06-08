@@ -65,26 +65,26 @@ function extractParsed(engine: Engine, data: unknown): Record<string, unknown> |
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   if (!BRIGHTDATA_API_KEY) {
-    return NextResponse.json({ error: "BRIGHTDATA_API_KEY manquante dans l'environnement" }, { status: 500 });
+    return NextResponse.json({ error: "BRIGHTDATA_API_KEY missing from the environment" }, { status: 500 });
   }
 
   let body: SerpBody;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Corps de requête invalide" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
   const engine = (body.engine ?? "web") as Engine;
   if (!ENGINES.includes(engine)) {
-    return NextResponse.json({ error: `Moteur inconnu : ${body.engine}. Attendu : ${ENGINES.join(", ")}` }, { status: 400 });
+    return NextResponse.json({ error: `Unknown engine: ${body.engine}. Expected: ${ENGINES.join(", ")}` }, { status: 400 });
   }
 
   const q = body.q?.trim() ?? "";
-  if (!q) return NextResponse.json({ error: "Requête (q) requise" }, { status: 400 });
+  if (!q) return NextResponse.json({ error: "Query (q) required" }, { status: 400 });
 
   const country = (body.country?.trim() || "us").toLowerCase();
   const lang = (body.lang?.trim() || "en").toLowerCase();
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
   try {
     result = await fetchSerp(googleUrl);
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur appel Bright Data" }, { status: 502 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Bright Data call error" }, { status: 502 });
   }
 
   // On renvoie toujours la forme complète, même sur statut non-2xx, pour que le

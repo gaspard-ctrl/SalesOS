@@ -24,7 +24,7 @@ function contactUrl(contactId: string): string | null {
 
 function formatAmount(amount: number | null): string {
   if (amount == null) return "";
-  return amount.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + "€";
+  return amount.toLocaleString("en-GB", { maximumFractionDigits: 0 }) + "€";
 }
 
 function pillStyle(color: string): React.CSSProperties {
@@ -49,21 +49,21 @@ export default function LeadAnalysisBadge({
   analysisStatus: string | null;
 }) {
   if (!analysis && !analysisStatus) {
-    return <span style={pillStyle(GREY)}>Non analysé</span>;
+    return <span style={pillStyle(GREY)}>Not analyzed</span>;
   }
 
   if (analysisStatus === "pending" || analysis?.status === "pending") {
     return (
       <span style={pillStyle(GREY)}>
-        <Loader2 size={12} className="animate-spin" /> Analyse…
+        <Loader2 size={12} className="animate-spin" /> Analyzing…
       </span>
     );
   }
 
   if (analysis?.status === "error") {
     return (
-      <span style={pillStyle(RED)} title={analysis.error_message ?? "Erreur"}>
-        <XCircle size={12} /> Erreur d'analyse
+      <span style={pillStyle(RED)} title={analysis.error_message ?? "Error"}>
+        <XCircle size={12} /> Analysis error
       </span>
     );
   }
@@ -72,7 +72,7 @@ export default function LeadAnalysisBadge({
     const strategy = analysis.match_strategy;
 
     if (analysis.hubspot_contact_id && (strategy === "email" || strategy === "person")) {
-      const label = strategy === "email" ? "Contact HubSpot (email) · pas de deal" : "Contact HubSpot · pas de deal";
+      const label = strategy === "email" ? "HubSpot contact (email) · no deal" : "HubSpot contact · no deal";
       const url = contactUrl(analysis.hubspot_contact_id);
       const content = (
         <>
@@ -94,14 +94,14 @@ export default function LeadAnalysisBadge({
     if (strategy === "company") {
       return (
         <span style={pillStyle(AMBER)}>
-          <AlertTriangle size={12} /> Société HubSpot · pas de deal
+          <AlertTriangle size={12} /> HubSpot company · no deal
         </span>
       );
     }
 
     return (
       <span style={pillStyle(ORANGE)}>
-        <AlertTriangle size={12} /> Aucun match HubSpot
+        <AlertTriangle size={12} /> No HubSpot match
       </span>
     );
   }
@@ -133,5 +133,5 @@ export default function LeadAnalysisBadge({
     return <span style={pillStyle(color)}>{content}</span>;
   }
 
-  return <span style={pillStyle(GREY)}>État inconnu</span>;
+  return <span style={pillStyle(GREY)}>Unknown status</span>;
 }

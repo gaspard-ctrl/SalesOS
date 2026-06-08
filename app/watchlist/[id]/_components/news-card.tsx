@@ -8,14 +8,14 @@ import type { BriefRow, NewsContent, NewsSignalSnapshot } from "@/lib/watchlist/
 
 // Catégorie de signal → libellé + couleur du badge.
 const SIGNAL_META: Record<string, { label: string; fg: string; bg: string }> = {
-  funding: { label: "Levée", fg: COLORS.ok, bg: COLORS.okBg },
+  funding: { label: "Funding", fg: COLORS.ok, bg: COLORS.okBg },
   acquisition: { label: "M&A", fg: COLORS.info, bg: COLORS.infoBg },
-  leadership: { label: "Direction", fg: COLORS.info, bg: COLORS.infoBg },
-  product: { label: "Produit", fg: COLORS.brand, bg: COLORS.brandTint },
-  partnership: { label: "Partenariat", fg: COLORS.brand, bg: COLORS.brandTint },
+  leadership: { label: "Leadership", fg: COLORS.info, bg: COLORS.infoBg },
+  product: { label: "Product", fg: COLORS.brand, bg: COLORS.brandTint },
+  partnership: { label: "Partnership", fg: COLORS.brand, bg: COLORS.brandTint },
   expansion: { label: "Expansion", fg: COLORS.ok, bg: COLORS.okBg },
-  risk: { label: "Risque", fg: COLORS.warn, bg: COLORS.warnBg },
-  other: { label: "Autre", fg: COLORS.ink2, bg: COLORS.bgSoft },
+  risk: { label: "Risk", fg: COLORS.warn, bg: COLORS.warnBg },
+  other: { label: "Other", fg: COLORS.ink2, bg: COLORS.bgSoft },
 };
 
 function signalMeta(type: string) {
@@ -68,7 +68,7 @@ export function NewsCard({
 
           {content.signals.length > 0 && (
             <>
-              <h4 style={sectionTitle()}>Signaux marché ({content.signals.length})</h4>
+              <h4 style={sectionTitle()}>Market signals ({content.signals.length})</h4>
               <ul style={list()}>
                 {content.signals.slice(0, 10).map((s, i) => (
                   <SignalItem key={s.id || i} signal={s} />
@@ -77,16 +77,16 @@ export function NewsCard({
             </>
           )}
 
-          <h4 style={sectionTitle()}>Posts LinkedIn ({content.posts.length})</h4>
+          <h4 style={sectionTitle()}>LinkedIn posts ({content.posts.length})</h4>
           {content.posts.length === 0 ? (
-            <p style={empty()}>Aucun post récent.</p>
+            <p style={empty()}>No recent posts.</p>
           ) : (
             <ul style={list()}>
               {content.posts.slice(0, 8).map((p, i) => (
                 <li key={i} style={listItem()}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
                     <span style={{ fontSize: 10, color: COLORS.ink3 }}>
-                      {new Date(p.postedAt).toLocaleDateString("fr-FR")}
+                      {new Date(p.postedAt).toLocaleDateString("en-GB")}
                     </span>
                     <span style={{ fontSize: 10, color: COLORS.ink3 }}>
                       ♡ {p.likes} · 💬 {p.comments}
@@ -111,8 +111,8 @@ export function NewsCard({
         </div>
       ) : (
         <p style={{ margin: 0, fontSize: 12, color: COLORS.ink3 }}>
-          Pas encore de veille pour cette company. Clique sur <strong>Générer</strong> en haut à droite : on récupère les
-          posts LinkedIn et on lance une veille marché Bright Data (presse, signaux d&apos;achat) synthétisée par l&apos;IA.
+          No intel yet for this company. Click <strong>Generate</strong> in the top right: we fetch LinkedIn posts and run a
+          Bright Data market scan (press, buying signals) summarized by AI.
         </p>
       )}
     </BriefSection>

@@ -58,10 +58,10 @@ const BANT_FIELDS: { key: string; label: string }[] = [
 ];
 
 const EXTRA_QUAL_FIELDS: { key: string; label: string }[] = [
-  { key: "estimatedBudget", label: "Budget estimé" },
-  { key: "champion", label: "Champion interne" },
-  { key: "needDetailed", label: "Besoin détaillé" },
-  { key: "strategicFit", label: "Fit stratégique" },
+  { key: "estimatedBudget", label: "Estimated budget" },
+  { key: "champion", label: "Internal champion" },
+  { key: "needDetailed", label: "Detailed need" },
+  { key: "strategicFit", label: "Strategic fit" },
 ];
 
 export function DealDetailPanel({
@@ -146,7 +146,7 @@ export function DealDetailPanel({
     const startedAt = Date.now();
     const tick = async () => {
       if (Date.now() - startedAt > 180_000) {
-        setAnalyzeError("L'analyse n'a pas répondu en 3 min. Relance via le bouton.");
+        setAnalyzeError("The analysis did not respond within 3 min. Restart it with the button.");
         setAnalyzing(false);
         return;
       }
@@ -160,7 +160,7 @@ export function DealDetailPanel({
           setAnalysisStale(false);
           setAnalyzing(false);
         } else if (data.status === "error") {
-          setAnalyzeError(data.error || "Erreur pendant l'analyse");
+          setAnalyzeError(data.error || "Error during analysis");
           setAnalyzing(false);
         }
       } catch {
@@ -192,10 +192,10 @@ export function DealDetailPanel({
       });
       const ct = r.headers.get("content-type") ?? "";
       if (!ct.includes("application/json")) {
-        throw new Error("Le serveur a renvoyé une réponse inattendue. Réessaie dans un moment.");
+        throw new Error("The server returned an unexpected response. Try again in a moment.");
       }
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "Erreur");
+      if (!r.ok) throw new Error(data.error ?? "Error");
 
       // Réponse "done" (cache frais OU dev inline qui vient de finir).
       if (data.status === "done" && data.analysis) {
@@ -213,7 +213,7 @@ export function DealDetailPanel({
       }
       setAnalyzing(true);
     } catch (e) {
-      setAnalyzeError(e instanceof Error ? e.message : "Erreur");
+      setAnalyzeError(e instanceof Error ? e.message : "Error");
       setAnalyzing(false);
     }
   }, [details]);
@@ -228,7 +228,7 @@ export function DealDetailPanel({
         body: JSON.stringify({ dealId: details.id }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "Erreur");
+      if (!r.ok) throw new Error(data.error ?? "Error");
       setEmailDraft(data);
     } catch (e) {
       console.error(e);
@@ -302,7 +302,7 @@ export function DealDetailPanel({
       });
       if (!r.ok) {
         const data = await r.json();
-        throw new Error(data.error ?? "Erreur");
+        throw new Error(data.error ?? "Error");
       }
       setSlackSent(true);
     } catch (e) {
@@ -407,14 +407,14 @@ export function DealDetailPanel({
               <>
                 <span>·</span>
                 <span style={{ color: COLORS.ink0, fontWeight: 600 }}>
-                  {parseFloat(details.amount).toLocaleString("fr-FR")} €
+                  {parseFloat(details.amount).toLocaleString("en-GB")} €
                 </span>
               </>
             )}
             {details.closedate && (
               <>
                 <span>·</span>
-                <span>Clôture {new Date(details.closedate).toLocaleDateString("fr-FR")}</span>
+                <span>Close {new Date(details.closedate).toLocaleDateString("en-GB")}</span>
               </>
             )}
             {details.ownerName && (
@@ -428,16 +428,16 @@ export function DealDetailPanel({
         <div style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <IconButton
             icon={Mail}
-            aria-label="Rédiger un email"
+            aria-label="Write an email"
             onClick={generateEmail}
             disabled={generating}
-            title="Email de suivi"
+            title="Follow-up email"
           />
           <button
             type="button"
             onClick={() => setClaudeOpen(true)}
-            aria-label="Poser une question à Claude"
-            title="Poser une question à Claude"
+            aria-label="Ask Claude a question"
+            title="Ask Claude a question"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -472,8 +472,8 @@ export function DealDetailPanel({
               type="button"
               onClick={sendToSlack}
               disabled={slackSending || slackSent}
-              aria-label="Envoyer en Slack"
-              title="Envoyer en DM Slack"
+              aria-label="Send to Slack"
+              title="Send as Slack DM"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -504,15 +504,15 @@ export function DealDetailPanel({
               ) : (
                 <Send size={14} />
               )}
-              {slackSent ? "Envoyé" : "Slack"}
+              {slackSent ? "Sent" : "Slack"}
             </button>
           )}
           <button
             type="button"
             onClick={rescore}
             disabled={rescoring}
-            aria-label="Rescorer ce deal"
-            title={activeScoredAt ? `Scoré ${timeAgo(activeScoredAt)}` : "Rescorer ce deal"}
+            aria-label="Rescore this deal"
+            title={activeScoredAt ? `Scored ${timeAgo(activeScoredAt)}` : "Rescore this deal"}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -541,10 +541,10 @@ export function DealDetailPanel({
             ) : (
               <Zap size={14} />
             )}
-            {rescoring ? "Scoring…" : "Rescorer"}
+            {rescoring ? "Scoring…" : "Rescore"}
           </button>
           <span style={{ width: 1, height: 22, background: COLORS.line, margin: "0 2px" }} />
-          <IconButton icon={X} aria-label="Fermer" onClick={onClose} variant="ghost" />
+          <IconButton icon={X} aria-label="Close" onClick={onClose} variant="ghost" />
         </div>
       </div>
 
@@ -576,7 +576,7 @@ export function DealDetailPanel({
                         color: COLORS.ink3,
                       }}
                     >
-                      Score deal
+                      Deal score
                     </span>
                     <span style={{ fontSize: 16, fontWeight: 700, color: badge.color }}>{badge.label}</span>
                     {relColor && (
@@ -602,17 +602,17 @@ export function DealDetailPanel({
                     {activeScoredAt && (
                       <span
                         style={{ fontSize: 10, color: COLORS.ink4 }}
-                        title={new Date(activeScoredAt).toLocaleString("fr-FR")}
+                        title={new Date(activeScoredAt).toLocaleString("en-GB")}
                       >
-                        Ce deal : {timeAgo(activeScoredAt).toLowerCase()}
+                        This deal: {timeAgo(activeScoredAt).toLowerCase()}
                       </span>
                     )}
                     {lastGlobalScoringAt && (
                       <span
                         style={{ fontSize: 10, color: COLORS.ink4 }}
-                        title={new Date(lastGlobalScoringAt).toLocaleString("fr-FR")}
+                        title={new Date(lastGlobalScoringAt).toLocaleString("en-GB")}
                       >
-                        Scoring général : {timeAgo(lastGlobalScoringAt).toLowerCase()}
+                        Global scoring: {timeAgo(lastGlobalScoringAt).toLowerCase()}
                       </span>
                     )}
                   </div>
@@ -627,7 +627,7 @@ export function DealDetailPanel({
                       color: COLORS.ink3,
                     }}
                   >
-                    Montant
+                    Amount
                   </span>
                   <span
                     style={{
@@ -642,7 +642,7 @@ export function DealDetailPanel({
                   </span>
                   {details.closedate && (
                     <span style={{ fontSize: 11, color: COLORS.ink3 }}>
-                      Clôture {new Date(details.closedate).toLocaleDateString("fr-FR", { month: "short", day: "numeric", year: "numeric" })}
+                      Close {new Date(details.closedate).toLocaleDateString("en-GB", { month: "short", day: "numeric", year: "numeric" })}
                     </span>
                   )}
                 </div>
@@ -748,7 +748,7 @@ export function DealDetailPanel({
                       size={12}
                       style={{ transform: showScoreDetails ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}
                     />
-                    Détails du score
+                    Score details
                   </button>
                   {showScoreDetails && (
                     <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -777,7 +777,7 @@ export function DealDetailPanel({
             <Card padding={18}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                 <div>
-                  <p style={{ fontSize: 13, color: COLORS.ink2, margin: 0 }}>Ce deal n&apos;a pas encore été scoré.</p>
+                  <p style={{ fontSize: 13, color: COLORS.ink2, margin: 0 }}>This deal hasn&apos;t been scored yet.</p>
                 </div>
                 <button
                   onClick={rescore}
@@ -798,7 +798,7 @@ export function DealDetailPanel({
                   }}
                 >
                   {rescoring ? <RefreshCw size={12} className="animate-spin" /> : <Zap size={12} />}
-                  {rescoring ? "Scoring…" : "Scorer ce deal"}
+                  {rescoring ? "Scoring…" : "Score this deal"}
                 </button>
               </div>
             </Card>
@@ -858,7 +858,7 @@ export function DealDetailPanel({
               ) : (
                 <Sparkles size={16} />
               )}
-              {analyzing ? "Analyse en cours…" : "Analyse approfondie"}
+              {analyzing ? "Analyzing…" : "Deep analysis"}
             </button>
           )}
           {analyzeError && (
@@ -877,7 +877,7 @@ export function DealDetailPanel({
           {analysis && (
             <Card padding={16}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                <SectionHeader title="Analyse approfondie" />
+                <SectionHeader title="Deep analysis" />
                 {(analyzing || analysisStale) && (
                   <span
                     style={{
@@ -895,10 +895,10 @@ export function DealDetailPanel({
                     {analyzing ? (
                       <>
                         <RefreshCw size={11} className="animate-spin" />
-                        Mise à jour en cours
+                        Updating
                       </>
                     ) : (
-                      "Analyse périmée"
+                      "Analysis outdated"
                     )}
                   </span>
                 )}
@@ -936,7 +936,7 @@ export function DealDetailPanel({
                       color: COLORS.ok,
                     }}
                   >
-                    Prochaine action
+                    Next action
                   </span>
                   <p style={{ fontSize: 14, color: "#15803d", margin: 0, marginTop: 2, lineHeight: 1.5, fontWeight: 500 }}>
                     {activeNextAction}
@@ -965,7 +965,7 @@ export function DealDetailPanel({
           {/* Email composer */}
           {sent && (
             <div style={{ display: "flex", alignItems: "center", gap: 6, color: COLORS.ok, fontSize: 13 }}>
-              <CheckCircle size={14} /> Email envoyé avec succès
+              <CheckCircle size={14} /> Email sent successfully
             </div>
           )}
           {showComposer && !sent && (
@@ -974,7 +974,7 @@ export function DealDetailPanel({
                 <input
                   value={emailTo}
                   onChange={(e) => setEmailTo(e.target.value)}
-                  placeholder="À (email)"
+                  placeholder="To (email)"
                   style={{
                     fontSize: 13,
                     padding: "7px 10px",
@@ -986,7 +986,7 @@ export function DealDetailPanel({
                 <input
                   value={emailSubject}
                   onChange={(e) => setEmailSubject(e.target.value)}
-                  placeholder="Objet"
+                  placeholder="Subject"
                   style={{
                     fontSize: 13,
                     padding: "7px 10px",
@@ -1026,7 +1026,7 @@ export function DealDetailPanel({
                       cursor: sending || !emailTo ? "not-allowed" : "pointer",
                     }}
                   >
-                    {sending ? "Envoi…" : "Envoyer via Gmail"}
+                    {sending ? "Sending…" : "Send via Gmail"}
                   </button>
                   <button
                     onClick={() => setShowComposer(false)}
@@ -1040,7 +1040,7 @@ export function DealDetailPanel({
                       cursor: "pointer",
                     }}
                   >
-                    Annuler
+                    Cancel
                   </button>
                 </div>
               </div>
@@ -1072,7 +1072,7 @@ export function DealDetailPanel({
                     letterSpacing: "0.06em",
                   }}
                 >
-                  Activité récente ({details.engagements.length})
+                  Recent activity ({details.engagements.length})
                 </span>
                 <ChevronDown
                   size={12}
@@ -1142,7 +1142,7 @@ export function DealDetailPanel({
                         padding: 0,
                       }}
                     >
-                      Charger plus ({details.engagements.length - engagementsShown})
+                      Load more ({details.engagements.length - engagementsShown})
                     </button>
                   )}
                 </>
@@ -1199,7 +1199,7 @@ export function DealDetailPanel({
                         ))}
                       {[...BANT_FIELDS, ...EXTRA_QUAL_FIELDS].every((f) => !activeQualification[f.key]) && (
                         <div style={{ fontSize: 12, color: COLORS.ink3, fontStyle: "italic" }}>
-                          Aucune information de qualification.
+                          No qualification info.
                         </div>
                       )}
                     </div>
@@ -1226,7 +1226,7 @@ export function DealDetailPanel({
                       <span>
                         {missingBant.map((f) => f.label).join(", ")}
                         {" "}
-                        {missingBant.length === 1 ? "manquant" : "manquants"}
+                        {missingBant.length === 1 ? "missing" : "missing"}
                       </span>
                     </div>
                   )}
@@ -1289,7 +1289,7 @@ export function DealDetailPanel({
                 engagements: details.engagements,
                 analysis: analysis ?? undefined,
               }}
-              placeholder="Poser une question sur ce deal…"
+              placeholder="Ask a question about this deal…"
               onClose={() => setClaudeOpen(false)}
             />
           </div>
@@ -1347,7 +1347,7 @@ function ContactRow({
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           {contact.linkedinUrl && (
-            <a href={contact.linkedinUrl} target="_blank" rel="noreferrer" style={{ color: "#0a66c2", display: "flex" }} aria-label="Profil LinkedIn">
+            <a href={contact.linkedinUrl} target="_blank" rel="noreferrer" style={{ color: "#0a66c2", display: "flex" }} aria-label="LinkedIn profile">
               <Linkedin size={14} />
             </a>
           )}
@@ -1381,11 +1381,11 @@ function ContactRow({
         >
           {msgState === "loading" ? (
             <>
-              <RefreshCw size={10} className="animate-spin" /> Génération…
+              <RefreshCw size={10} className="animate-spin" /> Generating…
             </>
           ) : (
             <>
-              <Linkedin size={10} /> Message LinkedIn
+              <Linkedin size={10} /> LinkedIn message
             </>
           )}
         </button>
@@ -1415,7 +1415,7 @@ function ContactRow({
               cursor: "pointer",
               color: copied ? COLORS.ok : COLORS.ink3,
             }}
-            aria-label="Copier"
+            aria-label="Copy"
           >
             {copied ? <Check size={12} /> : <Copy size={12} />}
           </button>
@@ -1431,10 +1431,15 @@ function AnalysisView({ analysis, onReanalyze }: { analysis: Analysis; onReanaly
     Moyen: COLORS.warn,
     "Élevé": COLORS.err,
   };
+  // Display-only FR->EN maps (the raw values come from the AI and are kept as the
+  // color/comparison keys above; we only translate what is shown on screen).
+  const RISK_EN: Record<string, string> = { Faible: "Low", Moyen: "Medium", "Élevé": "High" };
+  const MOMENTUM_EN: Record<string, string> = { "En accélération": "Accelerating", Stable: "Stable", "En perte de vitesse": "Losing momentum" };
+  const PRIORITY_EN: Record<string, string> = { Urgent: "Urgent", Moyen: "Medium", Faible: "Low" };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 12, color: COLORS.ink2 }}>Niveau de risque :</span>
+        <span style={{ fontSize: 12, color: COLORS.ink2 }}>Risk level:</span>
         <span
           style={{
             fontSize: 12,
@@ -1445,7 +1450,7 @@ function AnalysisView({ analysis, onReanalyze }: { analysis: Analysis; onReanaly
             background: (riskColors[analysis.riskLevel] ?? COLORS.ink1) + "18",
           }}
         >
-          {analysis.riskLevel}
+          {RISK_EN[analysis.riskLevel] ?? analysis.riskLevel}
         </span>
       </div>
       <p style={{ fontSize: 13, color: COLORS.ink1, lineHeight: 1.6, margin: 0 }}>
@@ -1463,7 +1468,7 @@ function AnalysisView({ analysis, onReanalyze }: { analysis: Analysis; onReanaly
         >
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
             <TrendingUp size={11} style={{ color: COLORS.ink2 }} />
-            <span style={{ fontSize: 11, fontWeight: 600, color: COLORS.ink1 }}>Dynamique du deal</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: COLORS.ink1 }}>Deal momentum</span>
             <span
               style={{
                 fontSize: 10,
@@ -1484,7 +1489,7 @@ function AnalysisView({ analysis, onReanalyze }: { analysis: Analysis; onReanaly
                       : "#fef9c3",
               }}
             >
-              {analysis.dynamique.momentum}
+              {MOMENTUM_EN[analysis.dynamique.momentum] ?? analysis.dynamique.momentum}
             </span>
           </div>
           <p style={{ fontSize: 12, color: COLORS.ink2, margin: 0, lineHeight: 1.5 }}>
@@ -1505,15 +1510,15 @@ function AnalysisView({ analysis, onReanalyze }: { analysis: Analysis; onReanaly
               borderBottom: `1px solid ${COLORS.line}`,
             }}
           >
-            Qualification (analyse)
+            Qualification (analysis)
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
             {[
               { key: "budget", label: "Budget", color: "#0369a1" },
-              { key: "authority", label: "Autorité", color: "#7c3aed" },
-              { key: "need", label: "Besoin", color: "#b45309" },
+              { key: "authority", label: "Authority", color: "#7c3aed" },
+              { key: "need", label: "Need", color: "#b45309" },
               { key: "timeline", label: "Timeline", color: "#0f766e" },
-              { key: "fit", label: "Fit stratégique", color: COLORS.ok },
+              { key: "fit", label: "Strategic fit", color: COLORS.ok },
             ].map(({ key, label, color: c }) => {
               const val = analysis.qualification?.[key as keyof typeof analysis.qualification];
               if (!val) return null;
@@ -1545,7 +1550,7 @@ function AnalysisView({ analysis, onReanalyze }: { analysis: Analysis; onReanaly
           }}
         >
           <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.info, marginBottom: 3 }}>
-            Insight score
+            Score insight
           </div>
           <p style={{ fontSize: 12, color: COLORS.info, margin: 0, lineHeight: 1.5 }}>
             {analysis.scoreInsight ?? analysis.scoringInsight}
@@ -1556,7 +1561,7 @@ function AnalysisView({ analysis, onReanalyze }: { analysis: Analysis; onReanaly
       {(analysis.signaux?.positifs ?? analysis.positiveSignals)?.length > 0 && (
         <div>
           <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.ok, marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
-            <CheckCircle size={12} /> Signaux positifs
+            <CheckCircle size={12} /> Positive signals
           </div>
           {(analysis.signaux?.positifs ?? analysis.positiveSignals ?? []).map((s, i) => (
             <div
@@ -1579,7 +1584,7 @@ function AnalysisView({ analysis, onReanalyze }: { analysis: Analysis; onReanaly
       {(analysis.signaux?.negatifs ?? analysis.negativeSignals)?.length > 0 && (
         <div>
           <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.err, marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
-            <AlertCircle size={12} /> Points d&apos;attention
+            <AlertCircle size={12} /> Points of attention
           </div>
           {(analysis.signaux?.negatifs ?? analysis.negativeSignals ?? []).map((s, i) => (
             <div
@@ -1612,7 +1617,7 @@ function AnalysisView({ analysis, onReanalyze }: { analysis: Analysis; onReanaly
               gap: 4,
             }}
           >
-            <AlertCircle size={12} /> Risques identifiés
+            <AlertCircle size={12} /> Identified risks
           </div>
           {analysis.risques.map((r, i) => (
             <div
@@ -1648,7 +1653,7 @@ function AnalysisView({ analysis, onReanalyze }: { analysis: Analysis; onReanaly
                         : COLORS.bgSoft,
                 }}
               >
-                {r.severite}
+                {RISK_EN[r.severite] ?? r.severite}
               </span>
               {r.risque}
             </div>
@@ -1669,7 +1674,7 @@ function AnalysisView({ analysis, onReanalyze }: { analysis: Analysis; onReanaly
               gap: 4,
             }}
           >
-            <TrendingUp size={12} /> Prochaines étapes
+            <TrendingUp size={12} /> Next steps
           </div>
           {analysis.prochaines_etapes
             ? analysis.prochaines_etapes.map((s, i) => (
@@ -1705,7 +1710,7 @@ function AnalysisView({ analysis, onReanalyze }: { analysis: Analysis; onReanaly
                               : COLORS.bgSoft,
                       }}
                     >
-                      {s.priorite}
+                      {PRIORITY_EN[s.priorite] ?? s.priorite}
                     </span>
                     <span>{s.action}</span>
                   </div>
@@ -1747,7 +1752,7 @@ function AnalysisView({ analysis, onReanalyze }: { analysis: Analysis; onReanaly
           alignSelf: "flex-start",
         }}
       >
-        Re-analyser
+        Re-analyze
       </button>
     </div>
   );

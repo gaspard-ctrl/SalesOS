@@ -11,7 +11,7 @@ type AudienceFilter = "all" | "prospect" | "client";
 function formatDate(iso: string | null): string {
   if (!iso) return "?";
   try {
-    return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "2-digit" });
+    return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
   } catch {
     return "?";
   }
@@ -77,7 +77,7 @@ function RecapItem({
         </div>
         <div style={{ fontSize: 10, color: COLORS.ink3, marginTop: 2 }}>
           {formatDate(recap.meeting_started_at)}
-          {recap.meeting_recap_slack_sent_at ? " · Slack ✓" : " · Slack non envoyé"}
+          {recap.meeting_recap_slack_sent_at ? " · Slack ✓" : " · Slack not sent"}
         </div>
       </div>
     </button>
@@ -107,7 +107,7 @@ function RecapDetail({ recap }: { recap: SalesCoachRecapItem }) {
               rel="noreferrer"
               style={{ color: COLORS.brand, display: "inline-flex", alignItems: "center", gap: 3 }}
             >
-              Ouvrir dans Slack <ExternalLink size={11} />
+              Open in Slack <ExternalLink size={11} />
             </a>
           </>
         )}
@@ -155,11 +155,11 @@ function RecapDetail({ recap }: { recap: SalesCoachRecapItem }) {
             );
           })}
           <div style={{ fontSize: 11, color: COLORS.ink3, fontStyle: "italic", marginTop: 8 }}>
-            Message Slack non capturé (recap antérieur à la mise à jour). Re-render depuis le JSON.
+            Slack message not captured (recap predates the update). Re-rendered from the JSON.
           </div>
         </div>
       ) : (
-        <div style={{ fontSize: 13, color: COLORS.ink3 }}>Aucun contenu de recap.</div>
+        <div style={{ fontSize: 13, color: COLORS.ink3 }}>No recap content.</div>
       )}
     </div>
   );
@@ -240,7 +240,7 @@ export function RecapsView() {
                   textTransform: "capitalize",
                 }}
               >
-                {opt === "all" ? "Tous" : opt === "prospect" ? "Prospects" : "Clients"}
+                {opt === "all" ? "All" : opt === "prospect" ? "Prospects" : "Clients"}
               </button>
             ))}
           </div>
@@ -251,7 +251,7 @@ export function RecapsView() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher…"
+              placeholder="Search…"
               style={{
                 width: "100%",
                 padding: "6px 8px 6px 26px",
@@ -266,12 +266,12 @@ export function RecapsView() {
 
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
-            <div style={{ padding: "32px 16px", textAlign: "center", fontSize: 12, color: COLORS.ink3 }}>Chargement…</div>
+            <div style={{ padding: "32px 16px", textAlign: "center", fontSize: 12, color: COLORS.ink3 }}>Loading…</div>
           ) : error ? (
             <div style={{ padding: "32px 16px", textAlign: "center", fontSize: 12, color: COLORS.err }}>{error}</div>
           ) : filtered.length === 0 ? (
             <div style={{ padding: "32px 16px", textAlign: "center", fontSize: 12, color: COLORS.ink3 }}>
-              Aucun recap.
+              No recaps.
             </div>
           ) : (
             filtered.map((r) => (
@@ -294,7 +294,7 @@ export function RecapsView() {
             className="flex items-center justify-center h-full"
             style={{ fontSize: 13, color: COLORS.ink3 }}
           >
-            Sélectionne un recap pour voir le message Slack.
+            Select a recap to view the Slack message.
           </div>
         )}
       </div>

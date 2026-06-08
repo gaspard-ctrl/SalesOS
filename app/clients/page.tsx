@@ -87,7 +87,7 @@ export default function ClientsPage() {
                 boxShadow: ownerMode === m ? "0 1px 2px rgba(0,0,0,0.04)" : undefined,
               }}
             >
-              {m === "mine" ? "Mes clients" : "Tout le monde"}
+              {m === "mine" ? "My clients" : "Everyone"}
             </button>
           ))}
         </div>
@@ -106,7 +106,7 @@ export default function ClientsPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filtrer par compte…"
+            placeholder="Filter by account…"
             style={{
               width: "100%",
               paddingLeft: 32,
@@ -125,7 +125,7 @@ export default function ClientsPage() {
         <button
           type="button"
           onClick={() => mutate()}
-          aria-label="Rafraîchir"
+          aria-label="Refresh"
           style={{
             padding: "7px 10px",
             borderRadius: 8,
@@ -156,26 +156,26 @@ export default function ClientsPage() {
             fontSize: 12,
             fontWeight: 600,
           }}
-          title="Importer les closed-won historiques depuis HubSpot"
+          title="Import historical closed-won deals from HubSpot"
         >
           <UserPlus size={14} />
-          Importer un client
+          Import a client
         </button>
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           <StatPill label="Clients" value={filtered.length} />
-          <StatPill label="ARR signé" value={`${(totalAmount / 1000).toFixed(0)}k€`} />
-          <StatPill label="Enrichis" value={`${enriched}/${filtered.length}`} />
-          {pending > 0 && <StatPill label="En cours" value={pending} />}
+          <StatPill label="Signed ARR" value={`${(totalAmount / 1000).toFixed(0)}k€`} />
+          <StatPill label="Enriched" value={`${enriched}/${filtered.length}`} />
+          {pending > 0 && <StatPill label="In progress" value={pending} />}
         </div>
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         {isLoading ? (
-          <div style={{ color: COLORS.ink3, fontSize: 13 }}>Chargement…</div>
+          <div style={{ color: COLORS.ink3, fontSize: 13 }}>Loading…</div>
         ) : error ? (
           <div style={{ color: COLORS.err, fontSize: 13 }}>
-            {error instanceof Error ? error.message : "Erreur de chargement"}
+            {error instanceof Error ? error.message : "Failed to load"}
           </div>
         ) : (
           <ClientsTable clients={filtered} />

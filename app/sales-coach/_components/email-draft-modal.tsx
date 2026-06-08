@@ -41,11 +41,11 @@ export function EmailDraftModal({ open, analysisId, defaultRecipients, initialDr
     try {
       const res = await fetch(`/api/sales-coach/${analysisId}/draft-email`, { method: "POST" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Erreur");
+      if (!res.ok) throw new Error(data.error ?? "Error");
       setSubject(data.subject ?? "");
       setBody(data.body ?? "");
     } catch (e) {
-      setResult({ ok: false, msg: e instanceof Error ? e.message : "Erreur" });
+      setResult({ ok: false, msg: e instanceof Error ? e.message : "Error" });
     } finally {
       setGenerating(false);
     }
@@ -61,17 +61,17 @@ export function EmailDraftModal({ open, analysisId, defaultRecipients, initialDr
       fd.set("body", body);
       const res = await fetch("/api/gmail/send", { method: "POST", body: fd });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Erreur");
-      setResult({ ok: true, msg: "Envoyé via Gmail" });
+      if (!res.ok) throw new Error(data.error ?? "Error");
+      setResult({ ok: true, msg: "Sent via Gmail" });
     } catch (e) {
-      setResult({ ok: false, msg: e instanceof Error ? e.message : "Erreur" });
+      setResult({ ok: false, msg: e instanceof Error ? e.message : "Error" });
     } finally {
       setSending(false);
     }
   }
 
   async function copyAll() {
-    await navigator.clipboard.writeText(`Sujet : ${subject}\n\n${body}`);
+    await navigator.clipboard.writeText(`Subject: ${subject}\n\n${body}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -92,16 +92,16 @@ export function EmailDraftModal({ open, analysisId, defaultRecipients, initialDr
         <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: "#eeeeee" }}>
           <div className="flex items-center gap-2">
             <Mail size={16} style={{ color: "#f01563" }} />
-            <h2 className="text-base font-semibold" style={{ color: "#111" }}>Brouillon mail de suivi</h2>
+            <h2 className="text-base font-semibold" style={{ color: "#111" }}>Follow-up email draft</h2>
           </div>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100" aria-label="Fermer">
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100" aria-label="Close">
             <X size={18} style={{ color: "#666" }} />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
           <div>
-            <label className="text-xs font-medium block mb-1" style={{ color: "#888" }}>À</label>
+            <label className="text-xs font-medium block mb-1" style={{ color: "#888" }}>To</label>
             <input
               type="text"
               value={to}
@@ -112,7 +112,7 @@ export function EmailDraftModal({ open, analysisId, defaultRecipients, initialDr
             />
           </div>
           <div>
-            <label className="text-xs font-medium block mb-1" style={{ color: "#888" }}>Sujet</label>
+            <label className="text-xs font-medium block mb-1" style={{ color: "#888" }}>Subject</label>
             <input
               type="text"
               value={subject}
@@ -123,7 +123,7 @@ export function EmailDraftModal({ open, analysisId, defaultRecipients, initialDr
             />
           </div>
           <div>
-            <label className="text-xs font-medium block mb-1" style={{ color: "#888" }}>Corps</label>
+            <label className="text-xs font-medium block mb-1" style={{ color: "#888" }}>Body</label>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
@@ -131,7 +131,7 @@ export function EmailDraftModal({ open, analysisId, defaultRecipients, initialDr
               rows={14}
               className="w-full text-sm px-3 py-2 rounded-md border outline-none resize-y"
               style={{ borderColor: "#e5e5e5", background: "#fafafa", color: "#111", lineHeight: 1.6 }}
-              placeholder={generating ? "Génération en cours…" : ""}
+              placeholder={generating ? "Generating…" : ""}
             />
           </div>
 
@@ -156,7 +156,7 @@ export function EmailDraftModal({ open, analysisId, defaultRecipients, initialDr
             style={{ background: "#fff", color: "#666", border: "1px solid #e5e5e5" }}
           >
             <RefreshCw size={12} className={generating ? "animate-spin" : ""} />
-            {generating ? "Régénération…" : "Régénérer"}
+            {generating ? "Regenerating…" : "Regenerate"}
           </button>
           <button
             onClick={copyAll}
@@ -164,7 +164,7 @@ export function EmailDraftModal({ open, analysisId, defaultRecipients, initialDr
             style={{ background: "#fff", color: "#666", border: "1px solid #e5e5e5" }}
           >
             {copied ? <Check size={12} style={{ color: "#059669" }} /> : <Copy size={12} />}
-            {copied ? "Copié" : "Copier"}
+            {copied ? "Copied" : "Copy"}
           </button>
           <div className="flex-1" />
           <button
@@ -174,7 +174,7 @@ export function EmailDraftModal({ open, analysisId, defaultRecipients, initialDr
             style={{ background: "#f01563", color: "#fff" }}
           >
             <Send size={12} />
-            {sending ? "Envoi…" : "Envoyer via Gmail"}
+            {sending ? "Sending…" : "Send via Gmail"}
           </button>
         </div>
       </div>

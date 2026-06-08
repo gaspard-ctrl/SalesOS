@@ -55,7 +55,7 @@ async function resolveDefaultDealStage(): Promise<DefaultStage> {
   }
   const data = await hubspotFetch<{ results: RawPipeline[] }>("/crm/v3/pipelines/deals");
   const pipelines = data.results ?? [];
-  if (pipelines.length === 0) throw new Error("Aucun pipeline HubSpot trouvé");
+  if (pipelines.length === 0) throw new Error("No HubSpot pipeline found");
   const pipeline = pipelines.find((p) => p.id === "default") ?? pipelines[0];
   const openStages = (pipeline.stages ?? []).filter(
     (s) => s.metadata?.isClosed !== "true",
@@ -65,7 +65,7 @@ async function resolveDefaultDealStage(): Promise<DefaultStage> {
     .slice()
     .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
   const stage = discovery ?? fallbackOrdered[0];
-  if (!stage) throw new Error("Aucun stage ouvert trouvé sur le pipeline");
+  if (!stage) throw new Error("No open stage found in the pipeline");
   const value: DefaultStage = { pipelineId: pipeline.id, stageId: stage.id };
   defaultStageCache = { ts: Date.now(), value };
   return value;
@@ -325,11 +325,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const source = body.source?.trim() || null;
 
   if (!requestedUserId && !fallbackOwnerId) {
-    return NextResponse.json({ error: "userId ou ownerId requis" }, { status: 400 });
+    return NextResponse.json({ error: "userId or ownerId required" }, { status: 400 });
   }
-  if (!companyName) return NextResponse.json({ error: "companyName requis" }, { status: 400 });
-  if (!contactEmail) return NextResponse.json({ error: "contactEmail requis" }, { status: 400 });
-  if (!dealName) return NextResponse.json({ error: "dealName requis" }, { status: 400 });
+  if (!companyName) return NextResponse.json({ error: "companyName required" }, { status: 400 });
+  if (!contactEmail) return NextResponse.json({ error: "contactEmail required" }, { status: 400 });
+  if (!dealName) return NextResponse.json({ error: "dealName required" }, { status: 400 });
 
   // Resolve the owner: if a userId is provided, look up the user's
   // hubspot_owner_id and slack_display_name from the users table. This is the
@@ -349,7 +349,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     } | null;
     if (!salesRow?.hubspot_owner_id) {
       return NextResponse.json(
-        { error: "Le sales sélectionné n'a pas de hubspot_owner_id configuré." },
+        { error: "The selected sales rep has no hubspot_owner_id configured." },
         { status: 400 },
       );
     }
@@ -357,7 +357,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     ownerSlackDisplayName = salesRow.slack_display_name?.trim() || null;
   }
   if (!ownerId) {
-    return NextResponse.json({ error: "Owner HubSpot introuvable" }, { status: 400 });
+    return NextResponse.json({ error: "HubSpot owner not found" }, { status: 400 });
   }
 
   // Read the lead + last analysis (idempotency + slack_ts for threading)
@@ -367,7 +367,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .eq("id", leadId)
     .single();
   if (leadErr || !lead) {
-    return NextResponse.json({ error: leadErr?.message ?? "Lead introuvable" }, { status: 404 });
+    return NextResponse.json({ error: leadErr?.message ?? "Lead not found" }, { status: 404 });
   }
 
   const leadRow = lead as {
@@ -381,7 +381,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (!leadRow.last_analysis_id) {
     return NextResponse.json(
-      { error: "Lead non analysé. Lance l'analyse avant de finaliser." },
+      { error: "Lead not analyzed. Run the analysis before finalizing." },
       { status: 400 },
     );
   }
@@ -403,7 +403,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         ok: true,
         skipped: true,
         dealId: analysisRow.hubspot_deal_id,
-        message: "Un deal HubSpot est déjà lié à ce lead.",
+        message: "A HubSpot deal is already linked to this lead.",
       },
     );
   }
@@ -515,7 +515,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
     if (!res.ok) slackWarnings.push(`postMessage in channel: ${res.error ?? "unknown"}`);
   } else {
-    slackWarnings.push("Lead sans slack_channel_id/ts, message non envoyé.");
+    slackWarnings.push("Lead without slack_channel_id/ts, message not sent.");
   }
 
   // 9. Test phase: DM to the QA user (Arthur) with a summary.
@@ -530,7 +530,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         ? testTarget
         : await findSlackUserIdByDisplayName(testTarget);
       if (!testUserId) {
-        slackWarnings.push(`test DM: utilisateur Slack "${testTarget}" introuvable`);
+        slackWarnings.push(`test DM: Slack user "${testTarget}" not found`);
       } else {
         const dm = await slackPost("/conversations.open", { users: testUserId });
         const dmChannel = dm.channel as string | undefined;

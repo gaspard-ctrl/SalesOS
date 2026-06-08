@@ -37,7 +37,7 @@ function dedupRows(rows: Row[]): Row[] {
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as {
     csv?: string;
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     dryRun?: boolean;
   } | null;
   if (!body || typeof body.csv !== "string") {
-    return NextResponse.json({ error: "csv requis" }, { status: 400 });
+    return NextResponse.json({ error: "csv required" }, { status: 400 });
   }
   const mode: Mode = body.mode === "update" ? "update" : "skip";
   const dryRun = Boolean(body.dryRun);
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   const validRows: Row[] = [];
   for (const r of parsed.rows) {
     if (!r.owner) {
-      errors.push({ line: 0, reason: `Owner manquant pour "${r.name}"` });
+      errors.push({ line: 0, reason: `Owner missing for "${r.name}"` });
       continue;
     }
     validRows.push(r);

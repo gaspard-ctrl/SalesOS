@@ -58,7 +58,7 @@ export function EditableList({
       <div className="flex items-center justify-between mb-1">
         <p className="text-sm font-semibold" style={{ color: "#111" }}>{title}</p>
         <div className="flex items-center gap-2">
-          {saved && <span className="text-[10px]" style={{ color: "#16a34a" }}>Enregistré</span>}
+          {saved && <span className="text-[10px]" style={{ color: "#16a34a" }}>Saved</span>}
           {saving && <span className="text-[10px]" style={{ color: "#aaa" }}>…</span>}
           <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "#f5f5f5", color: "#888" }}>
             {items.length}
@@ -82,7 +82,7 @@ export function EditableList({
           className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-30"
           style={{ background: "#f01563", color: "#fff" }}
         >
-          Ajouter
+          Add
         </button>
       </div>
 
@@ -111,7 +111,7 @@ export function EditableList({
           className="text-[10px] mt-2 font-medium"
           style={{ color: "#f01563" }}
         >
-          {expanded ? "Réduire" : `Voir tout (${items.length})`}
+          {expanded ? "Collapse" : `Show all (${items.length})`}
         </button>
       )}
     </div>

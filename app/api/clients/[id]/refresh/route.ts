@@ -17,7 +17,7 @@ export const maxDuration = 60;
 // l'enrich complet). 409 si le client n'a pas encore été enrichi.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id } = await params;
 
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .eq("id", id)
     .single();
   if (clientErr || !client) {
-    return NextResponse.json({ error: "Client introuvable" }, { status: 404 });
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
   if (client.enrichment_status !== "done") {
     return NextResponse.json(
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const internalSecret = process.env.INTERNAL_SECRET;
   if (!internalSecret) {
-    return NextResponse.json({ error: "INTERNAL_SECRET manquant" }, { status: 500 });
+    return NextResponse.json({ error: "INTERNAL_SECRET missing" }, { status: 500 });
   }
 
   const triggerUrl = `${req.nextUrl.origin}/.netlify/functions/clients-refresh-background`;

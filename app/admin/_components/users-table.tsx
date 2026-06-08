@@ -85,7 +85,7 @@ export function UsersTable({ users }: { users: User[] }) {
                 className="text-left px-4 py-3 font-medium"
                 style={{ color: "#888" }}
               >
-                Nom
+                Name
               </th>
               <th
                 className="text-left px-4 py-3 font-medium"
@@ -97,12 +97,12 @@ export function UsersTable({ users }: { users: User[] }) {
                 className="text-left px-4 py-3 font-medium"
                 style={{ color: "#888" }}
               >
-                Clé Claude
+                Claude key
               </th>
               <th
                 className="text-left px-4 py-3 font-medium"
                 style={{ color: "#888" }}
-                title="Reçoit le deal digest par AE sur Slack"
+                title="Receives the per-AE deal digest on Slack"
               >
                 Sales
               </th>
@@ -110,7 +110,7 @@ export function UsersTable({ users }: { users: User[] }) {
                 className="text-left px-4 py-3 font-medium"
                 style={{ color: "#888" }}
               >
-                Ce mois
+                This month
               </th>
               <th
                 className="text-left px-4 py-3 font-medium"
@@ -157,7 +157,7 @@ export function UsersTable({ users }: { users: User[] }) {
                       className="text-xs px-2 py-1 rounded-full"
                       style={{ background: "#fef9c3", color: "#854d0e" }}
                     >
-                      Non configurée
+                      Not configured
                     </span>
                   )}
                 </td>
@@ -168,7 +168,7 @@ export function UsersTable({ users }: { users: User[] }) {
                     disabled={savingSales === user.id}
                     role="switch"
                     aria-checked={user.is_sales}
-                    title={user.is_sales ? "Reçoit le deal digest" : "Ne reçoit pas le deal digest"}
+                    title={user.is_sales ? "Receives the deal digest" : "Does not receive the deal digest"}
                     className="inline-flex items-center transition-colors"
                     style={{
                       width: 38,
@@ -222,7 +222,7 @@ export function UsersTable({ users }: { users: User[] }) {
                       e.currentTarget.style.color = "#888";
                     }}
                   >
-                    {user.claude_key_active ? "Modifier" : "Définir"}
+                    {user.claude_key_active ? "Edit" : "Set"}
                   </button>
                 </td>
               </tr>
@@ -234,7 +234,7 @@ export function UsersTable({ users }: { users: User[] }) {
                   className="px-4 py-8 text-center text-sm"
                   style={{ color: "#aaa" }}
                 >
-                  Aucun utilisateur. Invite des membres à se connecter.
+                  No users. Invite team members to sign in.
                 </td>
               </tr>
             )}

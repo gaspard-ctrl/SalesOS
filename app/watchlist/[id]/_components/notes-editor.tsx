@@ -44,7 +44,7 @@ export function NotesEditor({
       setTimeout(() => setStatus("idle"), 1200);
     } else {
       setStatus("error");
-      setErrorMsg(res.error ?? "Erreur de sauvegarde");
+      setErrorMsg(res.error ?? "Save failed");
     }
   }
 
@@ -67,14 +67,14 @@ export function NotesEditor({
         {status === "saving" && <Loader2 size={11} className="animate-spin" style={{ color: COLORS.ink3 }} />}
         {status === "saved" && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: COLORS.ok }}>
-            <Check size={11} /> Enregistré
+            <Check size={11} /> Saved
           </span>
         )}
       </div>
       <textarea
         value={value}
         onChange={onChange}
-        placeholder="Contexte, points clés, prochains pas… Sauvegarde automatique."
+        placeholder="Context, key points, next steps… Auto-saved."
         rows={3}
         style={{
           width: "100%",

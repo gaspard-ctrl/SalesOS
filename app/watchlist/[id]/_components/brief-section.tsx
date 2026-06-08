@@ -78,7 +78,7 @@ export function BriefSection({
               type="button"
               onClick={onRefresh}
               disabled={disabled || status === "running"}
-              title={status === "ok" ? "Régénérer" : "Générer"}
+              title={status === "ok" ? "Regenerate" : "Generate"}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -99,7 +99,7 @@ export function BriefSection({
               ) : (
                 <RefreshCw size={11} />
               )}
-              {status === "running" ? "En cours…" : status === "ok" ? "Régénérer" : "Générer"}
+              {status === "running" ? "Running…" : status === "ok" ? "Regenerate" : "Generate"}
             </button>
           )}
         </div>
@@ -134,20 +134,20 @@ function StatusPill({ status }: { status: BriefStatus }) {
   if (status === "running") {
     return (
       <span style={pill(COLORS.info, COLORS.infoBg)}>
-        <Loader2 size={9} className="animate-spin" /> En cours
+        <Loader2 size={9} className="animate-spin" /> Running
       </span>
     );
   }
   if (status === "ok") {
     return (
       <span style={pill(COLORS.ok, COLORS.okBg)}>
-        <CheckCircle2 size={9} /> À jour
+        <CheckCircle2 size={9} /> Up to date
       </span>
     );
   }
   return (
     <span style={pill(COLORS.err, COLORS.errBg)}>
-      <AlertCircle size={9} /> Erreur
+      <AlertCircle size={9} /> Error
     </span>
   );
 }
@@ -170,11 +170,11 @@ function formatRelative(iso: string): string {
   const date = new Date(iso);
   const diff = Date.now() - date.getTime();
   const min = Math.floor(diff / 60_000);
-  if (min < 1) return "À l'instant";
-  if (min < 60) return `Il y a ${min} min`;
+  if (min < 1) return "Just now";
+  if (min < 60) return `${min} min ago`;
   const h = Math.floor(min / 60);
-  if (h < 24) return `Il y a ${h}h`;
+  if (h < 24) return `${h}h ago`;
   const d = Math.floor(h / 24);
-  if (d < 7) return `Il y a ${d}j`;
-  return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+  if (d < 7) return `${d}d ago`;
+  return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 }

@@ -7,14 +7,14 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   if (!BRIGHTDATA_API_KEY) {
-    return NextResponse.json({ error: "Bright Data non configuré" }, { status: 500 });
+    return NextResponse.json({ error: "Bright Data not configured" }, { status: 500 });
   }
 
   const username = req.nextUrl.searchParams.get("username");
-  if (!username) return NextResponse.json({ error: "username requis" }, { status: 400 });
+  if (!username) return NextResponse.json({ error: "username required" }, { status: 400 });
 
   try {
     const [details, postsRes] = await Promise.allSettled([
@@ -33,6 +33,6 @@ export async function GET(req: NextRequest) {
             : null,
     });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Error" }, { status: 500 });
   }
 }

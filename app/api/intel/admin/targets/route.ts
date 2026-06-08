@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const [{ data: companies }, { data: roles }] = await Promise.all([
     db.from("guide_defaults").select("content").eq("key", "target_companies").maybeSingle(),
@@ -32,10 +32,10 @@ export async function GET(_req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as { companies?: string[]; roles?: string[] } | null;
-  if (!body) return NextResponse.json({ error: "Body invalide" }, { status: 400 });
+  if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
   const updates: Promise<unknown>[] = [];
   if (Array.isArray(body.companies)) {
@@ -61,7 +61,7 @@ export async function PUT(req: NextRequest) {
     );
   }
   if (updates.length === 0) {
-    return NextResponse.json({ error: "Au moins companies[] ou roles[] requis" }, { status: 400 });
+    return NextResponse.json({ error: "At least companies[] or roles[] required" }, { status: 400 });
   }
   await Promise.all(updates);
 

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { data, error } = await db
     .from("enrichment_lists")
@@ -53,13 +53,13 @@ export async function GET(_req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const body = await req.json().catch(() => null) as
     | { id?: string; name: string; source: string; criteria?: unknown; results?: unknown }
     | null;
   if (!body || !body.name || !body.source) {
-    return NextResponse.json({ error: "name et source requis" }, { status: 400 });
+    return NextResponse.json({ error: "name and source required" }, { status: 400 });
   }
 
   const row = {

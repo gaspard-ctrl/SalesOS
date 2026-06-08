@@ -42,27 +42,27 @@ export const DEFAULT_DEAL_FILTERS: DealFilters = {
 // ─── Labels ────────────────────────────────────────────────────────────────────
 
 const ACTIVITY_LABELS: Record<ActivityFilter, string> = {
-  all: "Toutes",
-  active_7: "Actifs < 7j",
-  active_30: "Actifs < 30j",
-  inactive_14: "Inactifs > 14j",
-  inactive_30: "Inactifs > 30j",
-  dormant_90: "Dormants > 90j",
+  all: "All",
+  active_7: "Active < 7d",
+  active_30: "Active < 30d",
+  inactive_14: "Inactive > 14d",
+  inactive_30: "Inactive > 30d",
+  dormant_90: "Dormant > 90d",
 };
 
 const STARTED_LABELS: Record<StartedFilter, string> = {
-  all: "Toutes",
-  this_month: "Ce mois-ci",
-  this_quarter: "Ce trimestre",
-  this_year: "Cette année",
-  custom: "Période perso.",
+  all: "All",
+  this_month: "This month",
+  this_quarter: "This quarter",
+  this_year: "This year",
+  custom: "Custom range",
 };
 
 const SCORE_LABELS: Record<ScoreTier, string> = {
   hot: "Hot (≥ 80)",
   warm: "Warm (60–79)",
   cold: "Cold (< 60)",
-  unscored: "Non scoré",
+  unscored: "Unscored",
 };
 
 const AMOUNT_LABELS: Record<AmountBand, string> = {
@@ -287,7 +287,7 @@ function ActivityChip({ value, onChange }: { value: ActivityFilter; onChange: (v
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <Chip
-        label="Activité"
+        label="Activity"
         active={value !== "all"}
         summary={value !== "all" ? ACTIVITY_LABELS[value] : undefined}
         onClick={() => setOpen((o) => !o)}
@@ -318,7 +318,7 @@ function StartedChip({
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <Chip
-        label="Début"
+        label="Started"
         active={value !== "all"}
         summary={summary}
         onClick={() => setOpen((o) => !o)}
@@ -330,14 +330,14 @@ function StartedChip({
         ))}
         {value === "custom" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8, paddingTop: 8, borderTop: "1px solid #f3f4f6" }}>
-            <label style={{ fontSize: 10, color: "#6b7280", fontWeight: 600 }}>Du</label>
+            <label style={{ fontSize: 10, color: "#6b7280", fontWeight: 600 }}>From</label>
             <input
               type="date"
               value={from}
               onChange={(e) => onChange("custom", e.target.value, to)}
               style={{ fontSize: 12, padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 6, outline: "none" }}
             />
-            <label style={{ fontSize: 10, color: "#6b7280", fontWeight: 600 }}>Au</label>
+            <label style={{ fontSize: 10, color: "#6b7280", fontWeight: 600 }}>To</label>
             <input
               type="date"
               value={to}
@@ -360,7 +360,7 @@ function ScoreChip({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
   const active = tiers.length > 0;
-  const summary = tiers.length === 1 ? SCORE_LABELS[tiers[0]] : tiers.length > 1 ? `${tiers.length} paliers` : undefined;
+  const summary = tiers.length === 1 ? SCORE_LABELS[tiers[0]] : tiers.length > 1 ? `${tiers.length} tiers` : undefined;
   const toggle = (t: ScoreTier) => {
     onChange(tiers.includes(t) ? tiers.filter((x) => x !== t) : [...tiers, t]);
   };
@@ -397,7 +397,7 @@ function OwnerChip({
   const summary = ownerIds.length === 1
     ? (owners.find((o) => o.id === ownerIds[0])?.name ?? "1")
     : ownerIds.length > 1 ? `${ownerIds.length} owners`
-    : mode === "mine" ? undefined : "Tous";
+    : mode === "mine" ? undefined : "All";
   const toggle = (id: string) => {
     const next = ownerIds.includes(id) ? ownerIds.filter((x) => x !== id) : [...ownerIds, id];
     onChange("all", next);
@@ -410,7 +410,7 @@ function OwnerChip({
       <Chip
         label="Owner"
         active={active}
-        summary={mode === "mine" && ownerIds.length === 0 ? "Mes deals" : summary}
+        summary={mode === "mine" && ownerIds.length === 0 ? "My deals" : summary}
         onClick={() => setOpen((o) => !o)}
         onClear={active ? () => onChange("mine", []) : undefined}
       />
@@ -426,7 +426,7 @@ function OwnerChip({
               cursor: "pointer", fontWeight: 500,
             }}
           >
-            Mes deals
+            My deals
           </button>
           <button
             onClick={() => onChange("all", [])}
@@ -438,23 +438,23 @@ function OwnerChip({
               cursor: "pointer", fontWeight: 500,
             }}
           >
-            Tous les owners
+            All owners
           </button>
         </div>
         {mode === "all" && (
           <>
             <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7280", marginBottom: 4, paddingTop: 4, borderTop: "1px solid #f3f4f6" }}>
-              Filtrer par owner(s) spécifique(s)
+              Filter by specific owner(s)
             </div>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher…"
+              placeholder="Search…"
               style={{ width: "100%", fontSize: 12, padding: "5px 8px", border: "1px solid #e5e7eb", borderRadius: 6, outline: "none", marginBottom: 6 }}
             />
             <div style={{ maxHeight: 220, overflowY: "auto" }}>
               {filtered.length === 0 ? (
-                <div style={{ fontSize: 11, color: "#9ca3af", padding: "6px 8px" }}>Aucun owner</div>
+                <div style={{ fontSize: 11, color: "#9ca3af", padding: "6px 8px" }}>No owner</div>
               ) : filtered.map((o) => (
                 <CheckRow key={o.id} checked={ownerIds.includes(o.id)} label={o.name || "—"} onToggle={() => toggle(o.id)} />
               ))}
@@ -480,14 +480,14 @@ function AmountChip({
   const customLabel = (min || max) ? `${min || "0"}–${max || "∞"}€` : "";
   const summary = bands.length === 1 && !min && !max
     ? AMOUNT_LABELS[bands[0]]
-    : bands.length > 1 ? `${bands.length} tranches` : customLabel || undefined;
+    : bands.length > 1 ? `${bands.length} bands` : customLabel || undefined;
   const toggle = (b: AmountBand) => {
     onChange(bands.includes(b) ? bands.filter((x) => x !== b) : [...bands, b], min, max);
   };
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <Chip
-        label="Montant"
+        label="Amount"
         active={active}
         summary={summary}
         onClick={() => setOpen((o) => !o)}
@@ -498,10 +498,10 @@ function AmountChip({
           <CheckRow key={k} checked={bands.includes(k)} label={AMOUNT_LABELS[k]} onToggle={() => toggle(k)} />
         ))}
         <div style={{ borderTop: "1px solid #f3f4f6", marginTop: 6, paddingTop: 8 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7280", marginBottom: 4 }}>Ou plage personnalisée (€)</div>
+          <div style={{ fontSize: 10, fontWeight: 600, color: "#6b7280", marginBottom: 4 }}>Or custom range (€)</div>
           <div style={{ display: "flex", gap: 6 }}>
             <input
-              type="number"
+                type="number"
               inputMode="numeric"
               placeholder="Min"
               value={min}
@@ -569,7 +569,7 @@ export function DealFiltersBar({
             cursor: "pointer", textDecoration: "underline", padding: "4px 6px",
           }}
         >
-          Réinitialiser ({activeCount})
+          Reset ({activeCount})
         </button>
       )}
     </div>

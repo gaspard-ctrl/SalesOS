@@ -37,10 +37,10 @@ type MappingState = {
 };
 
 const TARGET_FIELDS: { key: TargetField; label: string; required: boolean }[] = [
-  { key: "name", label: "Entreprise", required: true },
+  { key: "name", label: "Company", required: true },
   { key: "owner", label: "Owner", required: false },
-  { key: "sector", label: "Secteur", required: false },
-  { key: "current_coaching_platform", label: "Plateforme coaching", required: false },
+  { key: "sector", label: "Sector", required: false },
+  { key: "current_coaching_platform", label: "Coaching platform", required: false },
   { key: "notes", label: "Notes", required: false },
 ];
 
@@ -155,10 +155,10 @@ export function IcpTargetsDrawer({
   const resolvedTitle =
     title ??
     (showCompanies && showRoles
-      ? "Mes companies & rôles cibles"
+      ? "My companies & target roles"
       : showCompanies
-      ? "Mes companies"
-      : "Rôles cibles");
+      ? "My companies"
+      : "Target roles");
   const { mutate: swrMutate } = useSWRConfig();
   const [companies, setCompanies] = React.useState<ScopeCompany[]>([]);
   const [reps, setReps] = React.useState<SalesRep[]>([]);
@@ -200,7 +200,7 @@ export function IcpTargetsDrawer({
       );
     }
     Promise.all(fetches)
-      .catch((e) => setFeedback({ kind: "err", msg: e instanceof Error ? e.message : "Erreur" }))
+      .catch((e) => setFeedback({ kind: "err", msg: e instanceof Error ? e.message : "Error" }))
       .finally(() => setLoading(false));
   }, [open, showCompanies, showRoles]);
 
@@ -216,7 +216,7 @@ export function IcpTargetsDrawer({
   }
 
   async function addCompany() {
-    const name = prompt("Nom de l'entreprise");
+    const name = prompt("Company name");
     if (!name?.trim()) return;
     setFeedback(null);
     const r = await fetch("/api/intel/admin/scope-companies", {
@@ -226,7 +226,7 @@ export function IcpTargetsDrawer({
     });
     const j = await r.json();
     if (!r.ok) {
-      setFeedback({ kind: "err", msg: j.error ?? "Erreur ajout" });
+      setFeedback({ kind: "err", msg: j.error ?? "Error adding" });
       return;
     }
     await reloadCompanies();
@@ -242,7 +242,7 @@ export function IcpTargetsDrawer({
     });
     const j = await r.json();
     if (!r.ok) {
-      setFeedback({ kind: "err", msg: j.error ?? "Erreur" });
+      setFeedback({ kind: "err", msg: j.error ?? "Error" });
       return;
     }
     setCompanies((cs) => cs.map((c) => (c.id === id ? (j.company as ScopeCompany) : c)));
@@ -255,12 +255,12 @@ export function IcpTargetsDrawer({
   }
 
   async function removeCompany(id: string, name: string) {
-    if (!confirm(`Retirer ${name} de tes entreprises suivies ?`)) return;
+    if (!confirm(`Remove ${name} from your tracked companies?`)) return;
     setFeedback(null);
     const r = await fetch(`/api/intel/admin/scope-companies/${id}`, { method: "DELETE" });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
-      setFeedback({ kind: "err", msg: j.error ?? "Erreur suppression" });
+      setFeedback({ kind: "err", msg: j.error ?? "Error deleting" });
       return;
     }
     setCompanies((cs) => cs.filter((c) => c.id !== id));
@@ -278,7 +278,7 @@ export function IcpTargetsDrawer({
     if (ids.length === 0) return;
     const names = companies.filter((c) => selectedIds.has(c.id)).map((c) => c.name);
     const preview = names.slice(0, 3).join(", ") + (names.length > 3 ? `, +${names.length - 3}` : "");
-    if (!confirm(`Supprimer ${ids.length} entreprise${ids.length > 1 ? "s" : ""} (${preview}) ?`)) return;
+    if (!confirm(`Delete ${ids.length} compan${ids.length > 1 ? "ies" : "y"} (${preview})?`)) return;
     setBulkDeleting(true);
     setFeedback(null);
     try {
@@ -288,13 +288,13 @@ export function IcpTargetsDrawer({
         body: JSON.stringify({ ids }),
       });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.error ?? "Erreur suppression");
+      if (!r.ok) throw new Error(j.error ?? "Error deleting");
       setCompanies((cs) => cs.filter((c) => !selectedIds.has(c.id)));
       setSelectedIds(new Set());
-      setFeedback({ kind: "ok", msg: `${ids.length} entreprise${ids.length > 1 ? "s" : ""} supprimée${ids.length > 1 ? "s" : ""}.` });
+      setFeedback({ kind: "ok", msg: `${ids.length} compan${ids.length > 1 ? "ies" : "y"} deleted.` });
       invalidateWatchlist();
     } catch (e) {
-      setFeedback({ kind: "err", msg: e instanceof Error ? e.message : "Erreur" });
+      setFeedback({ kind: "err", msg: e instanceof Error ? e.message : "Error" });
     } finally {
       setBulkDeleting(false);
     }
@@ -318,10 +318,10 @@ export function IcpTargetsDrawer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roles: roles.split("\n") }),
       });
-      if (!r.ok) throw new Error((await r.json()).error ?? "Erreur");
-      setFeedback({ kind: "ok", msg: "Rôles enregistrés." });
+      if (!r.ok) throw new Error((await r.json()).error ?? "Error");
+      setFeedback({ kind: "ok", msg: "Roles saved." });
     } catch (e) {
-      setFeedback({ kind: "err", msg: e instanceof Error ? e.message : "Erreur" });
+      setFeedback({ kind: "err", msg: e instanceof Error ? e.message : "Error" });
     } finally {
       setSavingRoles(false);
     }
@@ -361,7 +361,7 @@ export function IcpTargetsDrawer({
       const csv = String(reader.result ?? "");
       const { headers, rows } = parseCsvAll(csv);
       if (headers.length === 0 || rows.length === 0) {
-        setFeedback({ kind: "err", msg: "CSV vide ou illisible." });
+        setFeedback({ kind: "err", msg: "Empty or unreadable CSV." });
         return;
       }
       setFeedback(null);
@@ -379,7 +379,7 @@ export function IcpTargetsDrawer({
   async function confirmMapping() {
     if (!mappingState) return;
     if (mappingState.mapping.name < 0) {
-      setFeedback({ kind: "err", msg: "La colonne Entreprise est obligatoire." });
+      setFeedback({ kind: "err", msg: "The Company column is required." });
       return;
     }
     const ownerMapped = mappingState.mapping.owner >= 0;
@@ -387,7 +387,7 @@ export function IcpTargetsDrawer({
     if (!ownerMapped && !defaultOwner) {
       setFeedback({
         kind: "err",
-        msg: "Owner obligatoire : choisis un owner par défaut ou mappe la colonne owner.",
+        msg: "Owner required: choose a default owner or map the owner column.",
       });
       return;
     }
@@ -405,11 +405,11 @@ export function IcpTargetsDrawer({
         body: JSON.stringify({ csv, dryRun: true }),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error ?? "Erreur import");
+      if (!r.ok) throw new Error(j.error ?? "Import error");
       setMappingState(null);
       setImportPreview({ csv, summary: j.summary as ImportSummary });
     } catch (e) {
-      setFeedback({ kind: "err", msg: e instanceof Error ? e.message : "Erreur" });
+      setFeedback({ kind: "err", msg: e instanceof Error ? e.message : "Error" });
     } finally {
       setMappingLoading(false);
     }
@@ -426,18 +426,18 @@ export function IcpTargetsDrawer({
         body: JSON.stringify({ csv: importPreview.csv, mode }),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error ?? "Erreur import");
+      if (!r.ok) throw new Error(j.error ?? "Import error");
       const s = j.summary as ImportSummary;
       const parts: string[] = [];
-      if (s.toInsert > 0) parts.push(`${s.toInsert} ajoutée${s.toInsert > 1 ? "s" : ""}`);
-      if (s.toUpdate > 0) parts.push(`${s.toUpdate} mise${s.toUpdate > 1 ? "s" : ""} à jour`);
-      if (s.skipped > 0) parts.push(`${s.skipped} doublon${s.skipped > 1 ? "s" : ""} ignoré${s.skipped > 1 ? "s" : ""}`);
-      setFeedback({ kind: "ok", msg: parts.join(" · ") || "Aucun changement." });
+      if (s.toInsert > 0) parts.push(`${s.toInsert} added`);
+      if (s.toUpdate > 0) parts.push(`${s.toUpdate} updated`);
+      if (s.skipped > 0) parts.push(`${s.skipped} duplicate${s.skipped > 1 ? "s" : ""} skipped`);
+      setFeedback({ kind: "ok", msg: parts.join(" · ") || "No changes." });
       setImportPreview(null);
       await Promise.all([reloadCompanies(), reloadReps()]);
       invalidateWatchlist();
     } catch (e) {
-      setFeedback({ kind: "err", msg: e instanceof Error ? e.message : "Erreur" });
+      setFeedback({ kind: "err", msg: e instanceof Error ? e.message : "Error" });
     } finally {
       setImporting(false);
     }
@@ -504,12 +504,12 @@ export function IcpTargetsDrawer({
             {resolvedTitle}
           </h2>
           {showCompanies && showRoles && (
-            <span style={{ fontSize: 11, color: COLORS.ink3 }}>partagées par tous les agents</span>
+            <span style={{ fontSize: 11, color: COLORS.ink3 }}>shared by all agents</span>
           )}
           <button
             type="button"
             onClick={onClose}
-            aria-label="Fermer"
+            aria-label="Close"
             style={{ marginLeft: "auto", border: "none", background: "transparent", cursor: "pointer", color: COLORS.ink3 }}
           >
             <X size={18} />
@@ -518,13 +518,13 @@ export function IcpTargetsDrawer({
 
         <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 20 }}>
           {loading ? (
-            <p style={{ color: COLORS.ink3 }}>Chargement…</p>
+            <p style={{ color: COLORS.ink3 }}>Loading…</p>
           ) : (
             <>
               {showCompanies && showRoles && (
                 <p style={{ fontSize: 12, color: COLORS.ink2, margin: 0, lineHeight: 1.5 }}>
-                  Ces listes alimentent : Company News, Hiring Spike, Funding & Expansion,
-                  Ads Activity, Init exhaustif, Weekly Scan.
+                  These lists feed: Company News, Hiring Spike, Funding & Expansion,
+                  Ads Activity, Full Init, Weekly Scan.
                 </p>
               )}
 
@@ -541,12 +541,12 @@ export function IcpTargetsDrawer({
                       margin: 0,
                     }}
                   >
-                    Entreprises suivies ({companies.length})
+                    Tracked companies ({companies.length})
                   </h3>
                   <input
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
-                    placeholder="Filtrer…"
+                    placeholder="Filter…"
                     style={{
                       marginLeft: 12,
                       padding: "5px 8px",
@@ -560,10 +560,10 @@ export function IcpTargetsDrawer({
                   />
                   <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
                     <button type="button" onClick={addCompany} style={btnSecondary()}>
-                      <Plus size={12} /> Ajouter
+                      <Plus size={12} /> Add
                     </button>
                     <button type="button" onClick={() => fileInputRef.current?.click()} style={btnSecondary()}>
-                      <Upload size={12} /> Importer CSV
+                      <Upload size={12} /> Import CSV
                     </button>
                     <input
                       ref={fileInputRef}
@@ -573,7 +573,7 @@ export function IcpTargetsDrawer({
                       style={{ display: "none" }}
                     />
                     <button type="button" onClick={exportCsv} disabled={companies.length === 0} style={btnSecondary()}>
-                      <Download size={12} /> Exporter CSV
+                      <Download size={12} /> Export CSV
                     </button>
                   </div>
                 </div>
@@ -608,14 +608,14 @@ export function IcpTargetsDrawer({
                     }}
                   >
                     <span style={{ fontSize: 12, color: COLORS.ink1 }}>
-                      {selectedIds.size} sélectionnée{selectedIds.size > 1 ? "s" : ""}
+                      {selectedIds.size} selected
                     </span>
                     <button
                       type="button"
                       onClick={() => setSelectedIds(new Set())}
                       style={{ ...btnSecondary(), padding: "4px 8px" }}
                     >
-                      Tout désélectionner
+                      Deselect all
                     </button>
                     <button
                       type="button"
@@ -628,7 +628,7 @@ export function IcpTargetsDrawer({
                         borderColor: COLORS.err,
                       }}
                     >
-                      <Trash2 size={12} /> {bulkDeleting ? "Suppression…" : "Supprimer la sélection"}
+                      <Trash2 size={12} /> {bulkDeleting ? "Deleting…" : "Delete selection"}
                     </button>
                   </div>
                 )}
@@ -656,7 +656,7 @@ export function IcpTargetsDrawer({
                         <th style={th(32)}>
                           <input
                             type="checkbox"
-                            aria-label="Tout sélectionner"
+                            aria-label="Select all"
                             checked={filtered.length > 0 && filtered.every((c) => selectedIds.has(c.id))}
                             ref={(el) => {
                               if (!el) return;
@@ -676,10 +676,10 @@ export function IcpTargetsDrawer({
                             style={{ cursor: "pointer" }}
                           />
                         </th>
-                        <th style={th()}>Entreprise</th>
+                        <th style={th()}>Company</th>
                         <th style={th(140)}>Owner</th>
-                        <th style={th(160)}>Secteur</th>
-                        <th style={th(180)}>Plateforme coaching</th>
+                        <th style={th(160)}>Sector</th>
+                        <th style={th(180)}>Coaching platform</th>
                         <th style={th()}>Notes</th>
                         <th style={th(40)}></th>
                       </tr>
@@ -688,7 +688,7 @@ export function IcpTargetsDrawer({
                       {filtered.length === 0 && (
                         <tr>
                           <td colSpan={7} style={{ padding: 24, textAlign: "center", color: COLORS.ink3, fontSize: 12 }}>
-                            {companies.length === 0 ? "Aucune entreprise. Ajoutes-en ou importe un CSV." : "Aucun résultat."}
+                            {companies.length === 0 ? "No companies. Add some or import a CSV." : "No results."}
                           </td>
                         </tr>
                       )}
@@ -706,7 +706,7 @@ export function IcpTargetsDrawer({
                   </table>
                 </div>
                 <p style={{ fontSize: 10, color: COLORS.ink3, margin: "6px 2px 0" }}>
-                  Modification inline · Tab pour passer au champ suivant. Dédup case-insensitive sur le nom.
+                  Inline editing · Tab to move to the next field. Case-insensitive dedup on the name.
                 </p>
               </section>
               )}
@@ -724,7 +724,7 @@ export function IcpTargetsDrawer({
                       margin: 0,
                     }}
                   >
-                    Titres / rôles ciblés ({rolesCount})
+                    Target titles / roles ({rolesCount})
                   </h3>
                   <button
                     type="button"
@@ -732,7 +732,7 @@ export function IcpTargetsDrawer({
                     disabled={savingRoles}
                     style={{ ...btnSecondary(), marginLeft: "auto" }}
                   >
-                    <Save size={12} /> {savingRoles ? "…" : "Enregistrer rôles"}
+                    <Save size={12} /> {savingRoles ? "…" : "Save roles"}
                   </button>
                 </div>
                 <textarea
@@ -740,7 +740,7 @@ export function IcpTargetsDrawer({
                   onChange={(e) => setRoles(e.target.value)}
                   rows={10}
                   style={ta()}
-                  placeholder="Un titre par ligne&#10;ex: DRH&#10;Head of L&D"
+                  placeholder="One title per line&#10;e.g. CHRO&#10;Head of L&D"
                 />
               </section>
               )}
@@ -765,7 +765,7 @@ export function IcpTargetsDrawer({
             </span>
           )}
           <button type="button" onClick={onClose} style={{ ...btnSecondary(), marginLeft: "auto" }}>
-            Fermer
+            Close
           </button>
         </footer>
       </aside>
@@ -854,11 +854,11 @@ function ColumnMappingModal({
       >
         <div>
           <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: COLORS.ink0 }}>
-            Mapper les colonnes du CSV
+            Map the CSV columns
           </h3>
           <p style={{ margin: "4px 0 0", fontSize: 12, color: COLORS.ink2 }}>
-            {rows.length} ligne{rows.length > 1 ? "s" : ""} détectée{rows.length > 1 ? "s" : ""}.
-            Associe chaque champ à une colonne de ton fichier. Seule l&apos;entreprise est obligatoire.
+            {rows.length} row{rows.length > 1 ? "s" : ""} detected.
+            Match each field to a column in your file. Only the company is required.
           </p>
         </div>
 
@@ -889,15 +889,15 @@ function ColumnMappingModal({
                   color: COLORS.ink1,
                 }}
               >
-                {!f.required && <option value={-1}>— Ignorer —</option>}
+                {!f.required && <option value={-1}>— Ignore —</option>}
                 {f.required && mapping[f.key] < 0 && (
                   <option value={-1} disabled>
-                    — Choisir une colonne —
+                    — Choose a column —
                   </option>
                 )}
                 {headers.map((h, idx) => (
                   <option key={idx} value={idx}>
-                    {h || `Colonne ${idx + 1}`}
+                    {h || `Column ${idx + 1}`}
                   </option>
                 ))}
               </select>
@@ -905,7 +905,7 @@ function ColumnMappingModal({
           ))}
 
           <label style={{ fontSize: 12, color: COLORS.ink1 }}>
-            Owner par défaut
+            Default owner
             {!ownerColMapped && <span style={{ color: COLORS.err }}> *</span>}
           </label>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -940,13 +940,13 @@ function ColumnMappingModal({
                 flex: 1,
               }}
             >
-              <option value="">— Aucun —</option>
+              <option value="">— None —</option>
               {reps.map((r) => (
                 <option key={r.id} value={r.name}>
                   {r.name}
                 </option>
               ))}
-              <option value="__custom__">+ Nouveau owner…</option>
+              <option value="__custom__">+ New owner…</option>
             </select>
             {(customMode || (fallbackOwner && !reps.some((r) => r.name === fallbackOwner))) && (
               <input
@@ -955,7 +955,7 @@ function ColumnMappingModal({
                   setCustomOwner(e.target.value);
                   setDefaultOwner(e.target.value || null);
                 }}
-                placeholder="Nom du owner"
+                placeholder="Owner name"
                 autoFocus
                 style={{
                   padding: "6px 8px",
@@ -974,13 +974,13 @@ function ColumnMappingModal({
         {fallbackOwner && (
           <p style={{ margin: 0, fontSize: 11, color: COLORS.ink3 }}>
             {ownerColMapped
-              ? `Appliqué uniquement aux lignes sans owner dans le CSV.`
-              : `Appliqué à toutes les ${rows.length} entreprises importées.`}
+              ? `Applied only to rows without an owner in the CSV.`
+              : `Applied to all ${rows.length} imported companies.`}
           </p>
         )}
         {!ownerOk && (
           <p style={{ margin: 0, fontSize: 11, color: COLORS.err }}>
-            Owner obligatoire : choisis un owner par défaut ou mappe la colonne owner.
+            Owner required: choose a default owner or map the owner column.
           </p>
         )}
 
@@ -1048,7 +1048,7 @@ function ColumnMappingModal({
                     colSpan={TARGET_FIELDS.length}
                     style={{ padding: "6px 10px", fontSize: 11, color: COLORS.ink3, fontStyle: "italic" }}
                   >
-                    + {rows.length - sample.length} ligne{rows.length - sample.length > 1 ? "s" : ""}
+                    + {rows.length - sample.length} row{rows.length - sample.length > 1 ? "s" : ""}
                   </td>
                 </tr>
               )}
@@ -1058,7 +1058,7 @@ function ColumnMappingModal({
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" onClick={onCancel} style={btnSecondary()}>
-            Annuler
+            Cancel
           </button>
           <button
             type="button"
@@ -1066,7 +1066,7 @@ function ColumnMappingModal({
             disabled={!canContinue}
             style={{ ...btnPrimary(), opacity: canContinue ? 1 : 0.6 }}
           >
-            {loading ? "Analyse…" : "Continuer"}
+            {loading ? "Analyzing…" : "Continue"}
           </button>
         </div>
       </div>
@@ -1097,7 +1097,7 @@ function CompanyRow({
       <td style={{ ...td(), textAlign: "center" }}>
         <input
           type="checkbox"
-          aria-label={`Sélectionner ${company.name}`}
+          aria-label={`Select ${company.name}`}
           checked={selected}
           onChange={() => onToggleSelected(company.id)}
           style={{ cursor: "pointer" }}
@@ -1107,7 +1107,7 @@ function CompanyRow({
         <InlineEditable
           value={company.name}
           onCommit={(v) => v !== company.name && onPatch(company.id, { name: v })}
-          placeholder="Entreprise"
+          placeholder="Company"
         />
       </td>
       <td style={td()}>
@@ -1148,7 +1148,7 @@ function CompanyRow({
         <button
           type="button"
           onClick={() => onRemove(company.id, company.name)}
-          aria-label="Supprimer"
+          aria-label="Delete"
           style={{ border: "none", background: "transparent", color: COLORS.err, cursor: "pointer", padding: 0 }}
         >
           <Trash2 size={13} />
@@ -1237,33 +1237,33 @@ function ImportPreviewModal({
           gap: 12,
         }}
       >
-        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: COLORS.ink0 }}>Aperçu import CSV</h3>
+        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: COLORS.ink0 }}>CSV import preview</h3>
         <ul style={{ margin: 0, padding: "0 0 0 16px", fontSize: 12, color: COLORS.ink1, lineHeight: 1.6 }}>
-          <li>{summary.parsed} ligne{summary.parsed > 1 ? "s" : ""} lue{summary.parsed > 1 ? "s" : ""}</li>
+          <li>{summary.parsed} row{summary.parsed > 1 ? "s" : ""} read</li>
           <li>
-            {summary.toInsert} nouvelle{summary.toInsert > 1 ? "s" : ""} entreprise{summary.toInsert > 1 ? "s" : ""}
+            {summary.toInsert} new compan{summary.toInsert > 1 ? "ies" : "y"}
           </li>
           <li>
-            {summary.deduped - summary.toInsert} doublon{summary.deduped - summary.toInsert > 1 ? "s" : ""} avec l&apos;existant
+            {summary.deduped - summary.toInsert} duplicate{summary.deduped - summary.toInsert > 1 ? "s" : ""} with existing
           </li>
           {summary.errors.length > 0 && (
             <li style={{ color: COLORS.err }}>
-              {summary.errors.length} erreur{summary.errors.length > 1 ? "s" : ""} (ligne {summary.errors.slice(0, 3).map((e) => e.line).join(", ")}…)
+              {summary.errors.length} error{summary.errors.length > 1 ? "s" : ""} (row {summary.errors.slice(0, 3).map((e) => e.line).join(", ")}…)
             </li>
           )}
         </ul>
         <p style={{ margin: 0, fontSize: 12, color: COLORS.ink2 }}>
-          Pour les doublons (case-insensitive sur le nom), tu veux :
+          For duplicates (case-insensitive on the name), you want to:
         </p>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" onClick={onCancel} style={btnSecondary()}>
-            Annuler
+            Cancel
           </button>
           <button type="button" onClick={() => onConfirm("skip")} disabled={importing} style={btnSecondary()}>
-            Ignorer les doublons
+            Skip duplicates
           </button>
           <button type="button" onClick={() => onConfirm("update")} disabled={importing} style={btnPrimary()}>
-            Écraser owner/notes
+            Overwrite owner/notes
           </button>
         </div>
       </div>

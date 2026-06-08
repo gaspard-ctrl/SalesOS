@@ -79,7 +79,7 @@ export function HubspotCompanyRow({
           )}
         </div>
         <div style={{ fontSize: 11, color: COLORS.ink3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {[company.industry, company.country, company.employees ? `${company.employees.toLocaleString("fr-FR")} empl.` : null]
+          {[company.industry, company.country, company.employees ? `${company.employees.toLocaleString("en-GB")} empl.` : null]
             .filter(Boolean)
             .join(" · ") || "—"}
         </div>
@@ -102,10 +102,10 @@ export function HubspotCompanyRow({
             flexShrink: 0,
             whiteSpace: "nowrap",
           }}
-          title={scopeOwner ? `Déjà dans la watchlist · ${scopeOwner}` : "Déjà dans la watchlist"}
+          title={scopeOwner ? `Already in the watchlist · ${scopeOwner}` : "Already in the watchlist"}
         >
           {ownerAccent && <span style={{ width: 7, height: 7, borderRadius: 999, background: ownerAccent }} />}
-          {scopeOwner ?? "Dans la watchlist"}
+          {scopeOwner ?? "In the watchlist"}
         </span>
       ) : (
         <span
@@ -120,7 +120,7 @@ export function HubspotCompanyRow({
             whiteSpace: "nowrap",
           }}
         >
-          + à ajouter
+          + to add
         </span>
       )}
     </div>

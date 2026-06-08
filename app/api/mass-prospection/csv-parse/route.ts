@@ -6,15 +6,15 @@ export const dynamic = "force-dynamic";
 // POST — parse CSV file, return headers + preview rows
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
-  if (!file) return NextResponse.json({ error: "Fichier CSV requis" }, { status: 400 });
+  if (!file) return NextResponse.json({ error: "CSV file required" }, { status: 400 });
 
   const text = await file.text();
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length < 2) return NextResponse.json({ error: "Le CSV doit contenir au moins un en-tête et une ligne de données" }, { status: 400 });
+  if (lines.length < 2) return NextResponse.json({ error: "The CSV must contain at least a header and one data row" }, { status: 400 });
 
   // Parse CSV (handle quoted fields with commas)
   function parseCsvLine(line: string): string[] {

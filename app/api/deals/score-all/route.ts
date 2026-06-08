@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   let userId: string | null = null;
   if (!isCron) {
     const user = await getAuthenticatedUser();
-    if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     userId = user.id;
   }
 
@@ -125,6 +125,6 @@ export async function POST(req: NextRequest) {
       lastRunAt: scored > 0 ? finishedAt : null,
     });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur" }, { status: 500 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Error" }, { status: 500 });
   }
 }

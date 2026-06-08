@@ -6,9 +6,9 @@ import { useMarketingEvents } from "@/lib/hooks/use-marketing";
 import type { MarketingEvent, MarketingEventType } from "@/lib/marketing-types";
 
 const TYPE_META: Record<MarketingEventType, { label: string; color: string; background: string }> = {
-  salon:              { label: "Salon",         color: "#f59e0b", background: "#fff7ed" },
+  salon:              { label: "Trade show",   color: "#f59e0b", background: "#fff7ed" },
   linkedin_pro:       { label: "LinkedIn Pro",  color: "#3b82f6", background: "#eff6ff" },
-  linkedin_perso:     { label: "LinkedIn Perso", color: "#8b5cf6", background: "#f5f3ff" },
+  linkedin_perso:     { label: "LinkedIn Personal", color: "#8b5cf6", background: "#f5f3ff" },
   nurturing_campaign: { label: "Nurturing",     color: "#14b8a6", background: "#f0fdfa" },
 };
 
@@ -68,7 +68,7 @@ function EventsModal({ onClose }: { onClose: () => void }) {
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     if (!label.trim()) {
-      setFormError("Label requis");
+      setFormError("Label required");
       return;
     }
     setSubmitting(true);
@@ -108,7 +108,7 @@ function EventsModal({ onClose }: { onClose: () => void }) {
           <div>
             <h3 className="font-semibold text-sm" style={{ color: "#111" }}>Marketing events</h3>
             <p className="text-[11px]" style={{ color: "#888" }}>
-              Salons & posts LinkedIn — apparaissent comme des points colorés sur le graph Traffic.
+              Trade shows & LinkedIn posts - shown as colored dots on the Traffic chart.
             </p>
           </div>
           <button
@@ -117,7 +117,7 @@ function EventsModal({ onClose }: { onClose: () => void }) {
             style={{ color: "#888" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#eeeeee"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-            aria-label="Fermer"
+            aria-label="Close"
           >
             <X size={16} />
           </button>
@@ -145,7 +145,7 @@ function EventsModal({ onClose }: { onClose: () => void }) {
             type="text"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            placeholder="Ex. Salon VivaTech, Post IA et coaching…"
+            placeholder="e.g. VivaTech trade show, AI & coaching post…"
             className="text-xs px-3 py-1.5 rounded-lg outline-none flex-1 min-w-[200px]"
             style={{ border: "1px solid #e5e5e5", background: "#fafafa", color: "#111" }}
           />
@@ -156,7 +156,7 @@ function EventsModal({ onClose }: { onClose: () => void }) {
             style={{ background: "#f01563", color: "#fff" }}
           >
             <Plus size={13} />
-            Ajouter
+            Add
           </button>
         </form>
 
@@ -168,10 +168,10 @@ function EventsModal({ onClose }: { onClose: () => void }) {
 
         <div className="max-h-[420px] overflow-y-auto">
           {isLoading ? (
-            <div className="px-4 py-6 text-xs text-center" style={{ color: "#aaa" }}>Chargement…</div>
+            <div className="px-4 py-6 text-xs text-center" style={{ color: "#aaa" }}>Loading…</div>
           ) : events.length === 0 ? (
             <div className="px-4 py-6 text-xs text-center" style={{ color: "#aaa" }}>
-              Aucun event — ajoute un salon ou un post LinkedIn pour commencer.
+              No events - add a trade show or a LinkedIn post to get started.
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -191,7 +191,7 @@ function EventsModal({ onClose }: { onClose: () => void }) {
 function EventRow({ ev, onDelete }: { ev: MarketingEvent; onDelete: (id: string) => void }) {
   const [confirming, setConfirming] = useState(false);
   const meta = TYPE_META[ev.event_type];
-  const formattedDate = new Date(ev.event_date + "T12:00:00").toLocaleDateString("fr-FR", {
+  const formattedDate = new Date(ev.event_date + "T12:00:00").toLocaleDateString("en-GB", {
     day: "numeric", month: "short", year: "numeric",
   });
   return (
@@ -214,14 +214,14 @@ function EventRow({ ev, onDelete }: { ev: MarketingEvent; onDelete: (id: string)
               className="text-[10px] font-medium px-2 py-0.5 rounded"
               style={{ background: "#fef2f2", color: "#dc2626" }}
             >
-              Confirmer
+              Confirm
             </button>
             <button
               onClick={() => setConfirming(false)}
               className="text-[10px] font-medium px-2 py-0.5 rounded"
               style={{ background: "#f5f5f5", color: "#666" }}
             >
-              Annuler
+              Cancel
             </button>
           </div>
         ) : (
@@ -231,7 +231,7 @@ function EventRow({ ev, onDelete }: { ev: MarketingEvent; onDelete: (id: string)
             style={{ color: "#bbb" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#dc2626"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "#bbb"; }}
-            aria-label="Supprimer"
+            aria-label="Delete"
           >
             <Trash2 size={14} />
           </button>

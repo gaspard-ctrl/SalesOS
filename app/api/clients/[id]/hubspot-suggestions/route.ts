@@ -14,21 +14,21 @@ export const maxDuration = 60;
 // lib/clients/hubspot-suggestions.ts), ici declenchee a la demande (bouton).
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: "ANTHROPIC_API_KEY manquante" }, { status: 500 });
+    return NextResponse.json({ error: "ANTHROPIC_API_KEY missing" }, { status: 500 });
   }
 
   const { id } = await params;
 
   const ctx = await buildChecklistContext(id);
-  if (!ctx) return NextResponse.json({ error: "Client introuvable" }, { status: 404 });
+  if (!ctx) return NextResponse.json({ error: "Client not found" }, { status: 404 });
 
   let result;
   try {
     result = await generateHubspotSuggestions(ctx.client.hubspot_deal_id, ctx.contextText, user.id);
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur IA" }, { status: 502 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "AI error" }, { status: 502 });
   }
 
   const { error: updateErr } = await db

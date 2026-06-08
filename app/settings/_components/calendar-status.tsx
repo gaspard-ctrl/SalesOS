@@ -29,7 +29,7 @@ export function CalendarStatus({ gmailConnected }: { gmailConnected: boolean }) 
   if (status === "loading") {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full" style={{ background: "#f5f5f5", color: "#aaa" }}>
-        Vérification…
+        Checking…
       </span>
     );
   }
@@ -39,10 +39,10 @@ export function CalendarStatus({ gmailConnected }: { gmailConnected: boolean }) 
       <div className="flex items-center gap-2">
         <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: "#f0fdf4", color: "#16a34a" }}>
           <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
-          Connecté
+          Connected
         </span>
         <button onClick={() => router.push("/api/gmail/connect")} className="text-xs" style={{ color: "#aaa" }}>
-          Reconnecter
+          Reconnect
         </button>
       </div>
     );
@@ -52,10 +52,10 @@ export function CalendarStatus({ gmailConnected }: { gmailConnected: boolean }) 
     return (
       <div className="text-right space-y-1.5">
         <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: "#fee2e2", color: "#991b1b" }}>
-          API non activée
+          API not enabled
         </span>
         <p className="text-[10px]" style={{ color: "#888" }}>
-          Active l&apos;API Google Calendar dans ta{" "}
+          Enable the Google Calendar API in your{" "}
           <a
             href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com"
             target="_blank"
@@ -75,22 +75,22 @@ export function CalendarStatus({ gmailConnected }: { gmailConnected: boolean }) 
       <div className="text-right space-y-1.5">
         <div className="flex items-center justify-end gap-2">
           <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: "#fef3c7", color: "#92400e" }}>
-            Permission manquante
+            Permission missing
           </span>
           <button
             onClick={() => router.push("/api/gmail/connect")}
             className="text-xs px-2.5 py-1 rounded-lg font-medium"
             style={{ background: "#f01563", color: "#fff" }}
           >
-            Reconnecter →
+            Reconnect →
           </button>
         </div>
         <p className="text-[10px]" style={{ color: "#888" }}>
-          Si ça persiste, révoque d&apos;abord l&apos;accès sur{" "}
+          If it persists, first revoke access on{" "}
           <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" style={{ color: "#f01563" }}>
             myaccount.google.com/permissions
           </a>
-          {" "}puis reconnecte.
+          {" "}then reconnect.
         </p>
         {detail && <p className="text-[10px] font-mono" style={{ color: "#bbb" }}>{detail.slice(0, 80)}</p>}
       </div>
@@ -99,7 +99,7 @@ export function CalendarStatus({ gmailConnected }: { gmailConnected: boolean }) 
 
   return (
     <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full" style={{ background: "#f5f5f5", color: "#aaa" }}>
-      {status === "not_connected" ? "Gmail non connecté" : "Non connecté"}
+      {status === "not_connected" ? "Gmail not connected" : "Not connected"}
     </span>
   );
 }

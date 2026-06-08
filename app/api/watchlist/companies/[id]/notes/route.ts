@@ -13,7 +13,7 @@ export interface UpdateNotesResponse {
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) {
-    return NextResponse.json({ ok: false, notes: null, error: "Non authentifié" }, { status: 401 });
+    return NextResponse.json({ ok: false, notes: null, error: "Not authenticated" }, { status: 401 });
   }
 
   const { id } = await params;
@@ -21,7 +21,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ ok: false, notes: null, error: "Body JSON invalide" }, { status: 400 });
+    return NextResponse.json({ ok: false, notes: null, error: "Invalid JSON body" }, { status: 400 });
   }
 
   const notes = typeof body.notes === "string" ? body.notes : null;
@@ -35,7 +35,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (error || !data) {
     return NextResponse.json(
-      { ok: false, notes: null, error: error?.message ?? "Compte introuvable" },
+      { ok: false, notes: null, error: error?.message ?? "Account not found" },
       { status: 500 },
     );
   }

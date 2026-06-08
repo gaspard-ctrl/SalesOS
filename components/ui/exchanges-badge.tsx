@@ -18,7 +18,7 @@ export function ExchangesBadge({ count, size = "xs", title }: Props) {
   const iconSize = size === "xs" ? 9 : 10;
   return (
     <span
-      title={title ?? `${count} email${count > 1 ? "s" : ""} envoyé${count > 1 ? "s" : ""} depuis SalesOS`}
+      title={title ?? `${count} email${count > 1 ? "s" : ""} sent from SalesOS`}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -35,7 +35,7 @@ export function ExchangesBadge({ count, size = "xs", title }: Props) {
       }}
     >
       <Mail size={iconSize} />
-      {count} échange{count > 1 ? "s" : ""}
+      {count} exchange{count > 1 ? "s" : ""}
     </span>
   );
 }

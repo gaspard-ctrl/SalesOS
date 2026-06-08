@@ -135,7 +135,7 @@ const tools: Anthropic.Tool[] = [
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { query, lifecyclestage, industry, country, leadstatus, contacted, companysize, source, createdyear, ownerFilter } = await req.json() as {
     query: string;
@@ -208,7 +208,7 @@ Mets uniquement les IDs des contacts les plus pertinents dans contact_ids (max 2
       // Fallback: return all collected contacts
       return NextResponse.json({
         results: Object.values(allContacts),
-        explanation: "Voici les contacts trouvés.",
+        explanation: "Here are the contacts found.",
       });
     }
 
@@ -234,7 +234,7 @@ Mets uniquement les IDs des contacts les plus pertinents dans contact_ids (max 2
               content: JSON.stringify(contacts.map((c: ContactResult) => ({ id: c.id, name: `${c.firstName} ${c.lastName}`, jobTitle: c.jobTitle, company: c.company, industry: c.industry, lifecyclestage: c.lifecyclestage }))),
             });
           } catch (e) {
-            toolResults.push({ type: "tool_result", tool_use_id: block.id, content: `Erreur: ${e}`, is_error: true });
+            toolResults.push({ type: "tool_result", tool_use_id: block.id, content: `Error: ${e}`, is_error: true });
           }
         }
       }
@@ -247,5 +247,5 @@ Mets uniquement les IDs des contacts les plus pertinents dans contact_ids (max 2
   }
 
   logUsage(user.id, "claude-haiku-4-5-20251001", totalInput, totalOutput);
-  return NextResponse.json({ results: Object.values(allContacts), explanation: "Voici les contacts trouvés." });
+  return NextResponse.json({ results: Object.values(allContacts), explanation: "Here are the contacts found." });
 }
