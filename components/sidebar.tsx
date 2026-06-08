@@ -12,6 +12,7 @@ import {
   Crosshair,
   Target,
   Megaphone,
+  Video,
   Settings,
   ShieldCheck,
   Menu,
@@ -37,7 +38,8 @@ const nav: NavEntry[] = [
   { href: "/prospecting", label: "Prospecting", icon: Crosshair },
   { href: "/mass-prospection", label: "Mass Prospection", icon: Target },
   // { href: "/watchlist", label: "Watch List", icon: Eye },
-  { href: "/marketing", label: "Marketing", icon: Megaphone }
+  { href: "/marketing", label: "Marketing", icon: Megaphone },
+  { href: "/video-studio", label: "Video Studio", icon: Video }
 ];
 
 export default function Sidebar() {

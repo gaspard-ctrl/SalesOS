@@ -4,7 +4,7 @@ import { use, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ExternalLink, AlertTriangle, Loader2, Sparkles, Clock, Trash2, RefreshCw, Search, CheckCircle2, MailPlus, ListChecks } from "lucide-react";
+import { ArrowLeft, ExternalLink, AlertTriangle, Loader2, Sparkles, Clock, Trash2, RefreshCw, Search, CheckCircle2, MailPlus, ListChecks, Video } from "lucide-react";
 import { COLORS } from "@/lib/design/tokens";
 import { getMissingHubspotFields, mergeOnboardingItems, type ClientRow } from "@/lib/clients/types";
 import { useUserMe } from "@/lib/hooks/use-user-me";
@@ -408,6 +408,29 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             >
               <MailPlus size={12} />
               Draft a mail to request missing info
+            </button>
+          )}
+          {client.enrichment_status === "done" && (
+            <button
+              type="button"
+              onClick={() => router.push(`/video-studio?clientId=${client.id}`)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 12,
+                fontWeight: 500,
+                padding: "6px 12px",
+                borderRadius: 8,
+                border: `1px solid ${COLORS.line}`,
+                background: COLORS.bgCard,
+                color: COLORS.ink1,
+                cursor: "pointer",
+              }}
+              title="Generate a personalized avatar video for this account (script from AI, then HeyGen)."
+            >
+              <Video size={12} />
+              Create video
             </button>
           )}
           {client.enrichment_status === "done" && client.onboarding_checklist?.dismissed && (
