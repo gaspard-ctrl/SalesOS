@@ -187,6 +187,32 @@ async function createCompany(
   return res.id;
 }
 
+// The HubSpot deal "origin" property (label "Source") is a strict enumeration.
+// Our internally-extracted lead source categories (see lib/lead-analysis.ts) do
+// not all map onto it, so we translate the ones that do and leave the property
+// unset for the rest. Writing an unknown property name ("source") or an invalid
+// option both trigger a HubSpot 400, so we must be exact here. The raw source is
+// still persisted to lead_analyses.extracted_source regardless.
+const VALID_DEAL_ORIGINS = new Set([
+  "Linkedin",
+  "Cold call",
+  "Email",
+  "Referral",
+  "Tradeshows",
+  "Webinar",
+  "Partnerships",
+]);
+const DEAL_ORIGIN_BY_SOURCE: Record<string, string> = {
+  LinkedIn: "Linkedin",
+  Recommandation: "Referral",
+  Évènement: "Tradeshows",
+};
+function dealOriginFromSource(source: string | null): string | null {
+  if (!source) return null;
+  const mapped = DEAL_ORIGIN_BY_SOURCE[source] ?? source;
+  return VALID_DEAL_ORIGINS.has(mapped) ? mapped : null;
+}
+
 async function createDeal(
   dealName: string,
   ownerId: string,
@@ -200,7 +226,8 @@ async function createDeal(
     pipeline: pipelineId,
     dealstage: stageId,
   };
-  if (source) properties.source = source;
+  const origin = dealOriginFromSource(source);
+  if (origin) properties.origin = origin;
   const res = await hubspotFetch<{ id: string }>("/crm/v3/objects/deals", "POST", {
     properties,
   });
@@ -408,164 +435,179 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  // 1. Resolve default deal stage
-  const { pipelineId, stageId } = await resolveDefaultDealStage();
+  // From here on we hit HubSpot / Slack / DB. Any throw (HubSpot error, network
+  // hiccup, or a Netlify sync-function timeout ~26s) must still surface as JSON,
+  // otherwise the client's res.json() crashes with "Unexpected end of JSON input"
+  // and hides the real cause.
+  try {
+    // 1. Resolve default deal stage
+    const { pipelineId, stageId } = await resolveDefaultDealStage();
 
-  // 2. Reuse or create Contact. The modal is the canonical "validate the
-  // lead" step, so when reusing an existing contact we still patch its name
-  // with the value the admin confirmed.
-  let contactId = analysisRow?.hubspot_contact_id ?? null;
-  if (!contactId) {
-    contactId = await findContactByEmail(contactEmail);
-  }
-  if (!contactId) {
-    contactId = await createContact(contactEmail, contactName, ownerId);
-  } else if (contactName) {
-    await patchContactName(contactId, contactName).catch(() => null);
-  }
-
-  // 3. Reuse or create Company (by domain). HubSpot auto-creates a nameless
-  // company when the contact is saved (domain-matching feature), so a found
-  // match may have no `name` and no `hubspot_owner_id`. We always force the
-  // company owner to match the deal owner picked in the validation modal.
-  const domain = domainFromEmail(contactEmail);
-  let companyId: string | null = null;
-  if (domain) {
-    const found = await findCompanyByDomain(domain);
-    if (found) {
-      companyId = found.id;
-      if (!found.name) {
-        await patchCompanyName(found.id, companyName).catch(() => null);
-      }
-      if (found.ownerId !== ownerId) {
-        await patchCompanyOwner(found.id, ownerId).catch(() => null);
-      }
+    // 2. Reuse or create Contact. The modal is the canonical "validate the
+    // lead" step, so when reusing an existing contact we still patch its name
+    // with the value the admin confirmed.
+    let contactId = analysisRow?.hubspot_contact_id ?? null;
+    if (!contactId) {
+      contactId = await findContactByEmail(contactEmail);
     }
-  }
-  if (!companyId) {
-    companyId = await createCompany(companyName, domain, ownerId);
-  }
+    if (!contactId) {
+      contactId = await createContact(contactEmail, contactName, ownerId);
+    } else if (contactName) {
+      await patchContactName(contactId, contactName).catch(() => null);
+    }
 
-  // 4. Create Deal
-  const dealId = await createDeal(dealName, ownerId, pipelineId, stageId, source);
-
-  // 5. Associate (best-effort, parallel)
-  await Promise.allSettled([
-    hubspotAssociate("deals", dealId, "contacts", contactId),
-    hubspotAssociate("deals", dealId, "companies", companyId),
-    hubspotAssociate("contacts", contactId, "companies", companyId),
-  ]);
-
-  // 6. Snapshot the freshly created deal
-  const snapshot = await fetchDealContext(dealId).catch(() => null);
-
-  // 7. Persist app state
-  const nowIso = new Date().toISOString();
-  await db
-    .from("leads")
-    .update({
-      validation_status: "validated",
-      validated_by: user.id,
-      validated_at: nowIso,
-      analysis_status: "done",
-      analyzed_at: nowIso,
-    })
-    .eq("id", leadId);
-
-  await db
-    .from("lead_analyses")
-    .update({
-      status: "done",
-      hubspot_contact_id: contactId,
-      hubspot_deal_id: dealId,
-      match_strategy: "email",
-      extracted_source: source,
-      ...snapshotPatch(snapshot),
-      updated_at: nowIso,
-    })
-    .eq("id", analysisRow!.id);
-
-  // 8. Slack thread reply tagging the owner
-  const portalId = process.env.NEXT_PUBLIC_HUBSPOT_PORTAL_ID;
-  const dealUrl = portalId
-    ? `https://app.hubspot.com/contacts/${portalId}/deal/${dealId}`
-    : null;
-  // Tag the sales in Slack. Prefer the slack_display_name we got from the
-  // selected app user (always exact); fall back to looking up the user by
-  // hubspot_owner_id when only an ownerId was provided.
-  const slackOwnerUserId = ownerSlackDisplayName
-    ? await findSlackUserIdByDisplayName(ownerSlackDisplayName).catch(() => null)
-    : await resolveSlackUserIdForOwner(ownerId).catch(() => null);
-  const ownerFallbackName =
-    ownerSlackDisplayName || snapshot?.owner_name || "owner";
-  const ownerTag = slackOwnerUserId
-    ? `<@${slackOwnerUserId}>`
-    : `@${ownerFallbackName}`;
-
-  const slackText = dealUrl
-    ? `${ownerTag} this lead is yours! HubSpot deal created: <${dealUrl}|${dealName}>`
-    : `${ownerTag} this lead is yours! HubSpot deal created: ${dealName}`;
-
-  const slackWarnings: string[] = [];
-  if (leadRow.slack_channel_id && leadRow.slack_ts) {
-    const res = await slackPost("/chat.postMessage", {
-      channel: leadRow.slack_channel_id,
-      thread_ts: leadRow.slack_ts,
-      text: slackText,
-    });
-    if (!res.ok) slackWarnings.push(`postMessage in channel: ${res.error ?? "unknown"}`);
-  } else {
-    slackWarnings.push("Lead without slack_channel_id/ts, message not sent.");
-  }
-
-  // 9. Test phase: DM to the QA user (Arthur) with a summary.
-  // The env var accepts either a Slack user id ("U123...") or a display/real
-  // name we resolve via users.list.
-  let testNotifSent = false;
-  const testTarget = process.env.LEADS_TEST_NOTIFY_SLACK_USER_ID?.trim();
-  if (testTarget) {
-    try {
-      const looksLikeSlackId = /^[UW][A-Z0-9]{6,}$/.test(testTarget);
-      const testUserId = looksLikeSlackId
-        ? testTarget
-        : await findSlackUserIdByDisplayName(testTarget);
-      if (!testUserId) {
-        slackWarnings.push(`test DM: Slack user "${testTarget}" not found`);
-      } else {
-        const dm = await slackPost("/conversations.open", { users: testUserId });
-        const dmChannel = dm.channel as string | undefined;
-        if (dm.ok && dmChannel) {
-          const summary = [
-            `:white_check_mark: Lead finalisé via SalesOS (phase test)`,
-            `• Deal : ${dealUrl ? `<${dealUrl}|${dealName}>` : dealName}`,
-            `• Owner attribué : ${snapshot?.owner_name ?? ownerId}`,
-            `• Company : ${companyName} (id \`${companyId}\`)`,
-            `• Contact : ${contactName || contactEmail} (id \`${contactId}\`)`,
-            `• Origine : ${source ?? "non renseignée"}`,
-            leadRow.slack_permalink ? `• Message original : ${leadRow.slack_permalink}` : null,
-          ]
-            .filter(Boolean)
-            .join("\n");
-          const res = await slackPost("/chat.postMessage", { channel: dmChannel, text: summary });
-          testNotifSent = res.ok;
-          if (!res.ok) slackWarnings.push(`test DM: ${res.error ?? "unknown"}`);
-        } else {
-          slackWarnings.push(`test DM open failed: ${dm.error ?? "unknown"}`);
+    // 3. Reuse or create Company (by domain). HubSpot auto-creates a nameless
+    // company when the contact is saved (domain-matching feature), so a found
+    // match may have no `name` and no `hubspot_owner_id`. We always force the
+    // company owner to match the deal owner picked in the validation modal.
+    const domain = domainFromEmail(contactEmail);
+    let companyId: string | null = null;
+    if (domain) {
+      const found = await findCompanyByDomain(domain);
+      if (found) {
+        companyId = found.id;
+        if (!found.name) {
+          await patchCompanyName(found.id, companyName).catch(() => null);
+        }
+        if (found.ownerId !== ownerId) {
+          await patchCompanyOwner(found.id, ownerId).catch(() => null);
         }
       }
-    } catch (e) {
-      slackWarnings.push(`test DM threw: ${e instanceof Error ? e.message : "unknown"}`);
     }
-  }
+    if (!companyId) {
+      companyId = await createCompany(companyName, domain, ownerId);
+    }
 
-  return NextResponse.json({
-    ok: true,
-    dealId,
-    contactId,
-    companyId,
-    pipelineId,
-    stageId,
-    testNotifSent,
-    slackWarnings: slackWarnings.length > 0 ? slackWarnings : undefined,
-  });
+    // 4. Create Deal
+    const dealId = await createDeal(dealName, ownerId, pipelineId, stageId, source);
+
+    // 5. Associate (best-effort, parallel)
+    await Promise.allSettled([
+      hubspotAssociate("deals", dealId, "contacts", contactId),
+      hubspotAssociate("deals", dealId, "companies", companyId),
+      hubspotAssociate("contacts", contactId, "companies", companyId),
+    ]);
+
+    // 6. Snapshot the freshly created deal
+    const snapshot = await fetchDealContext(dealId).catch(() => null);
+
+    // 7. Persist app state
+    const nowIso = new Date().toISOString();
+    await db
+      .from("leads")
+      .update({
+        validation_status: "validated",
+        validated_by: user.id,
+        validated_at: nowIso,
+        analysis_status: "done",
+        analyzed_at: nowIso,
+      })
+      .eq("id", leadId);
+
+    await db
+      .from("lead_analyses")
+      .update({
+        status: "done",
+        hubspot_contact_id: contactId,
+        hubspot_deal_id: dealId,
+        match_strategy: "email",
+        extracted_source: source,
+        ...snapshotPatch(snapshot),
+        updated_at: nowIso,
+      })
+      .eq("id", analysisRow!.id);
+
+    // 8. Slack thread reply tagging the owner
+    const portalId = process.env.NEXT_PUBLIC_HUBSPOT_PORTAL_ID;
+    const dealUrl = portalId
+      ? `https://app.hubspot.com/contacts/${portalId}/deal/${dealId}`
+      : null;
+    // Tag the sales in Slack. Prefer the slack_display_name we got from the
+    // selected app user (always exact); fall back to looking up the user by
+    // hubspot_owner_id when only an ownerId was provided.
+    const slackOwnerUserId = ownerSlackDisplayName
+      ? await findSlackUserIdByDisplayName(ownerSlackDisplayName).catch(() => null)
+      : await resolveSlackUserIdForOwner(ownerId).catch(() => null);
+    const ownerFallbackName =
+      ownerSlackDisplayName || snapshot?.owner_name || "owner";
+    const ownerTag = slackOwnerUserId
+      ? `<@${slackOwnerUserId}>`
+      : `@${ownerFallbackName}`;
+
+    const slackText = dealUrl
+      ? `${ownerTag} this lead is yours! HubSpot deal created: <${dealUrl}|${dealName}>`
+      : `${ownerTag} this lead is yours! HubSpot deal created: ${dealName}`;
+
+    const slackWarnings: string[] = [];
+    if (leadRow.slack_channel_id && leadRow.slack_ts) {
+      const res = await slackPost("/chat.postMessage", {
+        channel: leadRow.slack_channel_id,
+        thread_ts: leadRow.slack_ts,
+        text: slackText,
+      });
+      if (!res.ok) slackWarnings.push(`postMessage in channel: ${res.error ?? "unknown"}`);
+    } else {
+      slackWarnings.push("Lead without slack_channel_id/ts, message not sent.");
+    }
+
+    // 9. Test phase: DM to the QA user (Arthur) with a summary.
+    // The env var accepts either a Slack user id ("U123...") or a display/real
+    // name we resolve via users.list.
+    let testNotifSent = false;
+    const testTarget = process.env.LEADS_TEST_NOTIFY_SLACK_USER_ID?.trim();
+    if (testTarget) {
+      try {
+        const looksLikeSlackId = /^[UW][A-Z0-9]{6,}$/.test(testTarget);
+        const testUserId = looksLikeSlackId
+          ? testTarget
+          : await findSlackUserIdByDisplayName(testTarget);
+        if (!testUserId) {
+          slackWarnings.push(`test DM: Slack user "${testTarget}" not found`);
+        } else {
+          const dm = await slackPost("/conversations.open", { users: testUserId });
+          const dmChannel = dm.channel as string | undefined;
+          if (dm.ok && dmChannel) {
+            const summary = [
+              `:white_check_mark: Lead finalisé via SalesOS (phase test)`,
+              `• Deal : ${dealUrl ? `<${dealUrl}|${dealName}>` : dealName}`,
+              `• Owner attribué : ${snapshot?.owner_name ?? ownerId}`,
+              `• Company : ${companyName} (id \`${companyId}\`)`,
+              `• Contact : ${contactName || contactEmail} (id \`${contactId}\`)`,
+              `• Origine : ${source ?? "non renseignée"}`,
+              leadRow.slack_permalink ? `• Message original : ${leadRow.slack_permalink}` : null,
+            ]
+              .filter(Boolean)
+              .join("\n");
+            const res = await slackPost("/chat.postMessage", { channel: dmChannel, text: summary });
+            testNotifSent = res.ok;
+            if (!res.ok) slackWarnings.push(`test DM: ${res.error ?? "unknown"}`);
+          } else {
+            slackWarnings.push(`test DM open failed: ${dm.error ?? "unknown"}`);
+          }
+        }
+      } catch (e) {
+        slackWarnings.push(`test DM threw: ${e instanceof Error ? e.message : "unknown"}`);
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      dealId,
+      contactId,
+      companyId,
+      pipelineId,
+      stageId,
+      testNotifSent,
+      slackWarnings: slackWarnings.length > 0 ? slackWarnings : undefined,
+    });
+  } catch (e) {
+    console.error("[leads/finalize] failed", e);
+    return NextResponse.json(
+      {
+        ok: false,
+        error: e instanceof Error ? e.message : "Finalize failed unexpectedly",
+      },
+      { status: 500 },
+    );
+  }
 }
