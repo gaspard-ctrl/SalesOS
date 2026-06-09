@@ -180,9 +180,23 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
           source: form.source.trim() || null,
         }),
       });
-      const data = (await res.json()) as FinalizeResponse;
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error ?? "Deal creation failed");
+      // The server always tries to return JSON, but a Netlify sync-function
+      // timeout (~26s) can still produce an empty/non-JSON body, so parse
+      // defensively instead of letting res.json() throw "Unexpected end of JSON input".
+      const raw = await res.text();
+      let data: FinalizeResponse | null = null;
+      try {
+        data = raw ? (JSON.parse(raw) as FinalizeResponse) : null;
+      } catch {
+        data = null;
+      }
+      if (!res.ok || !data?.ok) {
+        throw new Error(
+          data?.error ??
+            (res.status === 504 || res.status === 502
+              ? "The server took too long to respond (timeout). The deal may already have been created, check HubSpot before retrying."
+              : `Deal creation failed (HTTP ${res.status})`),
+        );
       }
       if (data.slackWarnings && data.slackWarnings.length > 0) {
         setWarnings(data.slackWarnings);
