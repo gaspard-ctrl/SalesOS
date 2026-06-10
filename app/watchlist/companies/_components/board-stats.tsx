@@ -24,13 +24,15 @@ export function BoardStats({
     <div
       style={{
         flexShrink: 0,
+        minHeight: 50,
         borderTop: `1px solid ${COLORS.line}`,
         background: COLORS.bgCard,
-        padding: "10px 16px",
+        padding: "6px 20px",
         display: "flex",
         alignItems: "center",
-        gap: 16,
-        flexWrap: "wrap",
+        gap: 24,
+        flexWrap: "nowrap",
+        overflowX: "auto",
       }}
     >
       <Tile
@@ -74,9 +76,9 @@ function topCounts(values: Array<string | null>, max = 4): Array<{ label: string
 
 function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-        <span style={{ fontSize: 18, fontWeight: 700, color: COLORS.ink0, lineHeight: 1 }}>{value}</span>
+        <span style={{ fontSize: 16, fontWeight: 700, color: COLORS.ink0, letterSpacing: "-0.02em", lineHeight: 1 }}>{value}</span>
         {sub && <span style={{ fontSize: 10, color: COLORS.ink4 }}>{sub}</span>}
       </div>
       <span style={{ fontSize: 10, color: COLORS.ink3, textTransform: "uppercase", letterSpacing: "0.04em", fontWeight: 600 }}>

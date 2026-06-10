@@ -3,8 +3,10 @@
 import * as React from "react";
 import useSWR from "swr";
 import { Users, Mail, ExternalLink, Loader2, MailPlus } from "lucide-react";
-import { COLORS } from "@/lib/design/tokens";
-import { ProspectGmailModal } from "../../_components/prospect-gmail-modal";
+import { COLORS, SHADOWS } from "@/lib/design/tokens";
+import { ContactHistoryModal } from "./contact-history-modal";
+import { ExchangesBadge } from "@/components/ui/exchanges-badge";
+import { useOutreachCounts } from "@/lib/hooks/use-outreach-counts";
 import type { DraftRecipient } from "./mail-drafter";
 import type { CompanyContactsResponse } from "@/app/api/watchlist/companies/[id]/contacts/route";
 
@@ -19,11 +21,16 @@ export function ContactsCard({
     `/api/watchlist/companies/${companyId}/contacts`,
     { revalidateOnFocus: false, dedupingInterval: 30_000 },
   );
-  const [gmailTarget, setGmailTarget] = React.useState<{ name: string; email: string } | null>(null);
+  const [historyTarget, setHistoryTarget] = React.useState<{ name: string; email: string } | null>(null);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
 
   const contacts = data?.contacts ?? [];
   const withEmail = contacts.filter((c) => c.email);
+  const contactEmails = React.useMemo(
+    () => (data?.contacts ?? []).map((c) => c.email).filter((e): e is string => !!e),
+    [data],
+  );
+  const { countByEmail } = useOutreachCounts(contactEmails);
 
   function nameOf(c: (typeof contacts)[number]) {
     return `${c.firstname ?? ""} ${c.lastname ?? ""}`.trim() || c.email || "Contact";
@@ -53,6 +60,7 @@ export function ContactsCard({
         background: COLORS.bgCard,
         border: `1px solid ${COLORS.line}`,
         borderRadius: 12,
+        boxShadow: SHADOWS.card,
         overflow: "hidden",
       }}
     >
@@ -60,17 +68,15 @@ export function ContactsCard({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
-          padding: "12px 16px",
-          borderBottom: `1px solid ${COLORS.line}`,
-          background: COLORS.bgSoft,
+          gap: 9,
+          padding: "14px 16px",
         }}
       >
-        <span style={{ display: "inline-flex", color: COLORS.ink2 }}>
-          <Users size={14} />
+        <span style={{ display: "inline-flex", color: COLORS.ink3 }}>
+          <Users size={16} />
         </span>
-        <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: COLORS.ink0 }}>
-          HubSpot Contacts
+        <h2 style={{ margin: 0, fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em", color: COLORS.ink0 }}>
+          HubSpot contacts
         </h2>
         {contacts.length > 0 && (
           <span style={{ fontSize: 11, color: COLORS.ink3 }}>{contacts.length}</span>
@@ -94,7 +100,7 @@ export function ContactsCard({
               cursor: "pointer",
             }}
           >
-            <MailPlus size={12} /> Ajouter {selected.size} au mail
+            <MailPlus size={12} /> Add {selected.size} to email
           </button>
         )}
         {isLoading && (
@@ -106,7 +112,7 @@ export function ContactsCard({
         )}
       </header>
 
-      <div style={{ padding: "8px 8px" }}>
+      <div style={{ padding: "0 8px 8px" }}>
         {isLoading && contacts.length === 0 ? (
           <p style={{ margin: 0, padding: "8px 8px", fontSize: 12, color: COLORS.ink3 }}>Loading contacts…</p>
         ) : contacts.length === 0 ? (
@@ -140,8 +146,34 @@ export function ContactsCard({
                     />
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {name}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                      {c.email ? (
+                        <button
+                          type="button"
+                          onClick={() => setHistoryTarget({ name, email: c.email as string })}
+                          title="View history"
+                          style={{
+                            padding: 0,
+                            border: "none",
+                            background: "transparent",
+                            cursor: "pointer",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: COLORS.ink0,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            minWidth: 0,
+                          }}
+                        >
+                          {name}
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.ink0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {name}
+                        </span>
+                      )}
+                      <ExchangesBadge count={countByEmail(c.email)} />
                     </div>
                     <div style={{ fontSize: 11, color: COLORS.ink3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {c.jobtitle ? c.jobtitle : "—"}
@@ -161,8 +193,8 @@ export function ContactsCard({
                   {c.email && (
                     <button
                       type="button"
-                      onClick={() => setGmailTarget({ name, email: c.email as string })}
-                      title="View Gmail exchanges"
+                      onClick={() => setHistoryTarget({ name, email: c.email as string })}
+                      title="View history (SalesOS + Gmail)"
                       style={iconBtn()}
                     >
                       <Mail size={13} />
@@ -184,11 +216,11 @@ export function ContactsCard({
         )}
       </div>
 
-      {gmailTarget && (
-        <ProspectGmailModal
-          fullName={gmailTarget.name}
-          email={gmailTarget.email}
-          onClose={() => setGmailTarget(null)}
+      {historyTarget && (
+        <ContactHistoryModal
+          fullName={historyTarget.name}
+          email={historyTarget.email}
+          onClose={() => setHistoryTarget(null)}
         />
       )}
     </section>

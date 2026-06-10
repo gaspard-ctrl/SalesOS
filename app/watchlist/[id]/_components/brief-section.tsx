@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { RefreshCw, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
-import { COLORS } from "@/lib/design/tokens";
+import { COLORS, SHADOWS } from "@/lib/design/tokens";
 import type { BriefStatus } from "@/lib/watchlist/briefs";
 
 export function BriefSection({
@@ -32,6 +32,7 @@ export function BriefSection({
         background: COLORS.bgCard,
         border: `1px solid ${COLORS.line}`,
         borderRadius: 12,
+        boxShadow: SHADOWS.card,
         overflow: "hidden",
       }}
     >
@@ -39,14 +40,12 @@ export function BriefSection({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
-          padding: "12px 16px",
-          borderBottom: `1px solid ${COLORS.line}`,
-          background: COLORS.bgSoft,
+          gap: 9,
+          padding: "14px 16px",
         }}
       >
-        <span style={{ display: "inline-flex", color: COLORS.ink2 }}>{icon}</span>
-        <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: COLORS.ink0 }}>{title}</h2>
+        <span style={{ display: "inline-flex", color: COLORS.ink3 }}>{icon}</span>
+        <h2 style={{ margin: 0, fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em", color: COLORS.ink0 }}>{title}</h2>
 
         <StatusPill status={status} />
         {staleBadge && (
@@ -105,7 +104,7 @@ export function BriefSection({
         </div>
       </header>
 
-      <div style={{ padding: "14px 16px" }}>
+      <div style={{ padding: "0 16px 16px" }}>
         {status === "error" && error && (
           <div
             style={{

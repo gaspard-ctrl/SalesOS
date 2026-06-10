@@ -51,6 +51,10 @@ export const SHADOWS = {
   sm: "0 1px 2px rgba(0, 0, 0, 0.04)",
   md: "0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.03)",
   card: "0 1px 3px rgba(0, 0, 0, 0.04)",
+  // Stronger elevation for hover/lift states (cards, rows).
+  pop: "0 10px 34px rgba(20, 20, 30, 0.12), 0 2px 6px rgba(20, 20, 30, 0.06)",
+  // Subtle tinted shadow under the pink primary CTA.
+  pink: "0 1px 2px rgba(240, 21, 99, 0.30)",
 } as const;
 
 /**

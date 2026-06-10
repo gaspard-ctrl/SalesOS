@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Mail, Sparkles, Send, Copy, Check, Loader2, X, Plus } from "lucide-react";
-import { COLORS } from "@/lib/design/tokens";
+import { COLORS, SHADOWS } from "@/lib/design/tokens";
 
 export interface DraftRecipient {
   name: string | null;
@@ -26,10 +26,12 @@ export function MailDrafter({
   companyId,
   recipients,
   onRecipientsChange,
+  onSent,
 }: {
   companyId: string;
   recipients: DraftRecipient[];
   onRecipientsChange: (next: DraftRecipient[]) => void;
+  onSent?: () => void;
 }) {
   const [to, setTo] = React.useState("");
   const [cc, setCc] = React.useState("");
@@ -88,10 +90,12 @@ export function MailDrafter({
       fd.set("subject", subject);
       fd.set("body", body);
       fd.set("source", "watchlist_drafter");
+      fd.set("scope_company_id", companyId);
       const res = await fetch("/api/gmail/send", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to send");
       setResult({ ok: true, msg: "Sent via Gmail" });
+      onSent?.();
     } catch (e) {
       setResult({ ok: false, msg: e instanceof Error ? e.message : "Error" });
     } finally {
@@ -113,6 +117,7 @@ export function MailDrafter({
         background: COLORS.bgCard,
         border: `1px solid ${COLORS.line}`,
         borderRadius: 12,
+        boxShadow: SHADOWS.card,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -122,16 +127,14 @@ export function MailDrafter({
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 10,
-          padding: "12px 16px",
-          borderBottom: `1px solid ${COLORS.line}`,
-          background: COLORS.bgSoft,
+          gap: 9,
+          padding: "14px 16px",
         }}
       >
         <span style={{ display: "inline-flex", color: COLORS.brand }}>
-          <Mail size={14} />
+          <Mail size={16} />
         </span>
-        <h2 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: COLORS.ink0 }}>Email drafter</h2>
+        <h2 style={{ margin: 0, fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em", color: COLORS.ink0 }}>Email drafter</h2>
         <button
           type="button"
           onClick={generate}
@@ -157,7 +160,7 @@ export function MailDrafter({
         </button>
       </header>
 
-      <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
         {/* BCC : prospects ajoutés depuis les contacts / l'analyse */}
         <Field label={`BCC · prospects (${recipients.length})`}>
           <div
@@ -385,5 +388,6 @@ function primaryBtn(): React.CSSProperties {
     border: "none",
     background: COLORS.brand,
     color: "#fff",
+    boxShadow: SHADOWS.pink,
   };
 }

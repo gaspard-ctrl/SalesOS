@@ -1,13 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { Search, Download, Loader2, Trash2, X, CheckSquare } from "lucide-react";
-import { COLORS } from "@/lib/design/tokens";
-import { useWatchSalesReps, useWatchAccounts } from "@/lib/hooks/use-watchlist";
-import { CompanyCard } from "./company-card";
+import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
+import { Search, Download, Loader2, Trash2, X, CheckSquare, Check, ChevronRight, ChevronDown } from "lucide-react";
+import { COLORS, RADIUS, SHADOWS, repAccent } from "@/lib/design/tokens";
+import { CompanyAvatar } from "@/components/ui/company-avatar";
+import { useWatchSalesReps, useWatchAccounts, setCompanyStatus } from "@/lib/hooks/use-watchlist";
 import { SalesRail, type RailRep } from "./sales-rail";
 import { BoardStats } from "./board-stats";
-import { UNASSIGNED_KEY, type ScopeCompany } from "./types";
+import { UNASSIGNED_KEY, STATUS_STYLE, STATUS_OPTIONS, type ScopeCompany } from "./types";
 
 const ALL = "__all__";
 
@@ -149,9 +151,9 @@ export function BoardView() {
       const s = v ?? "";
       return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const header = "name,owner,sector,current_coaching_platform,notes";
+    const header = "name,owner,sector,current_coaching_platform,status,email_count,notes";
     const body = visible.map((c) =>
-      [esc(c.name), esc(c.owner), esc(c.sector), esc(c.current_coaching_platform), esc(c.notes)].join(","),
+      [esc(c.name), esc(c.owner), esc(c.sector), esc(c.current_coaching_platform), esc(c.status), String(c.email_count), esc(c.notes)].join(","),
     );
     const blob = new Blob([[header, ...body].join("\n")], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -160,6 +162,11 @@ export function BoardView() {
     a.download = `watchlist-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function changeStatus(c: ScopeCompany, status: string | null) {
+    const r = await setCompanyStatus(c.id, status);
+    if (r.ok) await reloadAccounts();
   }
 
   const loading = (repsLoading || accLoading) && accounts.length === 0;
@@ -185,15 +192,16 @@ export function BoardView() {
         {/* Toolbar */}
         <div
           style={{
-            padding: "10px 16px",
+            padding: "11px 18px",
             display: "flex",
-            gap: 8,
+            gap: 9,
             alignItems: "center",
             flexWrap: "wrap",
+            background: COLORS.bgCard,
             borderBottom: `1px solid ${COLORS.line}`,
           }}
         >
-          <div style={{ position: "relative", flex: "0 0 240px" }}>
+          <div style={{ position: "relative", flex: "0 0 268px" }}>
             <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: COLORS.ink3 }} />
             <input
               value={search}
@@ -241,8 +249,8 @@ export function BoardView() {
           </span>
         </div>
 
-        {/* Grille */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+        {/* Table */}
+        <div style={{ flex: 1, overflowY: "auto", padding: 16, background: COLORS.bgPage }}>
           {loading ? (
             <div style={{ display: "flex", justifyContent: "center", padding: 40 }}>
               <Loader2 size={20} className="animate-spin" style={{ color: COLORS.brand }} />
@@ -254,19 +262,52 @@ export function BoardView() {
                 : "No results with these filters."}
             </div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10, alignContent: "start" }}>
-              {visible.map((c) => (
-                <CompanyCard
-                  key={c.id}
-                  company={c}
-                  mode="read"
-                  selectable
-                  selected={selectedIds.has(c.id)}
-                  selectionActive={selectedIds.size > 0}
-                  onToggleSelect={toggleSelect}
-                  onRemove={removeCompany}
-                />
-              ))}
+            <div
+              style={{
+                background: COLORS.bgCard,
+                border: `1px solid ${COLORS.line}`,
+                borderRadius: RADIUS.lg,
+                boxShadow: SHADOWS.card,
+                overflow: "hidden",
+              }}
+            >
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...thStyle, width: 44 }}>
+                      <button
+                        type="button"
+                        onClick={toggleSelectAll}
+                        aria-pressed={allVisibleSelected}
+                        title={allVisibleSelected ? "Deselect all" : "Select all"}
+                        style={checkboxStyle(allVisibleSelected)}
+                      >
+                        {allVisibleSelected && <Check size={11} />}
+                      </button>
+                    </th>
+                    <th style={thStyle}>Company</th>
+                    <th style={thStyle}>Owner</th>
+                    <th style={thStyle}>Sector</th>
+                    <th style={thStyle}>Platform</th>
+                    <th style={thStyle}>Status</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Emails</th>
+                    <th style={{ ...thStyle, width: 72 }} aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map((c) => (
+                    <CompanyRow
+                      key={c.id}
+                      company={c}
+                      selected={selectedIds.has(c.id)}
+                      selectionActive={selectedIds.size > 0}
+                      onToggleSelect={toggleSelect}
+                      onRemove={removeCompany}
+                      onStatusChange={(status) => changeStatus(c, status)}
+                    />
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -320,4 +361,353 @@ function dangerBtn(): React.CSSProperties {
     color: COLORS.err,
     cursor: "pointer",
   };
+}
+
+// ---- Table primitives ----
+const thStyle: React.CSSProperties = {
+  textAlign: "left",
+  fontSize: 11,
+  fontWeight: 600,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  color: COLORS.ink3,
+  padding: "10px 14px",
+  background: COLORS.bgSoft,
+  borderBottom: `1px solid ${COLORS.line}`,
+  whiteSpace: "nowrap",
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "9px 14px",
+  borderBottom: `1px solid ${COLORS.line}`,
+  fontSize: 13,
+  color: COLORS.ink2,
+  verticalAlign: "middle",
+};
+
+const tagStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  height: 22,
+  padding: "0 8px",
+  borderRadius: 6,
+  background: COLORS.bgSoft,
+  color: COLORS.ink2,
+  fontSize: 11.5,
+  fontWeight: 500,
+  whiteSpace: "nowrap",
+};
+
+function checkboxStyle(active: boolean): React.CSSProperties {
+  return {
+    width: 16,
+    height: 16,
+    borderRadius: 5,
+    border: `1.5px solid ${active ? COLORS.brand : COLORS.ink4}`,
+    background: active ? COLORS.brand : COLORS.bgCard,
+    color: "#fff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    padding: 0,
+    verticalAlign: "middle",
+  };
+}
+
+// Dense-table row. Reuses the board handlers verbatim (toggleSelect w/ shift-range,
+// removeCompany) and navigates to the company detail on row click.
+function CompanyRow({
+  company,
+  selected,
+  selectionActive,
+  onToggleSelect,
+  onRemove,
+  onStatusChange,
+}: {
+  company: ScopeCompany;
+  selected: boolean;
+  selectionActive: boolean;
+  onToggleSelect: (id: string, e: React.MouseEvent) => void;
+  onRemove: (company: ScopeCompany) => void;
+  onStatusChange: (status: string | null) => void;
+}) {
+  const router = useRouter();
+  const [hover, setHover] = React.useState(false);
+  const owner = company.owner?.trim() || null;
+  const accent = owner ? repAccent(owner) : null;
+  const sector = company.sector?.trim() || null;
+  const platform = company.current_coaching_platform?.trim() || null;
+  const showCheck = hover || selected || selectionActive;
+
+  return (
+    <tr
+      role="button"
+      tabIndex={0}
+      onClick={() => router.push(`/watchlist/${company.id}`)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          router.push(`/watchlist/${company.id}`);
+        }
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        cursor: "pointer",
+        background: selected ? COLORS.brandTintSoft : hover ? "#fcfcfb" : "transparent",
+        transition: "background .12s ease",
+      }}
+    >
+      <td style={tdStyle} onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          aria-pressed={selected}
+          title={selected ? "Deselect" : "Select"}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect(company.id, e);
+          }}
+          style={{ ...checkboxStyle(selected), opacity: showCheck ? 1 : 0.55 }}
+        >
+          {selected && <Check size={11} />}
+        </button>
+      </td>
+      <td style={tdStyle}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <CompanyAvatar name={company.name} size={28} rounded="md" />
+          <span
+            style={{
+              fontSize: 13.5,
+              fontWeight: 600,
+              color: COLORS.ink0,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {company.name}
+          </span>
+        </div>
+      </td>
+      <td style={tdStyle}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: 999,
+              flexShrink: 0,
+              background: accent ?? "transparent",
+              border: accent ? "none" : `1px dashed ${COLORS.ink4}`,
+              boxShadow: accent ? `0 0 0 3px ${accent}22` : "none",
+            }}
+          />
+          <span
+            style={{
+              color: owner ? COLORS.ink2 : COLORS.ink4,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {owner ?? "Unassigned"}
+          </span>
+        </span>
+      </td>
+      <td style={tdStyle}>
+        {sector ? <span style={tagStyle}>{sector}</span> : <span style={{ color: COLORS.ink4 }}>—</span>}
+      </td>
+      <td style={{ ...tdStyle, color: platform ? COLORS.ink2 : COLORS.ink4 }}>{platform ?? "—"}</td>
+      <td style={tdStyle}>
+        <StatusCell company={company} onChange={onStatusChange} />
+      </td>
+      <td style={{ ...tdStyle, textAlign: "right" }} className="num">
+        {company.email_count > 0 ? (
+          <span style={{ fontWeight: 600, color: COLORS.ink1, fontVariantNumeric: "tabular-nums" }}>{company.email_count}</span>
+        ) : (
+          <span style={{ color: COLORS.ink4 }}>—</span>
+        )}
+      </td>
+      <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>
+        <button
+          type="button"
+          title="Remove from watchlist"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(company);
+          }}
+          style={{
+            border: "none",
+            background: "transparent",
+            color: COLORS.ink4,
+            cursor: "pointer",
+            padding: 2,
+            opacity: hover ? 1 : 0,
+            transition: "opacity .12s ease",
+            verticalAlign: "middle",
+          }}
+        >
+          <Trash2 size={14} />
+        </button>
+        <span
+          style={{ color: COLORS.ink4, display: "inline-flex", verticalAlign: "middle", marginLeft: 2, pointerEvents: "none" }}
+        >
+          <ChevronRight size={16} />
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+// Status pill with an inline override menu (click -> pick a status -> POST + reload).
+// The menu is portaled to <body> so the table card's `overflow: hidden` never clips it.
+function StatusCell({
+  company,
+  onChange,
+}: {
+  company: ScopeCompany;
+  onChange: (status: string | null) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [pos, setPos] = React.useState<{ top: number; left: number } | null>(null);
+  const btnRef = React.useRef<HTMLButtonElement>(null);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    }
+    function close() {
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+
+  function toggle(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, left: r.left });
+    }
+    setOpen((v) => !v);
+  }
+
+  function pick(e: React.MouseEvent, status: string | null) {
+    e.stopPropagation();
+    setOpen(false);
+    onChange(status);
+  }
+
+  const s = STATUS_STYLE[company.status] ?? STATUS_STYLE["To enrich"];
+
+  return (
+    <div style={{ display: "inline-block" }} onClick={(e) => e.stopPropagation()}>
+      <button
+        ref={btnRef}
+        type="button"
+        title="Change status"
+        onClick={toggle}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 5,
+          height: 22,
+          padding: "0 9px",
+          borderRadius: 999,
+          border: "none",
+          background: s.bg,
+          color: s.fg,
+          fontSize: 11.5,
+          fontWeight: 600,
+          letterSpacing: "-0.01em",
+          whiteSpace: "nowrap",
+          cursor: "pointer",
+        }}
+      >
+        <span style={{ width: 6, height: 6, borderRadius: 999, background: s.dot }} />
+        {company.status}
+        <ChevronDown size={12} style={{ opacity: 0.7, marginLeft: 1 }} />
+      </button>
+      {open && pos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "fixed",
+              top: pos.top,
+              left: pos.left,
+              minWidth: 168,
+              background: COLORS.bgCard,
+              border: `1px solid ${COLORS.line}`,
+              borderRadius: RADIUS.md,
+              boxShadow: SHADOWS.pop,
+              padding: 4,
+              zIndex: 1000,
+            }}
+          >
+            {STATUS_OPTIONS.map((opt) => {
+              const os = STATUS_STYLE[opt];
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={(e) => pick(e, opt)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "7px 9px",
+                    fontSize: 12.5,
+                    fontWeight: 500,
+                    color: COLORS.ink1,
+                    background: opt === company.status ? COLORS.bgSoft : "transparent",
+                    border: "none",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                  }}
+                >
+                  <span style={{ width: 7, height: 7, borderRadius: 999, background: os.dot, flexShrink: 0 }} />
+                  {opt}
+                </button>
+              );
+            })}
+            <div style={{ height: 1, background: COLORS.line, margin: "4px 2px" }} />
+            <button
+              type="button"
+              onClick={(e) => pick(e, null)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                width: "100%",
+                textAlign: "left",
+                padding: "7px 9px",
+                fontSize: 12,
+                color: COLORS.ink3,
+                background: "transparent",
+                border: "none",
+                borderRadius: 6,
+                cursor: "pointer",
+              }}
+            >
+              Reset (auto)
+            </button>
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
 }

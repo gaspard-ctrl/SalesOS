@@ -40,3 +40,16 @@ export function useWatchAccounts(owner: string | null) {
     reload: () => mutate(),
   };
 }
+
+/** Override manuel du statut d'une company (null/"" => retour a l'auto). */
+export async function setCompanyStatus(
+  id: string,
+  status: string | null,
+): Promise<{ ok: boolean; status: string | null; error?: string }> {
+  const res = await fetch(`/api/watchlist/companies/${id}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  return res.json();
+}
