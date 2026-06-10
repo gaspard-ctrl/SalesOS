@@ -111,9 +111,21 @@ export function AeAnalysisCard({
           {content.watch_outs.length > 0 && <Block title="⚠ Watch-outs" items={content.watch_outs} />}
         </div>
       ) : (
-        <p style={{ margin: 0, fontSize: 12, color: COLORS.ink3 }}>
-          No analysis yet. Click <strong>Generate</strong> in the top right.
-        </p>
+        <div
+          style={{
+            padding: 16,
+            textAlign: "center",
+            fontSize: 12,
+            color: COLORS.ink3,
+            background: COLORS.bgSoft,
+            border: `1px dashed ${COLORS.lineStrong}`,
+            borderRadius: 10,
+          }}
+        >
+          No analysis yet. Click{" "}
+          <strong style={{ color: COLORS.ink2, fontWeight: 600 }}>Generate</strong> in the top right to get a tailored
+          account brief.
+        </div>
       )}
 
       <NotesEditor companyId={companyId} initialNotes={notes} />

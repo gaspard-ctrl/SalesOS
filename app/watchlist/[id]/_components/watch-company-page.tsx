@@ -16,6 +16,7 @@ import { CrossPageActions } from "./cross-page-actions";
 import { AeAnalysisCard } from "./ae-analysis-card";
 import { ContactsCard } from "./contacts-card";
 import { NewsCard } from "./news-card";
+import { EmailHistoryCard } from "./email-history-card";
 import { MailDrafter, type DraftRecipient } from "./mail-drafter";
 import { ApolloEnrichModal } from "../../_components/apollo-enrich-modal";
 
@@ -129,19 +130,19 @@ export function WatchCompanyPage({ id }: { id: string }) {
         overflow: "hidden",
       }}
     >
-      <DetailHeader company={company} />
+      <DetailHeader company={company} onEnrich={() => setApolloOpen(true)} />
 
       <div
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: 16,
+          padding: "16px 20px",
         }}
       >
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 440px",
+            gridTemplateColumns: "1fr 408px",
             gap: 16,
             maxWidth: 1500,
             margin: "0 auto",
@@ -162,6 +163,7 @@ export function WatchCompanyPage({ id }: { id: string }) {
               onProspect={addRecipients}
             />
             <ContactsCard companyId={company.id} onProspect={addRecipients} />
+            <EmailHistoryCard companyId={company.id} />
             <NewsCard
               brief={briefs.news}
               onRefresh={() => refresh("news")}
@@ -186,6 +188,7 @@ export function WatchCompanyPage({ id }: { id: string }) {
               companyId={company.id}
               recipients={recipients}
               onRecipientsChange={setRecipients}
+              onSent={() => mutate(`/api/watchlist/companies/${company.id}/emails`)}
             />
           </aside>
         </div>

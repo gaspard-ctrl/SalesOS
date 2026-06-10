@@ -3,8 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { List, Send, Loader2, UserPlus } from "lucide-react";
-import { COLORS } from "@/lib/design/tokens";
+import { List, Send, Loader2, UserPlus, ArrowRight, ExternalLink } from "lucide-react";
+import { COLORS, RADIUS, SHADOWS } from "@/lib/design/tokens";
 import type { WatchCompanyDetail } from "@/app/api/watchlist/companies/[id]/route";
 import type { CompanyContactsResponse } from "@/app/api/watchlist/companies/[id]/contacts/route";
 
@@ -59,40 +59,37 @@ export function CrossPageActions({
       style={{
         background: COLORS.bgCard,
         border: `1px solid ${COLORS.line}`,
-        borderRadius: 12,
-        padding: "12px 14px",
+        borderRadius: RADIUS.lg,
+        boxShadow: SHADOWS.card,
+        overflow: "hidden",
       }}
     >
-      <h3
-        style={{
-          margin: "0 0 8px",
-          fontSize: 10,
-          fontWeight: 700,
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
-          color: COLORS.ink3,
-        }}
-      >
-        🔗 Open in
-      </h3>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "14px 16px" }}>
+        <span style={{ color: COLORS.ink3, display: "inline-flex" }}>
+          <ExternalLink size={16} />
+        </span>
+        <span style={{ fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em", color: COLORS.ink0 }}>
+          Open in
+        </span>
+      </div>
+      <div style={{ padding: "0 12px 12px" }}>
         {onEnrichApollo && (
           <ActionLink
             onClick={onEnrichApollo}
-            icon={<UserPlus size={12} />}
+            icon={<UserPlus size={19} />}
             label="Enrich with Apollo"
             sub="Find ICP contacts + emails"
           />
         )}
         <ActionLink
           href="/watchlist/lists"
-          icon={<List size={12} />}
+          icon={<List size={19} />}
           label="List management"
           sub="Create a prospect list"
         />
         <ActionLink
           onClick={goToMassProspection}
-          icon={loadingProspection ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+          icon={loadingProspection ? <Loader2 size={19} className="animate-spin" /> : <Send size={19} />}
           label="Mass Prospection"
           sub={loadingProspection ? "Loading contacts…" : "HubSpot contacts preselected"}
           disabled={loadingProspection}
@@ -117,26 +114,45 @@ function ActionLink({
   sub: string;
   disabled?: boolean;
 }) {
+  const [hover, setHover] = React.useState(false);
   const content = (
     <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 8,
-        padding: "8px 10px",
-        borderRadius: 8,
-        border: `1px solid ${COLORS.line}`,
-        background: disabled ? COLORS.bgSoft : COLORS.bgCard,
+        gap: 12,
+        padding: "11px 12px",
+        borderRadius: 10,
+        background: disabled ? "transparent" : hover ? COLORS.bgSoft : "transparent",
         cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.5 : 1,
+        opacity: disabled ? 0.55 : 1,
+        transition: "background .12s ease",
       }}
     >
-      <span style={{ color: COLORS.ink2, display: "inline-flex" }}>{icon}</span>
+      <span
+        style={{
+          width: 38,
+          height: 38,
+          borderRadius: 10,
+          flexShrink: 0,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: COLORS.brandTint,
+          color: COLORS.brand,
+        }}
+      >
+        {icon}
+      </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.ink0 }}>{label}</div>
-        <div style={{ fontSize: 10, color: COLORS.ink3 }}>{sub}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em", color: COLORS.ink0 }}>{label}</div>
+        <div style={{ fontSize: 12, color: COLORS.ink3 }}>{sub}</div>
       </div>
-      <span style={{ color: COLORS.ink3 }}>→</span>
+      <span style={{ color: COLORS.ink4, display: "inline-flex" }}>
+        <ArrowRight size={17} />
+      </span>
     </div>
   );
 

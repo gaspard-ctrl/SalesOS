@@ -43,10 +43,10 @@ export function SalesRail({
   return (
     <aside
       style={{
-        width: 280,
+        width: droppable ? 280 : 236,
         flexShrink: 0,
-        borderLeft: `1px solid ${COLORS.line}`,
-        background: COLORS.bgSoft,
+        borderRight: `1px solid ${COLORS.line}`,
+        background: COLORS.bgCard,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -57,23 +57,23 @@ export function SalesRail({
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "10px 14px",
+          padding: "12px 16px",
           borderBottom: `1px solid ${COLORS.line}`,
         }}
       >
         <span
           style={{
-            fontSize: 10,
-            fontWeight: 700,
+            fontSize: 11,
+            fontWeight: 600,
             textTransform: "uppercase",
             letterSpacing: "0.06em",
             color: COLORS.ink3,
             flex: 1,
           }}
         >
-          Sales ({reps.length})
+          Sales reps
         </span>
-        {droppable && (
+        {droppable ? (
           <button
             type="button"
             onClick={onConfigure}
@@ -94,6 +94,8 @@ export function SalesRail({
           >
             <Settings2 size={12} /> Configure
           </button>
+        ) : (
+          <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.ink3 }}>{reps.length}</span>
         )}
       </div>
 

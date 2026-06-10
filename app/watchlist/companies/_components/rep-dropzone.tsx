@@ -41,6 +41,91 @@ export function RepDropZone({
         .map((w) => w[0]?.toUpperCase() ?? "")
         .join("");
 
+  // Filter mode (Board reps sidebar): clean Linear-style row, no charge bar.
+  if (!droppable) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={email ?? label}
+        onMouseEnter={() => setOver(true)}
+        onMouseLeave={() => setOver(false)}
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          width: "100%",
+          textAlign: "left",
+          padding: "8px 10px",
+          borderRadius: RADIUS.md,
+          border: "none",
+          cursor: "pointer",
+          background: active ? COLORS.brandTint : over ? COLORS.bgSoft : "transparent",
+          transition: "background .12s ease",
+        }}
+      >
+        {active && (
+          <span
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 8,
+              bottom: 8,
+              width: 3,
+              borderRadius: 3,
+              background: COLORS.brand,
+            }}
+          />
+        )}
+        <span
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 7,
+            flexShrink: 0,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: "-0.02em",
+            color: isUnassigned ? COLORS.ink3 : "#fff",
+            background: isUnassigned ? COLORS.bgSoft : accent,
+            border: isUnassigned ? `1px dashed ${COLORS.ink4}` : "none",
+          }}
+        >
+          {isUnassigned ? "?" : initials || "?"}
+        </span>
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: 13,
+            fontWeight: active ? 600 : 500,
+            color: isUnassigned ? COLORS.ink3 : COLORS.ink0,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {label}
+        </span>
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: active ? COLORS.brand : COLORS.ink3,
+            minWidth: 18,
+            textAlign: "right",
+          }}
+        >
+          {count}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <button
       type="button"

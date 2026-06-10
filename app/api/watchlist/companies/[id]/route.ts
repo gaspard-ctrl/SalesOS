@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -67,11 +68,24 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const briefs = await getBriefs(company.id);
 
+  // Nombre d'emails envoyes pour cette company (envois distincts = source_id distincts).
+  let outreachCount = 0;
+  const { data: logRows } = await db
+    .from("outreach_log")
+    .select("source_id")
+    .eq("user_id", user.id)
+    .eq("scope_company_id", company.id);
+  if (logRows && logRows.length > 0) {
+    const sends = new Set<string>();
+    for (const r of logRows) sends.add((r.source_id as string | null) ?? randomUUID());
+    outreachCount = sends.size;
+  }
+
   const response: WatchCompanyDetailResponse = {
     company,
     prospects: [],
     briefs,
-    outreach_count: 0,
+    outreach_count: outreachCount,
   };
 
   return NextResponse.json(response);

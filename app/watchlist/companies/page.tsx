@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Cloud, Sparkles, List as ListIcon, Building2 } from "lucide-react";
-import { COLORS } from "@/lib/design/tokens";
+import { Cloud, Sparkles, Building2, List as ListIcon } from "lucide-react";
+import { COLORS, SHADOWS } from "@/lib/design/tokens";
 import { BoardView } from "./_components/board-view";
 import { EnrichWizard } from "./_components/enrich-wizard";
 import { NewHubspotCompanyDialog } from "./_components/new-hubspot-company-dialog";
@@ -27,42 +27,29 @@ export default function WatchlistHubPage() {
       <div
         style={{
           flexShrink: 0,
-          padding: "10px 16px",
+          height: 56,
+          padding: "0 18px",
           borderBottom: `1px solid ${COLORS.line}`,
           background: COLORS.bgCard,
           display: "flex",
           alignItems: "center",
-          gap: 12,
+          gap: 14,
         }}
       >
-        <h1 style={{ fontSize: 16, fontWeight: 600, color: COLORS.ink0, margin: 0, lineHeight: 1.2 }}>Watch List</h1>
+        <h1 style={{ fontSize: 16, fontWeight: 600, color: COLORS.ink0, margin: 0, letterSpacing: "-0.02em", lineHeight: 1.2 }}>Watch List</h1>
 
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          <Link
-            href="/watchlist/companies/manage"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", fontSize: 12, fontWeight: 600, borderRadius: 8, border: `1px solid ${COLORS.line}`, background: COLORS.bgCard, color: COLORS.ink1, textDecoration: "none" }}
-          >
-            <Cloud size={13} /> HubSpot Sourcing
+        <div style={{ marginLeft: "auto", display: "flex", gap: 9, alignItems: "center" }}>
+          <Link href="/watchlist/companies/manage" style={ghostBtnSm()}>
+            <Cloud size={14} /> HubSpot Sourcing
           </Link>
-          <button
-            type="button"
-            onClick={() => setShowNewCompany(true)}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", fontSize: 12, fontWeight: 600, borderRadius: 8, border: `1px solid ${COLORS.line}`, background: COLORS.bgCard, color: COLORS.ink1, cursor: "pointer" }}
-          >
-            <Building2 size={13} /> New company
+          <button type="button" onClick={() => setShowNewCompany(true)} style={ghostBtnSm()}>
+            <Building2 size={14} /> New company
           </button>
-          <button
-            type="button"
-            onClick={() => setShowEnrich(true)}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", fontSize: 12, fontWeight: 600, borderRadius: 8, border: "none", background: COLORS.brand, color: "#fff", cursor: "pointer" }}
-          >
-            <Sparkles size={13} /> Enrichir
+          <button type="button" onClick={() => setShowEnrich(true)} style={primaryBtnSm()}>
+            <Sparkles size={14} /> Enrich
           </button>
-          <Link
-            href="/watchlist/lists"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", fontSize: 12, fontWeight: 600, borderRadius: 8, border: `1px solid ${COLORS.line}`, background: COLORS.bgCard, color: COLORS.ink1, textDecoration: "none" }}
-          >
-            <ListIcon size={13} /> Listes
+          <Link href="/watchlist/lists" style={ghostBtnSm()}>
+            <ListIcon size={14} /> Lists
           </Link>
         </div>
       </div>
@@ -81,4 +68,40 @@ export default function WatchlistHubPage() {
       {showNewCompany && <NewHubspotCompanyDialog onClose={() => setShowNewCompany(false)} />}
     </div>
   );
+}
+
+function ghostBtnSm(): React.CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    height: 30,
+    padding: "0 11px",
+    fontSize: 12,
+    fontWeight: 600,
+    borderRadius: 8,
+    border: `1px solid ${COLORS.lineStrong}`,
+    background: COLORS.bgCard,
+    color: COLORS.ink0,
+    textDecoration: "none",
+    cursor: "pointer",
+  };
+}
+
+function primaryBtnSm(): React.CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    height: 30,
+    padding: "0 11px",
+    fontSize: 12,
+    fontWeight: 600,
+    borderRadius: 8,
+    border: "none",
+    background: COLORS.brand,
+    color: "#fff",
+    boxShadow: SHADOWS.pink,
+    cursor: "pointer",
+  };
 }
