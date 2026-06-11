@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logUsage } from "@/lib/log-usage";
+import { NO_EM_DASH_RULE, stripEmDashes } from "@/lib/no-em-dash";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -103,7 +104,7 @@ export async function POST(req: NextRequest) {
       `Deal : ${p.dealname ?? "?"} | Stage : ${p.dealstage ?? "?"} | Montant : ${p.amount ? `${parseFloat(p.amount).toLocaleString("fr-FR")}€` : "?"}`,
       `Clôture prévue : ${p.closedate ? new Date(p.closedate).toLocaleDateString("fr-FR") : "?"}`,
       p.description ? `Description : ${sanitizeString(p.description)}` : null,
-      contactName ? `Contact principal : ${contactName}${contactTitle ? ` — ${contactTitle}` : ""}` : null,
+      contactName ? `Contact principal : ${contactName}${contactTitle ? ` - ${contactTitle}` : ""}` : null,
       toEmail ? `Email : ${toEmail}` : null,
       engagementLines ? `\nHistorique des échanges :\n${engagementLines}` : null,
       instructions ? `\nInstructions spécifiques : ${instructions}` : null,
@@ -114,6 +115,7 @@ export async function POST(req: NextRequest) {
       "Tu rédiges des emails de suivi de deal personnalisés, humains et percutants.",
       "L'email doit faire avancer le deal vers la prochaine étape.",
       "LANGUE : détecte la langue dominante à partir, dans l'ordre, des Instructions spécifiques, puis de l'Historique des échanges, puis de la Description du deal. Sinon, repli sur le français. Rédige TOUT (subject, body, signature) dans cette langue. Si la source est en anglais, écris en anglais ; en espagnol, en espagnol ; etc.",
+      NO_EM_DASH_RULE,
       "Réponds UNIQUEMENT en JSON valide : { \"subject\": \"...\", \"body\": \"...\" }",
       "Le body doit être en texte brut (pas de HTML, pas de markdown).",
       guide ? `\n---\nGUIDE DE PROSPECTION :\n${guide}` : "",
@@ -144,6 +146,8 @@ export async function POST(req: NextRequest) {
     } catch {
       body = raw;
     }
+    subject = stripEmDashes(subject);
+    body = stripEmDashes(body);
 
     return NextResponse.json({ subject, body, toEmail });
   } catch (e) {

@@ -4,11 +4,11 @@ export const DEFAULT_PROSPECTION_GUIDE = `# Guide de prospection Coachello
 ## 5 principes
 
 1. Partir d'un signal réel (post, initiative, secteur). Jamais générique.
-2. Nommer le problème avant la solution — que le prospect se dise "c'est mon sujet" avant de lire Coachello.
+2. Nommer le problème avant la solution : que le prospect se dise "c'est mon sujet" avant de lire Coachello.
 3. 100-200 mots max. La longueur se justifie par la personnalisation, pas par l'envie d'en dire plus.
 4. Un seul CTA. Une question, pas deux.
 5. Signer d'un prénom, jamais au nom de la marque.
-6. Ne met pas de tiret partout, en surtout pas le long tiret comme tu as l'habitude de mettre !!!
+6. JAMAIS de tiret long (—, em dash) ni de tiret moyen (–) dans un message. Règle absolue, aucune exception, subject et body compris. Utilise une virgule, un point, des parenthèses ou un tiret court (-).
 
 Pas de contexte fort ? Reste court et générique.
 
@@ -43,7 +43,7 @@ Si c'est un sujet pour vous, ravi de partager quelques succès clients.
 ### 3. Pratique vs formation (EN)
 [First name],
 
-We've built a different way to help managers grow — less theory, more practice.
+We've built a different way to help managers grow: less theory, more practice.
 
 What usually takes 8-12 hours now happens in ~50 minutes. Engagement close to 80 %, outcomes 10x more effective than traditional training.
 

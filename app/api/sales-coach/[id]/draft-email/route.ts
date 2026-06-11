@@ -4,6 +4,7 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logUsage } from "@/lib/log-usage";
 import { repairAnalysis, type SalesCoachAnalysis } from "@/lib/guides/sales-coach";
+import { NO_EM_DASH_RULE, stripEmDashes } from "@/lib/no-em-dash";
 import type { DealSnapshot } from "@/lib/hubspot";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,7 @@ const draftTool: Anthropic.Tool = {
   input_schema: {
     type: "object" as const,
     properties: {
-      subject: { type: "string", description: "Sujet de l'email — court, accroche-réfléchie" },
+      subject: { type: "string", description: "Sujet de l'email, court, accroche-réfléchie" },
       body: { type: "string", description: "Corps du mail en texte brut, ton chaleureux et concret. Pas de markdown." },
     },
     required: ["subject", "body"],
@@ -70,7 +71,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     `Tu rédiges un email de suivi commercial post-meeting pour ${senderName}.`,
     `Le mail est envoyé à : ${contactNames || "le prospect"}.`,
     `Meeting : ${row.meeting_title}${meetingDate ? ` (${meetingDate})` : ""}.`,
-    snapshot ? `Deal : ${snapshot.name} · ${snapshot.stage_label ?? snapshot.stage} · ${snapshot.amount ? `${snapshot.amount}€` : "—"}.` : "",
+    snapshot ? `Deal : ${snapshot.name} · ${snapshot.stage_label ?? snapshot.stage} · ${snapshot.amount ? `${snapshot.amount}€` : "-"}.` : "",
     "",
     `Synthèse du meeting : ${analysis.summary}`,
     "",
@@ -87,6 +88,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     "- inclure 1-2 next steps concrets, datés si possible",
     "- finir par une signature simple avec le prénom",
     "- jamais inventer un fait, un chiffre, un engagement non discuté",
+    `- ${NO_EM_DASH_RULE}`,
     "",
     "Utilise l'outil email_draft pour retourner le sujet + le corps.",
   ].filter(Boolean).join("\n");
@@ -107,7 +109,11 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "No tool_use block in response" }, { status: 500 });
   }
 
-  const draft = block.input as { subject: string; body: string };
+  const rawDraft = block.input as { subject: string; body: string };
+  const draft = {
+    subject: stripEmDashes(rawDraft.subject ?? ""),
+    body: stripEmDashes(rawDraft.body ?? ""),
+  };
 
   await db
     .from("sales_coach_analyses")

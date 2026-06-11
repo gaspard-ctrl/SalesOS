@@ -19,6 +19,7 @@ import {
 } from "@/lib/watchlist/briefs";
 import { fetchWatchlistNews } from "@/lib/watchlist/fetch-news";
 import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/guides/prospection";
+import { NO_EM_DASH_RULE, stripEmDashes } from "@/lib/no-em-dash";
 import { SALES_CONTEXT_PROMPT_BLOCK } from "@/lib/business-context";
 import type { AeRelationshipState } from "@/lib/watchlist/briefs";
 
@@ -41,7 +42,8 @@ ${SALES_CONTEXT_PROMPT_BLOCK}
 ## Guide de prospection (chaque opening_message doit le suivre)
 ${prospectionGuide}
 
-Ton style : direct, concret. Pas de tirets longs (em dash), utilise des virgules, des parenthèses ou des tirets courts.
+Ton style : direct, concret.
+${NO_EM_DASH_RULE}
 LANGUE : écris dans la langue du PROSPECT, pas celle du contexte fourni. Détecte-la depuis le compte lui-même : pays et implantation de l'entreprise, langue de ses news et posts, langue des emails reçus de leur part. Une entreprise non francophone = anglais, même si le guide et les instructions sont en français. En cas de doute, écris en anglais. Cette règle s'applique surtout aux opening_subject et opening_message (ce sont eux qui partent au prospect).
 
 Règles anti-générique :
@@ -229,9 +231,9 @@ export async function runAeAnalysis(input: {
       relationship_state: RELATIONSHIP_STATES.includes(parsed.relationship_state as AeRelationshipState)
         ? (parsed.relationship_state as AeRelationshipState)
         : null,
-      state_summary: typeof parsed.state_summary === "string" ? parsed.state_summary : "",
+      state_summary: typeof parsed.state_summary === "string" ? stripEmDashes(parsed.state_summary) : "",
       strategy: "", // legacy v1, plus généré
-      story_to_tell: typeof parsed.story_to_tell === "string" ? parsed.story_to_tell : "",
+      story_to_tell: typeof parsed.story_to_tell === "string" ? stripEmDashes(parsed.story_to_tell) : "",
       priority_contacts: Array.isArray(parsed.priority_contacts)
         ? (parsed.priority_contacts as unknown[])
             .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
@@ -239,7 +241,7 @@ export async function runAeAnalysis(input: {
         : [],
       next_actions: [], // legacy v1, redondant avec les contacts
       watch_outs: Array.isArray(parsed.watch_outs)
-        ? parsed.watch_outs.filter((s): s is string => typeof s === "string")
+        ? parsed.watch_outs.filter((s): s is string => typeof s === "string").map(stripEmDashes)
         : [],
       sources_used: parsed.sources_used ?? sourcesUsed,
     };
@@ -287,10 +289,10 @@ function normalizeContact(c: Record<string, unknown>): AeContact {
   return {
     name: typeof c.name === "string" ? c.name : "",
     role: typeof c.role === "string" ? c.role : null,
-    rationale: typeof c.rationale === "string" ? c.rationale : "",
+    rationale: typeof c.rationale === "string" ? stripEmDashes(c.rationale) : "",
     angle: "", // legacy v1, plus généré
-    opening_subject: typeof c.opening_subject === "string" ? c.opening_subject : null,
-    opening_message: typeof c.opening_message === "string" ? c.opening_message : null,
+    opening_subject: typeof c.opening_subject === "string" ? stripEmDashes(c.opening_subject) : null,
+    opening_message: typeof c.opening_message === "string" ? stripEmDashes(c.opening_message) : null,
     email: typeof c.email === "string" ? c.email : null,
     hubspot_id: typeof c.hubspot_id === "string" ? c.hubspot_id : null,
   };
