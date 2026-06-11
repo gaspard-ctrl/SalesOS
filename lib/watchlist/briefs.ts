@@ -44,6 +44,8 @@ export interface AeContact {
    * Absent sur les analyses générées avant la v2.
    */
   opening_message?: string | null;
+  /** v2 : objet de mail proposé pour l'opening_message. */
+  opening_subject?: string | null;
   email: string | null;
   hubspot_id: string | null;
 }
