@@ -2,10 +2,9 @@
 
 import * as React from "react";
 import useSWR from "swr";
-import { Users, History, ExternalLink, Loader2, MailPlus } from "lucide-react";
+import { Users, History, ExternalLink, Loader2, Mail, MailPlus } from "lucide-react";
 import { COLORS, SHADOWS } from "@/lib/design/tokens";
 import { ContactHistoryModal } from "./contact-history-modal";
-import { ExchangesBadge } from "@/components/ui/exchanges-badge";
 import { useOutreachCounts } from "@/lib/hooks/use-outreach-counts";
 import type { DraftRecipient } from "./mail-drafter";
 import type { CompanyContactsResponse } from "@/app/api/watchlist/companies/[id]/contacts/route";
@@ -173,13 +172,35 @@ export function ContactsCard({
                           {name}
                         </span>
                       )}
-                      <ExchangesBadge count={countByEmail(c.email)} />
                     </div>
                     <div style={{ fontSize: 11, color: COLORS.ink3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {c.jobtitle ? c.jobtitle : "—"}
                       {c.email ? ` · ${c.email}` : ""}
                     </div>
                   </div>
+                  {c.email && (
+                    <span
+                      title={`${countByEmail(c.email)} email${countByEmail(c.email) > 1 ? "s" : ""} sent from SalesOS to this contact`}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3,
+                        padding: "2px 7px",
+                        borderRadius: 99,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        lineHeight: 1,
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                        background: countByEmail(c.email) > 0 ? "#fff8fb" : COLORS.bgSoft,
+                        color: countByEmail(c.email) > 0 ? "#f01563" : COLORS.ink3,
+                        border: `1px solid ${countByEmail(c.email) > 0 ? "#fbd5e3" : COLORS.line}`,
+                      }}
+                    >
+                      <Mail size={10} />
+                      {countByEmail(c.email)}
+                    </span>
+                  )}
                   {c.email && onProspect && (
                     <button
                       type="button"
