@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import Anthropic from "@anthropic-ai/sdk";
 import { logUsage } from "@/lib/log-usage";
+import { NO_EM_DASH_RULE_EN, stripEmDashes } from "@/lib/no-em-dash";
 
 export async function POST(
   req: NextRequest,
@@ -39,12 +40,12 @@ export async function POST(
       const msg = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 30,
-        system: "Generate a short title (4-6 words max, no quotes, no punctuation) that summarizes this conversation. Reply with only the title, nothing else.",
+        system: `Generate a short title (4-6 words max, no quotes, no punctuation) that summarizes this conversation. Reply with only the title, nothing else. ${NO_EM_DASH_RULE_EN}`,
         messages: [
           { role: "user", content: `User asked: ${userContent}\n\nAssistant replied: ${assistantContent.slice(0, 300)}` },
         ],
       });
-      generatedTitle = msg.content[0].type === "text" ? msg.content[0].text.trim() : null;
+      generatedTitle = msg.content[0].type === "text" ? stripEmDashes(msg.content[0].text.trim()) : null;
       logUsage(user.id, "claude-haiku-4-5-20251001", msg.usage.input_tokens, msg.usage.output_tokens, "conversations");
     } catch { /* keep default title */ }
   }

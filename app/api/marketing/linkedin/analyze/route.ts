@@ -5,6 +5,7 @@ import { getCompanyPosts } from "@/lib/brightdata/linkedin";
 import { BRIGHTDATA_API_KEY } from "@/lib/brightdata/serp";
 import { logUsage } from "@/lib/log-usage";
 import { getModelPreference } from "@/lib/models/get-model-preference";
+import { NO_EM_DASH_RULE } from "@/lib/no-em-dash";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -37,7 +38,8 @@ export async function POST(req: NextRequest) {
       model,
       max_tokens: 1500,
       system:
-        "Tu analyses la stratégie de contenu LinkedIn d'un concurrent. Tu dois être concis, structuré, et orienté insights actionnables pour une équipe sales/marketing B2B SaaS.",
+        "Tu analyses la stratégie de contenu LinkedIn d'un concurrent. Tu dois être concis, structuré, et orienté insights actionnables pour une équipe sales/marketing B2B SaaS. " +
+        NO_EM_DASH_RULE,
       messages: [
         {
           role: "user",

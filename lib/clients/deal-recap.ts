@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { logUsage } from "../log-usage";
 import { withAnthropicRetry } from "../anthropic-retry";
 import { getModelPreference } from "../models/get-model-preference";
+import { NO_EM_DASH_RULE } from "@/lib/no-em-dash";
 import { renderClientContextForPrompt, type ClientEnrichmentContext } from "./context";
 import type { DealRecap } from "./types";
 
@@ -29,7 +30,8 @@ Règles :
   dans la timeline. Si tu n'as pas de source claire, mets source=null.
 - Langue : adapte-toi à la langue dominante des transcripts (FR si majoritaire,
   EN sinon).
-- N'invente rien. Si tu manques de contexte pour un field, mets null/[].`;
+- N'invente rien. Si tu manques de contexte pour un field, mets null/[].
+- ${NO_EM_DASH_RULE}`;
 
 const DEAL_RECAP_TOOL: Anthropic.Tool = {
   name: "deal_recap",

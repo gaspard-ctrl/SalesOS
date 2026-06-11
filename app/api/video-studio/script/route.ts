@@ -4,6 +4,7 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logUsage } from "@/lib/log-usage";
 import { VIDEO_SCRIPT_GUIDE } from "@/lib/guides/video-script";
+import { stripEmDashes } from "@/lib/no-em-dash";
 import { lookupClientByName, loadClientContextById } from "@/lib/clients/video-context";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ const CLIENT_TOOL: Anthropic.Tool = {
 type Matched = { id: string; name: string };
 
 function extractText(content: Anthropic.ContentBlock[]): string {
-  return content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
+  return stripEmDashes(content.map((b) => (b.type === "text" ? b.text : "")).join("").trim());
 }
 
 // POST /api/video-studio/script

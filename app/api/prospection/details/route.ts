@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { logUsage } from "@/lib/log-usage";
+import { NO_EM_DASH_RULE, stripEmDashes } from "@/lib/no-em-dash";
 
 export const dynamic = "force-dynamic";
 
@@ -123,12 +124,13 @@ export async function GET(req: NextRequest) {
 Réponds UNIQUEMENT en JSON valide avec ces 5 clés (chaînes vides si tu n'as pas assez d'infos) :
 {
   "analysis": "2-3 phrases synthétisant la relation commerciale : ce qu'on sait du contact/entreprise, état des échanges passés, contexte clé à garder en tête pour l'approche. Basé uniquement sur les données fournies.",
-  "recentNews": "ce que tu sais sur cette entreprise ou ce secteur depuis ta base de connaissance (positionnement, réputation, tendances connues). NE PAS prétendre que c'est récent ou daté — formule comme un contexte général connu.",
+  "recentNews": "ce que tu sais sur cette entreprise ou ce secteur depuis ta base de connaissance (positionnement, réputation, tendances connues). NE PAS prétendre que c'est récent ou daté - formule comme un contexte général connu.",
   "companyContext": "contexte de l'entreprise : taille, stade, enjeux, basé sur les données fournies et ta connaissance générale",
   "coachingNeed": "pourquoi cette entreprise ou ce contact pourrait avoir besoin de coaching",
   "angle": "angle d'attaque recommandé pour l'email"
 }
-IMPORTANT : Ne mentionne jamais de date précise ni d'événement récent que tu ne peux pas vérifier. Laisse un champ vide si tu n'as vraiment rien de pertinent.`,
+IMPORTANT : Ne mentionne jamais de date précise ni d'événement récent que tu ne peux pas vérifier. Laisse un champ vide si tu n'as vraiment rien de pertinent.
+${NO_EM_DASH_RULE}`,
         messages: [{ role: "user", content: contextBlock }],
       });
 
@@ -138,11 +140,11 @@ IMPORTANT : Ne mentionne jamais de date précise ni d'événement récent que tu
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         suggestions = {
-          analysis: parsed.analysis ?? "",
-          recentNews: parsed.recentNews ?? "",
-          companyContext: parsed.companyContext ?? "",
-          coachingNeed: parsed.coachingNeed ?? "",
-          angle: parsed.angle ?? "",
+          analysis: stripEmDashes(parsed.analysis ?? ""),
+          recentNews: stripEmDashes(parsed.recentNews ?? ""),
+          companyContext: stripEmDashes(parsed.companyContext ?? ""),
+          coachingNeed: stripEmDashes(parsed.coachingNeed ?? ""),
+          angle: stripEmDashes(parsed.angle ?? ""),
         };
       }
     } catch { /* leave suggestions empty on error */ }

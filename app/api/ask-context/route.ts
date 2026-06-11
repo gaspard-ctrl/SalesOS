@@ -4,6 +4,7 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
 import { logUsage } from "@/lib/log-usage";
+import { NO_EM_DASH_RULE } from "@/lib/no-em-dash";
 
 export const maxDuration = 120;
 
@@ -77,7 +78,8 @@ RÈGLES :
 - Réponds dans la langue de la question et des données (anglais par défaut si incertain), de manière concise et actionnable.
 - Base-toi UNIQUEMENT sur les données fournies. Si l'information n'est pas disponible, dis-le.
 - Utilise des bullet points et du markdown léger pour la lisibilité.
-- Sois direct — pas de formules de politesse inutiles.`;
+- Sois direct - pas de formules de politesse inutiles.
+- ${NO_EM_DASH_RULE}`;
 
   const encoder = new TextEncoder();
 

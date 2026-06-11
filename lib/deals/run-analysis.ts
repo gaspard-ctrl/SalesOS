@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { db } from "../db";
 import { logUsage } from "../log-usage";
+import { NO_EM_DASH_RULE } from "@/lib/no-em-dash";
 
 const DEFAULT_ANALYZE_MODEL = "claude-sonnet-4-6";
 
@@ -377,7 +378,8 @@ Sois hyper précis et factuel - base chaque analyse sur des éléments concrets 
 Les messages Slack sont des conversations internes de l'équipe Coachello - ils contiennent souvent des insights précieux sur l'avancement du deal, les blocages, et le contexte commercial.
 Ne mentionne jamais la probabilité HubSpot du stage - c'est une valeur automatique non pertinente. Raisonne uniquement sur la dynamique réelle (échanges, signaux, engagement).
 Identifie aussi les ÉVÉNEMENTS CLÉS datés qui retracent le parcours du deal (devis/proposition envoyé, échange ou réunion important, objection majeure, relance décisive, décision ou engagement du prospect…). Pour chacun : une date au format YYYY-MM-DD (convertis depuis les dates DD/MM/YYYY du contexte), un label court, un type, une phrase de contexte. N'invente JAMAIS de date : si un événement ne peut pas être daté à partir du contexte, ne l'inclus pas.
-Utilise l'outil deal_analysis pour retourner ton analyse.`,
+Utilise l'outil deal_analysis pour retourner ton analyse.
+${NO_EM_DASH_RULE}`,
       messages: [{ role: "user", content: contextBlock }],
       tools: [analyzeTool],
       tool_choice: { type: "tool" as const, name: "deal_analysis" },

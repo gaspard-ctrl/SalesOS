@@ -1050,7 +1050,7 @@ async function executeTool(
             end: p.end?.year ? `${p.end.year}-${String(p.end.month ?? 1).padStart(2, "0")}` : "actuel",
           })),
           skills: (profile.skills ?? []).slice(0, 15).map((s) => s.name),
-          education: (profile.educations ?? []).slice(0, 3).map((e) => `${e.schoolName} — ${e.degree ?? ""} ${e.fieldOfStudy ?? ""}`.trim()),
+          education: (profile.educations ?? []).slice(0, 3).map((e) => `${e.schoolName} - ${e.degree ?? ""} ${e.fieldOfStudy ?? ""}`.trim()),
         });
       } catch (e) {
         return `Erreur LinkedIn profile : ${e instanceof Error ? e.message : "inconnue"}`;
@@ -1259,9 +1259,9 @@ export async function runChat(args: {
   } catch { /* owners fetch failed */ }
 
   const teamLines = ownersMap.map((o) => `- ${o.name} (owner_id: ${o.id}, ${o.email})`).join("\n");
-  systemPrompt += `\n\nCONTEXTE UTILISATEUR\nL'utilisateur connecté est ${userDisplay}${userOwnerId ? ` (HubSpot owner ID : ${userOwnerId})` : ""}.\nQuand il dit "mes deals" → utilise my_deals_only: true.\nQuand il dit "les deals de [prénom]" → résous le prénom ci-dessous et utilise owner_id.\n\nÉQUIPE COMMERCIALE (owners HubSpot) :\n${teamLines || "Aucun owner trouvé"}\n\nRÈGLES IMPORTANTES :\n- "les deals de Quentin" → trouver l'owner_id de Quentin dans la liste ci-dessus, puis get_deals avec owner_id\n- "deals perdu" ou "deals lost" = stage closedlost\n- "deals gagné" ou "deals won" = stage closedwon\n- Ne JAMAIS chercher un commercial comme un contact — ce sont des owners\n- Ne pose AUCUNE question de clarification — déduis du contexte`;
+  systemPrompt += `\n\nCONTEXTE UTILISATEUR\nL'utilisateur connecté est ${userDisplay}${userOwnerId ? ` (HubSpot owner ID : ${userOwnerId})` : ""}.\nQuand il dit "mes deals" → utilise my_deals_only: true.\nQuand il dit "les deals de [prénom]" → résous le prénom ci-dessous et utilise owner_id.\n\nÉQUIPE COMMERCIALE (owners HubSpot) :\n${teamLines || "Aucun owner trouvé"}\n\nRÈGLES IMPORTANTES :\n- "les deals de Quentin" → trouver l'owner_id de Quentin dans la liste ci-dessus, puis get_deals avec owner_id\n- "deals perdu" ou "deals lost" = stage closedlost\n- "deals gagné" ou "deals won" = stage closedwon\n- Ne JAMAIS chercher un commercial comme un contact - ce sont des owners\n- Ne pose AUCUNE question de clarification - déduis du contexte`;
 
-  systemPrompt += `\n\nCAPACITÉS LINKEDIN (Bright Data)\nTu as accès à LinkedIn pour enrichir tes réponses. La recherche est instantanée ; les fiches détaillées sont scrapées (quelques secondes, best-effort — si ça échoue, dis-le simplement).\n\n• Profils :\n  - search_linkedin_people : trouver une personne par entreprise + titre (rapide)\n  - get_linkedin_profile : profil complet — fallback automatique nom+entreprise si pas d'username\n  - get_linkedin_activity / get_linkedin_posts : derniers posts publiés par un profil\n\n• Entreprises :\n  - get_linkedin_company / get_linkedin_company_posts / get_linkedin_company_jobs\n  - search_linkedin_companies\n\nPas de recherche d'email LinkedIn : pour un email, appuie-toi sur les données HubSpot (CRM).`;
+  systemPrompt += `\n\nCAPACITÉS LINKEDIN (Bright Data)\nTu as accès à LinkedIn pour enrichir tes réponses. La recherche est instantanée ; les fiches détaillées sont scrapées (quelques secondes, best-effort - si ça échoue, dis-le simplement).\n\n• Profils :\n  - search_linkedin_people : trouver une personne par entreprise + titre (rapide)\n  - get_linkedin_profile : profil complet - fallback automatique nom+entreprise si pas d'username\n  - get_linkedin_activity / get_linkedin_posts : derniers posts publiés par un profil\n\n• Entreprises :\n  - get_linkedin_company / get_linkedin_company_posts / get_linkedin_company_jobs\n  - search_linkedin_companies\n\nPas de recherche d'email LinkedIn : pour un email, appuie-toi sur les données HubSpot (CRM).`;
 
   // Langue : on répond toujours dans la langue de la question, sans traduire.
   // S'applique aussi à la question de périmètre canal ci-dessous.
@@ -1370,7 +1370,7 @@ export async function runChat(args: {
           if (block.type !== "tool_result" || typeof block.content !== "string") return block;
           if (block.content.length <= MAX_RESULT_CHARS) return block;
           const firstLine = block.content.split("\n")[0];
-          return { ...block, content: `${firstLine}\n[résultat volumineux tronqué — données déjà traitées]` };
+          return { ...block, content: `${firstLine}\n[résultat volumineux tronqué - données déjà traitées]` };
         });
         return { ...msg, content: pruned };
       });

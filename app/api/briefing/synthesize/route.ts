@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
 import { logUsage } from "@/lib/log-usage";
 import { DEFAULT_BRIEFING_GUIDE } from "@/lib/guides/briefing";
+import { NO_EM_DASH_RULE } from "@/lib/no-em-dash";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -56,7 +57,7 @@ const briefingTool: Anthropic.Tool = {
       meetingType: { type: "string", enum: ["discovery", "follow_up"] },
       isSalesMeeting: { type: "boolean", description: "true si la réunion est commerciale (prospect, client, deal). false si interne, partenaire, coaching, support, etc." },
       objective: { type: "string", description: "1 phrase : objectif de ce rendez-vous" },
-      contextSummary: { type: "string", description: "NARRATIF business uniquement (entreprise, marché, relation, historique). NE PAS mentionner le stage HubSpot, les montants CRM, ni l'analyse du funnel — tout ça va dans dealAnalysis. Markdown structuré : ## Situation, ## Derniers échanges. 1 phrase max par puce. Utiliser \\n pour les retours à la ligne." },
+      contextSummary: { type: "string", description: "NARRATIF business uniquement (entreprise, marché, relation, historique). NE PAS mentionner le stage HubSpot, les montants CRM, ni l'analyse du funnel - tout ça va dans dealAnalysis. Markdown structuré : ## Situation, ## Derniers échanges. 1 phrase max par puce. Utiliser \\n pour les retours à la ligne." },
       dealAnalysis: {
         type: "object",
         description: "Analyse FACTUELLE de l'état du deal côté CRM HubSpot. UNIQUEMENT le funnel : stage, momentum, signaux d'achat/de risque visibles dans les engagements. PAS de narratif business (ça va dans contextSummary). null si aucun deal HubSpot pertinent ou meeting non commercial.",
@@ -110,7 +111,7 @@ const briefingTool: Anthropic.Tool = {
           headquarters: { type: "string", description: "Siège" },
           recentPosts: {
             type: "array",
-            description: "2-3 derniers posts marquants (annonces, nominations) — 1 phrase synthétisée par post",
+            description: "2-3 derniers posts marquants (annonces, nominations) - 1 phrase synthétisée par post",
             items: {
               type: "object",
               properties: {
@@ -256,13 +257,13 @@ export async function POST(req: NextRequest) {
 
     if (rawData.contacts.length > 0) {
       sections.push("=== CONTACTS HUBSPOT ===\n" + rawData.contacts.map((c) =>
-        `${c.firstname ?? ""} ${c.lastname ?? ""} | ${c.jobtitle ?? "—"} @ ${c.company ?? "—"} | ${c.lifecyclestage ?? "—"} | Dernier contact: ${c.notes_last_contacted ?? "jamais"}`
+        `${c.firstname ?? ""} ${c.lastname ?? ""} | ${c.jobtitle ?? "-"} @ ${c.company ?? "-"} | ${c.lifecyclestage ?? "-"} | Dernier contact: ${c.notes_last_contacted ?? "jamais"}`
       ).join("\n"));
     }
 
     if (rawData.deals.length > 0) {
       sections.push("=== DEALS HUBSPOT ===\n" + rawData.deals.map((d) =>
-        `${d.name} | Stage: ${d.stage} | Montant: ${d.amount ? `${Number(d.amount).toLocaleString("fr-FR")}€` : "—"} | Closing: ${d.closedate ? new Date(d.closedate).toLocaleDateString("fr-FR") : "—"}`
+        `${d.name} | Stage: ${d.stage} | Montant: ${d.amount ? `${Number(d.amount).toLocaleString("fr-FR")}€` : "-"} | Closing: ${d.closedate ? new Date(d.closedate).toLocaleDateString("fr-FR") : "-"}`
       ).join("\n"));
     }
 
@@ -271,7 +272,7 @@ export async function POST(req: NextRequest) {
       sections.push("=== HISTORIQUE ÉCHANGES (" + sorted.length + " échanges, du plus récent au plus ancien) ===\n" +
         sorted.map((e) => {
           const date = new Date(e.date).toLocaleDateString("fr-FR");
-          return `[${e.type} — ${date}${e.duration ? ` — ${e.duration}min` : ""}]${e.subject ? ` Objet: ${e.subject}` : ""}${e.body ? `\n${e.body}` : ""}`;
+          return `[${e.type} - ${date}${e.duration ? ` - ${e.duration}min` : ""}]${e.subject ? ` Objet: ${e.subject}` : ""}${e.body ? `\n${e.body}` : ""}`;
         }).join("\n\n"));
     }
 
@@ -283,20 +284,20 @@ export async function POST(req: NextRequest) {
     }
 
     if (rawData.slackMessages.length > 0) {
-      sections.push("=== MENTIONS SLACK (conversations internes Coachello — NE PAS utiliser dans recentNews) ===\n" + rawData.slackMessages.slice(0, 5).map((m) =>
+      sections.push("=== MENTIONS SLACK (conversations internes Coachello - NE PAS utiliser dans recentNews) ===\n" + rawData.slackMessages.slice(0, 5).map((m) =>
         `[#${m.channel}] ${m.text}`
       ).join("\n"));
     }
 
     if (rawData.webResults.length > 0) {
-      sections.push("=== ACTUALITÉS WEB (signaux business uniquement — écarter le bruit générique, utiliser pour recentNews) ===\n" + rawData.webResults.slice(0, 5).map((r) =>
+      sections.push("=== ACTUALITÉS WEB (signaux business uniquement - écarter le bruit générique, utiliser pour recentNews) ===\n" + rawData.webResults.slice(0, 5).map((r) =>
         `${r.title} (${r.published_date ?? "date inconnue"})\nURL: ${r.url}\n${r.content}`
       ).join("\n\n"));
     }
 
     if (rawData.companyHubspot) {
       const c = rawData.companyHubspot;
-      sections.push("=== DONNÉES HUBSPOT ENTREPRISE (contexte seulement — NE PAS utiliser pour companyProfile, préférer tes connaissances et le web) ===\n" +
+      sections.push("=== DONNÉES HUBSPOT ENTREPRISE (contexte seulement - NE PAS utiliser pour companyProfile, préférer tes connaissances et le web) ===\n" +
         [
           c.name ? `Nom: ${c.name}` : null,
           c.industry ? `Secteur: ${c.industry}` : null,
@@ -306,13 +307,13 @@ export async function POST(req: NextRequest) {
     }
 
     if (rawData.companyProfileResults?.length > 0) {
-      sections.push("=== PROFIL ENTREPRISE (sources web — utiliser pour companyProfile) ===\n" + rawData.companyProfileResults.slice(0, 5).map((r) =>
+      sections.push("=== PROFIL ENTREPRISE (sources web - utiliser pour companyProfile) ===\n" + rawData.companyProfileResults.slice(0, 5).map((r) =>
         `${r.title} (${r.published_date ?? "date inconnue"})\nURL: ${r.url}\n${r.content}`
       ).join("\n\n"));
     }
 
     if (rawData.strategicResults?.length > 0) {
-      sections.push("=== HISTORIQUE STRATÉGIQUE (sources web — utiliser pour strategicHistory) ===\n" + rawData.strategicResults.slice(0, 5).map((r) =>
+      sections.push("=== HISTORIQUE STRATÉGIQUE (sources web - utiliser pour strategicHistory) ===\n" + rawData.strategicResults.slice(0, 5).map((r) =>
         `${r.title} (${r.published_date ?? "date inconnue"})\nURL: ${r.url}\n${r.content}`
       ).join("\n\n"));
     }
@@ -323,7 +324,7 @@ export async function POST(req: NextRequest) {
         `- [${p.postedAt}] (${p.likes} likes, ${p.comments} commentaires) ${p.text.slice(0, 250)}\n  ${p.url}`
       ).join("\n");
       sections.push(
-        "=== PAGE ENTREPRISE LINKEDIN (source LinkedIn — utiliser pour linkedinCompanyInsights) ===\n" +
+        "=== PAGE ENTREPRISE LINKEDIN (source LinkedIn - utiliser pour linkedinCompanyInsights) ===\n" +
         [
           c.details.name ? `Nom : ${c.details.name}` : null,
           c.details.industry ? `Secteur : ${c.details.industry}` : null,
@@ -338,7 +339,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (rawData.linkedinProfiles && rawData.linkedinProfiles.length > 0) {
-      sections.push("=== PROFILS LINKEDIN (source LinkedIn — utiliser pour personInsights et linkedinInsights) ===\n" + rawData.linkedinProfiles.map((p) => {
+      sections.push("=== PROFILS LINKEDIN (source LinkedIn - utiliser pour personInsights et linkedinInsights) ===\n" + rawData.linkedinProfiles.map((p) => {
         const name = `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim();
         const allPositions = (p.position ?? []).slice(0, 5).map((pos) => {
           const start = pos.start ? `${pos.start.month ? pos.start.month + "/" : ""}${pos.start.year}` : "";
@@ -347,12 +348,12 @@ export async function POST(req: NextRequest) {
         }).join("\n");
         const skills = (p.skills ?? []).slice(0, 10).map((s: { name: string }) => s.name).join(", ");
         const educations = (p.educations ?? []).slice(0, 2).map((e) =>
-          `${e.degree ?? ""} ${e.fieldOfStudy ?? ""} — ${e.schoolName ?? ""}`.trim()
+          `${e.degree ?? ""} ${e.fieldOfStudy ?? ""} - ${e.schoolName ?? ""}`.trim()
         ).join(", ");
         return [
           `Nom : ${name}`,
           p.profileUrl ? `URL LinkedIn : ${p.profileUrl}` : "",
-          `Headline : ${p.headline ?? "—"}`,
+          `Headline : ${p.headline ?? "-"}`,
           `\nParcours professionnel :`,
           allPositions || "Non disponible",
           skills ? `\nCompétences : ${skills}` : "",
@@ -370,30 +371,31 @@ export async function POST(req: NextRequest) {
 
 Tu prepares un briefing de reunion. Suis les instructions du guide ci-dessus.
 Tu recois des donnees issues de HubSpot, Gmail, Slack et du web.
-Si tu manques de donnees pour une section, dis-le explicitement — ne fabrique rien.
+Si tu manques de donnees pour une section, dis-le explicitement - ne fabrique rien.
 REGLE ABSOLUE : chaque point = 1 phrase max. Pas de paragraphes. Tout structuré.
+${NO_EM_DASH_RULE}
 
-IMPORTANT — isSalesMeeting :
+IMPORTANT - isSalesMeeting :
 - Mets isSalesMeeting=true UNIQUEMENT si la réunion est clairement commerciale : prospect, client, deal en cours, démo, closing.
 - Mets isSalesMeeting=false pour les réunions internes, partenaires, coaching, support, onboarding, ou si le contexte ne montre pas de lien commercial clair.
 - Si isSalesMeeting=false, NE REMPLIS PAS dealQualification ni dealAnalysis (laisse null/undefined).
 
-IMPORTANT — séparation contextSummary vs dealAnalysis (RÈGLE STRICTE) :
+IMPORTANT - séparation contextSummary vs dealAnalysis (RÈGLE STRICTE) :
 - contextSummary = NARRATIF business : qui est l'entreprise, son marché, sa dynamique stratégique, l'historique de la relation. PAS de mention du stage HubSpot, des montants CRM, ni du funnel.
 - dealAnalysis = FACTUEL CRM : où en est le deal côté HubSpot (stage, momentum, signaux d'achat/de risque visibles dans les engagements et le pipeline). PAS de blabla narratif business.
 - Les deux blocs doivent être strictement complémentaires. Une info CRM va dans dealAnalysis. Une info business/stratégique va dans contextSummary. Aucune redite.
 - Si aucun deal HubSpot n'est associé au meeting, mets dealAnalysis à null (ne pas inventer).
 
-IMPORTANT — linkedinInsights :
+IMPORTANT - linkedinInsights :
 - Remplis linkedinInsights UNIQUEMENT si une section "=== PROFILS LINKEDIN ===" est présente dans le contexte ci-dessus.
-- Si cette section est absente, laisse linkedinInsights vide (tableau vide ou undefined). Ne déduis JAMAIS un profil LinkedIn depuis HubSpot, Gmail, Slack ou le web — ces sources ne sont PAS LinkedIn.
+- Si cette section est absente, laisse linkedinInsights vide (tableau vide ou undefined). Ne déduis JAMAIS un profil LinkedIn depuis HubSpot, Gmail, Slack ou le web - ces sources ne sont PAS LinkedIn.
 - Pour chaque profil, recopier verbatim l'URL LinkedIn fournie dans le champ "URL LinkedIn :" du contexte dans le champ linkedinUrl. Ne JAMAIS inventer ni reconstruire cette URL.
 
 Utilise l'outil generate_briefing pour retourner le briefing.`;
 
     const eventDate = eventStart ? new Date(eventStart).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "";
 
-    const userPrompt = `Réunion : "${eventTitle}"${eventDate ? ` — ${eventDate}` : ""}
+    const userPrompt = `Réunion : "${eventTitle}"${eventDate ? ` - ${eventDate}` : ""}
 Participants externes : ${attendees.map((a) => `${a.displayName ?? ""} <${a.email}>`).join(", ")}
 
 ${contextBlock || "Aucune donnée trouvée dans les sources connectées."}

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { logUsage } from "../log-usage";
 import { withAnthropicRetry } from "../anthropic-retry";
 import { getModelPreference } from "../models/get-model-preference";
+import { NO_EM_DASH_RULE } from "@/lib/no-em-dash";
 import { renderClientContextForPrompt, type ClientEnrichmentContext } from "./context";
 import type { CoachBrief } from "./types";
 
@@ -31,8 +32,9 @@ Règles ABSOLUES :
 - N'invente RIEN. Si une info n'est pas dans le contexte, laisse le field à
   null. Mieux vaut un brief partiel qu'un brief faux.
 - Style : sobre, factuel, neutre. Pas de superlatifs. Pas de "exciting
-  opportunity" / "amazing client" — un coach lit ça pour préparer, pas pour
+  opportunity" / "amazing client" - un coach lit ça pour préparer, pas pour
   se motiver.
+- ${NO_EM_DASH_RULE}
 - Langue : adapte-toi à la langue dominante des transcripts. Si tout est en
   français, écris en français. Si c'est mixte, écris en anglais (lingua
   franca des coachs internationaux).
@@ -57,7 +59,7 @@ Structure des champs (cf. tool input_schema) :
   Coachello (self-assessment, peer feedback, etc.). Si rien d'explicite,
   laisse null.
 - ai_coaching : true / false / null. Coachello a une offre humaine ET une
-  offre IA — déduire de la formule signée.
+  offre IA - déduire de la formule signée.
 - coachello_app : "Slack" / "Teams" / "Email" / null si pas mentionné.
 - briefing_meeting_date : ISO date (YYYY-MM-DD) ou null. C'est la réunion
   qu'on fait avec les coachs avant le démarrage du programme.

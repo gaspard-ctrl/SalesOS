@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db";
 import { logUsage } from "@/lib/log-usage";
 import { BUSINESS_CONTEXT, BUSINESS_CONTEXT_HASH } from "@/lib/business-context";
+import { stripEmDashes } from "@/lib/no-em-dash";
 import type { Keyword, KeywordRelevance } from "@/lib/marketing-types";
 
 const BATCH_SIZE = 40;
@@ -56,7 +57,7 @@ ${BUSINESS_CONTEXT.company}
 Target buyers: ${BUSINESS_CONTEXT.audience.join(", ")}
 Core offerings: ${BUSINESS_CONTEXT.coreActivities.join("; ")}
 
-## What IS relevant — an HR/L&D decision-maker evaluating coaching solutions
+## What IS relevant - an HR/L&D decision-maker evaluating coaching solutions
 ${BUSINESS_CONTEXT.relevantTopics.map((t) => "- " + t).join("\n")}
 
 ## What is EXPLICITLY NOT relevant (cap score at 15-20, category "irrelevant")
@@ -64,22 +65,22 @@ ${BUSINESS_CONTEXT.excludedTopics.map((t) => "- " + t).join("\n")}
 
 ## THE CORE TEST
 Ask: "Does this query represent an HR/L&D buyer actively researching or considering a B2B coaching platform?"
-Not "is this HR-adjacent?" — that's too lenient. The keyword must move a buyer closer to purchase.
+Not "is this HR-adjacent?" - that's too lenient. The keyword must move a buyer closer to purchase.
 
-## Scoring scale — use the full 0-100 range, do NOT default to 50
+## Scoring scale - use the full 0-100 range, do NOT default to 50
 - 90-100 bullseye: explicit buyer intent, e.g. "leadership coaching platform for enterprise", "executive coaching ROI", "best coaching software for L&D"
 - 70-89 strong: clear B2B HR buyer topic, e.g. "first-time manager training programs", "scaling leadership development", "measuring coaching effectiveness"
 - 40-69 partial: leadership/coaching theme but audience or intent is ambiguous, e.g. "what is team coaching", "coaching styles explained"
-- 15-39 weak: HR-adjacent but not buyer intent — employee self-help, definition lookups, niche HR concepts with no purchase signal, e.g. "survivor syndrome", "career advice after layoff"
-- 0-14 irrelevant: matches excluded list — branded queries, consumer wellness, job-seeker content, lifestyle listicles, generic "questions to ask" formats
+- 15-39 weak: HR-adjacent but not buyer intent - employee self-help, definition lookups, niche HR concepts with no purchase signal, e.g. "survivor syndrome", "career advice after layoff"
+- 0-14 irrelevant: matches excluded list - branded queries, consumer wellness, job-seeker content, lifestyle listicles, generic "questions to ask" formats
 
-## Concrete anti-patterns — classify these as irrelevant/weak, NOT relevant
+## Concrete anti-patterns - classify these as irrelevant/weak, NOT relevant
 - Branded queries naming Coachello, its URL, or competitor brand names → irrelevant (score ≤15)
 - Employee-side content ("survivor syndrome", "how to cope with", "career change") → weak (score ≤35) unless clearly reframed for HR action
 - Definition/academic lookups ("what is X", "X meaning") → partial (score ~45) unless the concept is clearly buyer-intent
 - Generic listicles ("bucket list", "icebreaker questions", "fun team activities") → irrelevant (score ≤20)
 - Certification/how-to-become-a-coach content → irrelevant (we sell to buyers, not coaches-in-training)
-- Non-English keywords use the same axis — language is not a factor
+- Non-English keywords use the same axis - language is not a factor
 
 ## Keywords to classify (${keywords.length})
 ${keywords.map((k, i) => `${i + 1}. "${k}"`).join("\n")}
@@ -138,7 +139,7 @@ async function classifyBatch(
     keyword: c.keyword.trim().toLowerCase(),
     relevanceScore: clamp(Math.round(c.score), 0, 100),
     category: c.category,
-    reason: (c.reason ?? "").slice(0, 240),
+    reason: stripEmDashes(c.reason ?? "").slice(0, 240),
   }));
 }
 

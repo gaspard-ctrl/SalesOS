@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { withAnthropicRetry } from "../anthropic-retry";
 import { logUsage } from "../log-usage";
 import { getModelPreference } from "../models/get-model-preference";
+import { NO_EM_DASH_RULE, stripEmDashes } from "@/lib/no-em-dash";
 import type { ClientEnrichmentContext } from "./context";
 import type { Health } from "./types";
 
@@ -36,7 +37,7 @@ export async function generateHealthSummary(
     .map((m) => {
       const date = m.meeting_started_at?.slice(0, 10) ?? "?";
       const recap = m.meeting_recap_summary?.slice(0, 600) ?? "(pas de recap)";
-      return `- ${date} — ${m.meeting_title ?? "Meeting"} : ${recap}`;
+      return `- ${date} - ${m.meeting_title ?? "Meeting"} : ${recap}`;
     })
     .join("\n");
 
@@ -45,13 +46,15 @@ export async function generateHealthSummary(
 
   const prompt = `Tu analyses la santé d'un compte client Coachello (CS post-signature).
 
-Score : ${health.score}/100 — ${labelFr}.
+Score : ${health.score}/100 - ${labelFr}.
 Facteurs calculés : ${health.drivers?.join(" ; ") || "(aucun)"}.
 
 Derniers échanges (meetings récents) :
 ${recentMeetings || "(aucun meeting récent analysé)"}
 
-Écris UNE seule phrase courte (max 35 mots), dans la langue dominante des derniers échanges (anglais par défaut si mixte ou incertain), qui explique pourquoi le compte est à ce niveau, en t'appuyant SURTOUT sur les derniers échanges (ton, sujets, signaux concrets). Pas de préambule, pas de guillemets, juste la phrase.`;
+Écris UNE seule phrase courte (max 35 mots), dans la langue dominante des derniers échanges (anglais par défaut si mixte ou incertain), qui explique pourquoi le compte est à ce niveau, en t'appuyant SURTOUT sur les derniers échanges (ton, sujets, signaux concrets). Pas de préambule, pas de guillemets, juste la phrase.
+
+${NO_EM_DASH_RULE}`;
 
   const client = new Anthropic({ timeout: 120_000 });
   const msg = await withAnthropicRetry(
@@ -68,5 +71,5 @@ ${recentMeetings || "(aucun meeting récent analysé)"}
 
   const block = msg.content.find((b) => b.type === "text");
   const text = block && "text" in block ? block.text.trim() : "";
-  return text || null;
+  return text ? stripEmDashes(text) : null;
 }

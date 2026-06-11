@@ -9,6 +9,7 @@ import {
   CLIENT_FIELDS_TOOL,
 } from "./prompt";
 import { getModelPreference } from "../models/get-model-preference";
+import { NO_EM_DASH_RULE } from "@/lib/no-em-dash";
 import { parseClientFieldsFromClaude } from "./parse-output";
 import { fetchClientNews } from "./news";
 import { rankClientNews } from "./rank-news";
@@ -164,7 +165,7 @@ export async function runClientRefresh(
           client.messages.create({
             model: clientsModel,
             max_tokens: 8000,
-            system: CLIENT_EXTRACTION_SYSTEM_PROMPT,
+            system: `${CLIENT_EXTRACTION_SYSTEM_PROMPT}\n\n${NO_EM_DASH_RULE}`,
             messages: [{ role: "user", content: contextPrompt }],
             tools: [CLIENT_FIELDS_TOOL],
             tool_choice: { type: "tool" as const, name: "client_fields" },
