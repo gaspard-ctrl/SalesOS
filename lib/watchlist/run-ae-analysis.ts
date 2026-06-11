@@ -56,7 +56,7 @@ Réponds UNIQUEMENT via l'outil emit_ae_analysis :
 - relationship_state : never_contacted | cold (échanges anciens ou restés sans réponse) | warm (échanges récents et positifs) | active (deal ouvert en cours) | lost_deal (deal perdu récemment).
 - state_summary : 1 à 2 phrases max. L'essentiel : où on en est avec ce compte et le point d'entrée. Pas de paragraphe, pas de liste d'actions (l'action, c'est contacter les contacts listés).
 - story_to_tell : une accroche de social proof prête à dire/écrire, basée sur le secteur du prospect ET notre liste de clients actuels fournie en contexte. Cite uniquement des clients RÉELS de la liste fournie, du même secteur ou d'un secteur proche. Chaîne vide si aucun client pertinent.
-- priority_contacts : 3 à 5 contacts classés. Pour chacun : name, role, rationale (1 phrase, fait précis), opening_message (le message complet prêt à adapter : signal réel ou fait entreprise en ouverture, problème nommé avant Coachello, 100-200 mots, un seul CTA, signé "[Prénom expéditeur]"), email et hubspot_id si connus. Varie les ouvertures d'un contact à l'autre, adaptées à son rôle.
+- priority_contacts : 3 à 5 contacts classés. Pour chacun : name, role, rationale (1 phrase, fait précis), opening_subject (objet de mail court, 3 à 7 mots, spécifique au compte ou au signal, jamais "Coaching pour vos managers" ni un objet qui sent la prospection de masse), opening_message (le message complet prêt à adapter : signal réel ou fait entreprise en ouverture, problème nommé avant Coachello, 100-200 mots, un seul CTA, signé "[Prénom expéditeur]"), email et hubspot_id si connus. Varie les ouvertures et les objets d'un contact à l'autre, adaptés à son rôle.
 - watch_outs : 0 à 3 points courts, uniquement des risques réels du contexte (contact parti, deal perdu récent, concurrent en place, mauvais timing). Liste vide si rien de réel.
 - sources_used : { emails, news, sector, world_knowledge } selon ce qui a réellement servi.`;
 }
@@ -93,6 +93,10 @@ const ANALYSIS_TOOL = {
               type: "string",
               description: "1 phrase : pourquoi cibler cette personne, ancrée sur un fait précis du contexte",
             },
+            opening_subject: {
+              type: "string",
+              description: "Objet de mail court (3 à 7 mots), spécifique au compte ou au signal",
+            },
             opening_message: {
               type: "string",
               description:
@@ -101,7 +105,7 @@ const ANALYSIS_TOOL = {
             email: { type: ["string", "null"] },
             hubspot_id: { type: ["string", "null"] },
           },
-          required: ["name", "rationale", "opening_message"],
+          required: ["name", "rationale", "opening_subject", "opening_message"],
         },
       },
       watch_outs: {
@@ -283,6 +287,7 @@ function normalizeContact(c: Record<string, unknown>): AeContact {
     role: typeof c.role === "string" ? c.role : null,
     rationale: typeof c.rationale === "string" ? c.rationale : "",
     angle: "", // legacy v1, plus généré
+    opening_subject: typeof c.opening_subject === "string" ? c.opening_subject : null,
     opening_message: typeof c.opening_message === "string" ? c.opening_message : null,
     email: typeof c.email === "string" ? c.email : null,
     hubspot_id: typeof c.hubspot_id === "string" ? c.hubspot_id : null,

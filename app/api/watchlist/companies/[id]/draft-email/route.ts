@@ -204,6 +204,7 @@ function buildPrompt(input: {
       for (const c of ae.priority_contacts.slice(0, 5)) {
         const hook = c.opening_message ?? c.angle;
         lines.push(`- ${c.name}${c.role ? ` (${c.role})` : ""} - ${c.rationale}`);
+        if (c.opening_subject) lines.push(`  Objet proposé : ${c.opening_subject}`);
         if (hook) lines.push(`  Message proposé : ${hook.replace(/\n/g, " / ")}`);
       }
     }

@@ -238,7 +238,7 @@ function ContactRow({
         <p style={{ margin: "6px 0 0", fontSize: 11, color: COLORS.ink2, lineHeight: 1.5 }}>{contact.rationale}</p>
       )}
       {contact.opening_message ? (
-        <OpeningMessage text={contact.opening_message} />
+        <OpeningMessage subject={contact.opening_subject ?? null} text={contact.opening_message} />
       ) : (
         contact.angle && (
           <p style={{ margin: "4px 0 0", fontSize: 11, color: COLORS.ink1, lineHeight: 1.5 }}>
@@ -250,12 +250,12 @@ function ContactRow({
   );
 }
 
-function OpeningMessage({ text }: { text: string }) {
+function OpeningMessage({ subject, text }: { subject: string | null; text: string }) {
   const [copied, setCopied] = React.useState(false);
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(subject ? `Subject: ${subject}\n\n${text}` : text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -307,6 +307,9 @@ function OpeningMessage({ text }: { text: string }) {
           {copied ? <Check size={10} /> : <Copy size={10} />} {copied ? "Copied" : "Copy"}
         </button>
       </div>
+      {subject && (
+        <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: COLORS.ink0 }}>{subject}</p>
+      )}
       <p style={{ margin: 0, fontSize: 11, color: COLORS.ink1, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{text}</p>
     </div>
   );
