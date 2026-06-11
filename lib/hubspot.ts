@@ -273,14 +273,17 @@ type DealGetResponse = { properties?: Record<string, string> };
 type AssocResponse = { results?: { id: string }[] };
 type OwnersResponse = { results?: { id: string; firstName?: string; lastName?: string; email?: string }[] };
 type PipelinesResponse = { results?: { label?: string; stages: { id: string; label: string }[] }[] };
-type SearchResultRow = { properties?: Record<string, string> };
+type SearchResultRow = { id?: string; properties?: Record<string, string> };
 
 /**
  * Fetch a full context snapshot for a HubSpot deal: properties, associated
  * contacts (top 5), engagement timeline (meetings/calls/notes), owner name,
  * and pipeline stage label. Returns null if the deal can't be fetched.
  */
-export async function fetchDealContext(dealId: string): Promise<DealSnapshot | null> {
+export async function fetchDealContext(
+  dealId: string,
+  opts?: { includeCompanyActivities?: boolean },
+): Promise<DealSnapshot | null> {
   if (!dealId || !process.env.HUBSPOT_ACCESS_TOKEN) return null;
 
   const [dealRes, contactAssoc, engagementAssoc, companyAssoc, ownersRes, pipelinesRes] = await Promise.allSettled([
@@ -356,32 +359,38 @@ export async function fetchDealContext(dealId: string): Promise<DealSnapshot | n
     }
   }
 
+  // companyId remonté tôt : sert à la fois au fetch des activités niveau
+  // company (option includeCompanyActivities) et au snapshot company plus bas.
+  const companyId = companyAssoc.status === "fulfilled"
+    ? (companyAssoc.value.results ?? [])[0]?.id ?? null
+    : null;
+
   const engagements: DealEngagementSnapshot[] = [];
   const engIds = engagementAssoc.status === "fulfilled"
     ? (engagementAssoc.value.results ?? []).map((r) => r.id)
     : [];
 
-  if (engIds.length > 0) {
-    // 100 = limite max HubSpot par page. On laisse 1 seule page pour chaque
-    // source — rarement plus de 100 meetings/calls/notes par deal. Pour les
-    // emails on paginate via hubspotSearchAll (jusqu'à 500) car certains
-    // deals matures ont 200-300 emails et la richesse de cette source justifie
-    // de tout remonter.
+  // Lance les 4 recherches d'engagements (meetings/calls/notes/emails) pour un
+  // filtre d'association donné (deal ou company). 100 = limite max HubSpot par
+  // page ; 1 seule page pour meetings/calls/notes (rarement >100), pagination
+  // jusqu'à 500 pour les emails (deals matures = 200-300 emails).
+  type RowResults = { meetings: SearchResultRow[]; calls: SearchResultRow[]; notes: SearchResultRow[]; emails: SearchResultRow[] };
+  const fetchEngagementRows = async (filterProp: string, filterValue: string): Promise<RowResults> => {
     const [meetingsRes, callsRes, notesRes, emailsRes] = await Promise.allSettled([
       hubspotFetch<{ results?: SearchResultRow[] }>("/crm/v3/objects/meetings/search", "POST", {
-        filterGroups: [{ filters: [{ propertyName: "associations.deal", operator: "EQ", value: dealId }] }],
+        filterGroups: [{ filters: [{ propertyName: filterProp, operator: "EQ", value: filterValue }] }],
         properties: ["hs_meeting_title", "hs_meeting_body", "hs_timestamp", "hs_meeting_outcome"],
         sorts: [{ propertyName: "hs_timestamp", direction: "DESCENDING" }],
         limit: 100,
       }),
       hubspotFetch<{ results?: SearchResultRow[] }>("/crm/v3/objects/calls/search", "POST", {
-        filterGroups: [{ filters: [{ propertyName: "associations.deal", operator: "EQ", value: dealId }] }],
+        filterGroups: [{ filters: [{ propertyName: filterProp, operator: "EQ", value: filterValue }] }],
         properties: ["hs_call_title", "hs_call_body", "hs_timestamp", "hs_call_disposition"],
         sorts: [{ propertyName: "hs_timestamp", direction: "DESCENDING" }],
         limit: 100,
       }),
       hubspotFetch<{ results?: SearchResultRow[] }>("/crm/v3/objects/notes/search", "POST", {
-        filterGroups: [{ filters: [{ propertyName: "associations.deal", operator: "EQ", value: dealId }] }],
+        filterGroups: [{ filters: [{ propertyName: filterProp, operator: "EQ", value: filterValue }] }],
         properties: ["hs_note_body", "hs_timestamp"],
         sorts: [{ propertyName: "hs_timestamp", direction: "DESCENDING" }],
         limit: 100,
@@ -389,7 +398,7 @@ export async function fetchDealContext(dealId: string): Promise<DealSnapshot | n
       hubspotSearchAll<SearchResultRow>(
         "emails" as HubspotObjectType,
         {
-          filterGroups: [{ filters: [{ propertyName: "associations.deal", operator: "EQ", value: dealId }] }],
+          filterGroups: [{ filters: [{ propertyName: filterProp, operator: "EQ", value: filterValue }] }],
           properties: [
             "hs_email_subject",
             "hs_email_text",
@@ -402,91 +411,101 @@ export async function fetchDealContext(dealId: string): Promise<DealSnapshot | n
           limit: 100,
         },
         500,
-      ).then((results) => ({ results })),
+      ),
     ]);
+    return {
+      meetings: meetingsRes.status === "fulfilled" ? meetingsRes.value.results ?? [] : [],
+      calls: callsRes.status === "fulfilled" ? callsRes.value.results ?? [] : [],
+      notes: notesRes.status === "fulfilled" ? notesRes.value.results ?? [] : [],
+      emails: emailsRes.status === "fulfilled" ? emailsRes.value : [],
+    };
+  };
 
-    if (meetingsRes.status === "fulfilled") {
-      for (const m of meetingsRes.value.results ?? []) {
-        const mp = m.properties ?? {};
-        engagements.push({
-          type: "meeting",
-          date: mp.hs_timestamp ?? null,
-          title: mp.hs_meeting_title ?? null,
-          body: stripHtml(mp.hs_meeting_body ?? "").slice(0, 1500),
-        });
-      }
+  // Mappe une search-row HubSpot vers un DealEngagementSnapshot selon son type.
+  const mapRow = (type: DealEngagementSnapshot["type"], row: SearchResultRow): DealEngagementSnapshot => {
+    const props = row.properties ?? {};
+    if (type === "meeting") {
+      return { type, date: props.hs_timestamp ?? null, title: props.hs_meeting_title ?? null, body: stripHtml(props.hs_meeting_body ?? "").slice(0, 1500) };
     }
-    if (callsRes.status === "fulfilled") {
-      for (const c of callsRes.value.results ?? []) {
-        const cp = c.properties ?? {};
-        engagements.push({
-          type: "call",
-          date: cp.hs_timestamp ?? null,
-          title: cp.hs_call_title ?? null,
-          body: stripHtml(cp.hs_call_body ?? "").slice(0, 1500),
-        });
-      }
+    if (type === "call") {
+      return { type, date: props.hs_timestamp ?? null, title: props.hs_call_title ?? null, body: stripHtml(props.hs_call_body ?? "").slice(0, 1500) };
     }
-    if (notesRes.status === "fulfilled") {
-      for (const n of notesRes.value.results ?? []) {
-        const np = n.properties ?? {};
-        engagements.push({
-          type: "note",
-          date: np.hs_timestamp ?? null,
-          title: null,
-          body: stripHtml(np.hs_note_body ?? "").slice(0, 2000),
-        });
-      }
+    if (type === "note") {
+      return { type, date: props.hs_timestamp ?? null, title: null, body: stripHtml(props.hs_note_body ?? "").slice(0, 2000) };
     }
-    if (emailsRes.status === "fulfilled") {
-      for (const e of emailsRes.value.results ?? []) {
-        const ep = e.properties ?? {};
-        const direction = ep.hs_email_direction === "INCOMING_EMAIL" ? "in" : "out";
-        // hs_email_text est plain text quand HubSpot l'a indexé ; sinon on
-        // strip le HTML. Beaucoup d'emails commerciaux ont les deux mais le
-        // texte est plus propre.
-        const bodyRaw = ep.hs_email_text || stripHtml(ep.hs_email_html ?? "");
-        engagements.push({
-          type: "email",
-          date: ep.hs_timestamp ?? null,
-          title: ep.hs_email_subject ?? null,
-          body: bodyRaw.slice(0, 2500),
-          direction,
-        });
-      }
-    }
+    // email : hs_email_text est plain text quand HubSpot l'a indexé ; sinon on
+    // strip le HTML. Beaucoup d'emails commerciaux ont les deux mais le texte
+    // est plus propre.
+    const bodyRaw = props.hs_email_text || stripHtml(props.hs_email_html ?? "");
+    return {
+      type,
+      date: props.hs_timestamp ?? null,
+      title: props.hs_email_subject ?? null,
+      body: bodyRaw.slice(0, 2500),
+      direction: props.hs_email_direction === "INCOMING_EMAIL" ? "in" : "out",
+    };
+  };
 
-    engagements.sort((a, b) => {
-      const da = a.date ? new Date(a.date).getTime() : 0;
-      const db = b.date ? new Date(b.date).getTime() : 0;
-      return db - da;
-    });
+  // Dédup par objet HubSpot (type + id) : un même email peut être associé au
+  // deal ET à la company et reviendrait deux fois sinon.
+  const seen = new Set<string>();
+  const ingest = (rows: RowResults) => {
+    const order: Array<[DealEngagementSnapshot["type"], SearchResultRow[]]> = [
+      ["meeting", rows.meetings],
+      ["call", rows.calls],
+      ["note", rows.notes],
+      ["email", rows.emails],
+    ];
+    for (const [type, list] of order) {
+      for (const row of list) {
+        const key = row.id ? `${type}:${row.id}` : null;
+        if (key) {
+          if (seen.has(key)) continue;
+          seen.add(key);
+        }
+        engagements.push(mapRow(type, row));
+      }
+    }
+  };
+
+  // Activités niveau deal (comportement historique).
+  if (engIds.length > 0) {
+    ingest(await fetchEngagementRows("associations.deal", dealId));
   }
 
+  // Activités niveau company (opt-in) : capte les threads associés à la company
+  // / aux contacts mais pas au deal (ex. email d'intro). Dédup vs le deal.
+  if (opts?.includeCompanyActivities && companyId) {
+    ingest(await fetchEngagementRows("associations.company", companyId));
+  }
+
+  engagements.sort((a, b) => {
+    const da = a.date ? new Date(a.date).getTime() : 0;
+    const db = b.date ? new Date(b.date).getTime() : 0;
+    return db - da;
+  });
+
   let company: DealCompanySnapshot | null = null;
-  if (companyAssoc.status === "fulfilled") {
-    const companyId = (companyAssoc.value.results ?? [])[0]?.id;
-    if (companyId) {
-      try {
-        const cRes = await hubspotFetch<{ id: string; properties: Record<string, string> }>(
-          `/crm/v3/objects/companies/${companyId}?properties=name,industry,numberofemployees,city,state,country,lifecyclestage,domain`,
-        );
-        const cp = cRes.properties ?? {};
-        const employees = cp.numberofemployees ? parseInt(cp.numberofemployees, 10) : NaN;
-        company = {
-          id: cRes.id,
-          name: cp.name || null,
-          industry: cp.industry || null,
-          numberofemployees: Number.isFinite(employees) ? employees : null,
-          city: cp.city || null,
-          state: cp.state || null,
-          country: cp.country || null,
-          lifecyclestage: cp.lifecyclestage || null,
-          domain: cp.domain || null,
-        };
-      } catch {
-        // Company fetch is best-effort — recap still works without it
-      }
+  if (companyId) {
+    try {
+      const cRes = await hubspotFetch<{ id: string; properties: Record<string, string> }>(
+        `/crm/v3/objects/companies/${companyId}?properties=name,industry,numberofemployees,city,state,country,lifecyclestage,domain`,
+      );
+      const cp = cRes.properties ?? {};
+      const employees = cp.numberofemployees ? parseInt(cp.numberofemployees, 10) : NaN;
+      company = {
+        id: cRes.id,
+        name: cp.name || null,
+        industry: cp.industry || null,
+        numberofemployees: Number.isFinite(employees) ? employees : null,
+        city: cp.city || null,
+        state: cp.state || null,
+        country: cp.country || null,
+        lifecyclestage: cp.lifecyclestage || null,
+        domain: cp.domain || null,
+      };
+    } catch {
+      // Company fetch is best-effort — recap still works without it
     }
   }
 
