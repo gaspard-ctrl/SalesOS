@@ -43,6 +43,19 @@ function personalize(text: string, r: DraftRecipient): string {
   return text.replace(FIRST_NAME_TOKEN, firstNameOf(r));
 }
 
+function hasFirstNameToken(text: string): boolean {
+  return /\[(pr[ée]nom|first[ _]?name)\]/i.test(text);
+}
+
+// Garantit la présence du token : remplace le prénom d'une salutation existante,
+// sinon préfixe une salutation. Filet de sécurité après "Draft with Claude".
+function ensureFirstNameToken(text: string): string {
+  if (!text.trim() || hasFirstNameToken(text)) return text;
+  const greeted = text.replace(/^(\s*(?:bonjour|hello|hi|salut|hey|dear)[ \t]+)[^,\n!]+/i, "$1[prénom]");
+  if (hasFirstNameToken(greeted)) return greeted;
+  return `Bonjour [prénom],\n\n${text.replace(/^\s+/, "")}`;
+}
+
 /**
  * Drafteur de mail complet (panneau droit de la fiche Watch List).
  * - Les contacts sélectionnés (contacts card / analyse AE) arrivent en BCC.
@@ -128,12 +141,12 @@ export function MailDrafter({
       const res = await fetch(`/api/watchlist/companies/${companyId}/draft-email`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ instructions, recipients }),
+        body: JSON.stringify({ instructions, recipients, personalized }),
       });
       const data = (await res.json()) as DraftEmailResult;
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
       setSubject(data.subject ?? "");
-      setBody(data.body ?? "");
+      setBody(personalized ? ensureFirstNameToken(data.body ?? "") : (data.body ?? ""));
     } catch (e) {
       setResult({ ok: false, msg: e instanceof Error ? e.message : "Error" });
     } finally {
@@ -141,13 +154,10 @@ export function MailDrafter({
     }
   }
 
-  // Active le mode personnalisé ; insère "Bonjour [prénom]," si aucun token présent.
+  // Active le mode personnalisé ; insère le token [prénom] si absent.
   function togglePersonalized(on: boolean) {
     setPersonalized(on);
-    const hasToken = /\[(pr[ée]nom|first[ _]?name)\]/i.test(body);
-    if (on && !hasToken) {
-      setBody((prev) => `Bonjour [prénom],\n\n${prev.replace(/^\s+/, "")}`);
-    }
+    if (on) setBody((prev) => (prev.trim() ? ensureFirstNameToken(prev) : "Bonjour [prénom],\n\n"));
   }
 
   // Envoi personnalisé : un email par prospect (To = prospect), tokens remplacés.

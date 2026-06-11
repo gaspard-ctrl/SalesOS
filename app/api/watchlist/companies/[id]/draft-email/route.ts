@@ -78,9 +78,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const body = (await req.json().catch(() => ({}))) as {
     instructions?: string;
     recipients?: DraftRecipient[];
+    personalized?: boolean;
   };
   const instructions = (body.instructions ?? "").trim();
   const recipients = Array.isArray(body.recipients) ? body.recipients.filter((r) => r?.email) : [];
+  const personalized = body.personalized === true;
 
   const { data: company, error: companyErr } = await db
     .from("scope_companies")
@@ -109,6 +111,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     senderName,
     instructions,
     recipients,
+    personalized,
     hubspot,
     ae,
     news,
@@ -149,13 +152,14 @@ function buildPrompt(input: {
   senderName: string;
   instructions: string;
   recipients: DraftRecipient[];
+  personalized: boolean;
   hubspot: HubspotRecapContent | null;
   ae: AeAnalysisContent | null;
   news: NewsContent | null;
   rosterText: string;
   guide: string;
 }): string {
-  const { company, senderName, instructions, recipients, hubspot, ae, news, rosterText, guide } = input;
+  const { company, senderName, instructions, recipients, personalized, hubspot, ae, news, rosterText, guide } = input;
   const lines: string[] = [];
 
   lines.push(`Expéditeur : ${senderName} (Coachello).`);
@@ -175,6 +179,22 @@ function buildPrompt(input: {
     lines.push(`Destinataires : ${names}.`);
   } else {
     lines.push("Destinataires : non précisés (rédige un email générique adressable au prospect).");
+  }
+
+  // Mode envoi personnalisé : un même brouillon envoyé individuellement à chaque
+  // prospect, le token [prénom] / [first name] est remplacé côté client à l'envoi.
+  if (personalized) {
+    lines.push("");
+    lines.push("## Mode envoi personnalisé (IMPORTANT)");
+    lines.push(
+      "Ce brouillon sera envoyé individuellement à chaque destinataire, avec son prénom injecté automatiquement.",
+    );
+    lines.push(
+      'Commence le mail par une salutation contenant le token littéral "[first name]" (ou "[prénom]" si le mail est en français). N\'écris JAMAIS un vrai prénom : le token sera remplacé pour chaque prospect.',
+    );
+    lines.push(
+      "Le reste du mail doit convenir à TOUS les destinataires : ne mentionne ni le nom, ni le rôle d'une personne en particulier.",
+    );
   }
 
   // Instructions utilisateur (priorité)
