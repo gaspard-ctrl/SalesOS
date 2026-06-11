@@ -39,7 +39,10 @@ export function AeAnalysisCard({
   onRefresh?: () => void;
   isRefreshing?: boolean;
   clientError?: string | null;
-  onProspect?: (recipients: DraftRecipient[]) => void;
+  onProspect?: (
+    recipients: DraftRecipient[],
+    seed?: { subject: string | null; body: string | null },
+  ) => void;
 }) {
   const baseStatus = brief?.status ?? "idle";
   const status = isRefreshing && baseStatus !== "running" ? "running" : baseStatus;
@@ -137,7 +140,11 @@ export function AeAnalysisCard({
                     contact={c}
                     onProspect={
                       c.email && onProspect
-                        ? () => onProspect([{ name: c.name, email: c.email as string }])
+                        ? () =>
+                            onProspect([{ name: c.name, email: c.email as string }], {
+                              subject: c.opening_subject ?? null,
+                              body: c.opening_message ?? null,
+                            })
                         : undefined
                     }
                   />
