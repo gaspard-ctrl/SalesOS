@@ -8,6 +8,7 @@ import { fetchKeywords } from "@/lib/google-search-console";
 import { fetchAllArticles } from "@/lib/wordpress";
 import { classifyKeywords } from "@/lib/keyword-relevance";
 import { BUSINESS_CONTEXT_PROMPT_BLOCK } from "@/lib/business-context";
+import { NO_EM_DASH_RULE_EN } from "@/lib/no-em-dash";
 import { runArticleGeneration } from "@/lib/marketing/generate-article";
 import { getModelPreference } from "@/lib/models/get-model-preference";
 import type { Keyword, KeywordRelevance } from "@/lib/marketing-types";
@@ -450,7 +451,7 @@ async function runAnalysis(userId: string) {
 
   // ── 3. CONTENT GAPS: Claude proposes ideas — can pick from GSC or propose new angles ─
   const topPerformersText = topPerformers.length > 0
-    ? topPerformers.map((p) => `- "${p.title}" — ${p.sessions} sessions`).join("\n")
+    ? topPerformers.map((p) => `- "${p.title}" - ${p.sessions} sessions`).join("\n")
     : "(none)";
 
   const topEligibleForPrompt = eligibleKeywords
@@ -460,7 +461,7 @@ async function runAnalysis(userId: string) {
   const gscKeywordsText = topEligibleForPrompt.length > 0
     ? topEligibleForPrompt.map((k) => {
         const rel = relOf(k.keyword)!;
-        return `- "${k.keyword}" — ${k.impressions} imp., pos ${k.position}, CTR ${k.ctr}% · relevance ${rel.relevanceScore}/100`;
+        return `- "${k.keyword}" - ${k.impressions} imp., pos ${k.position}, CTR ${k.ctr}% · relevance ${rel.relevanceScore}/100`;
       }).join("\n")
     : "(no relevant keywords in Search Console)";
 
@@ -483,7 +484,7 @@ async function runAnalysis(userId: string) {
             properties: {
               topic: {
                 type: "string",
-                description: "Specific article title — distinctive angle, not a banal listicle",
+                description: "Specific article title - distinctive angle, not a banal listicle",
               },
               targetKeyword: {
                 type: "string",
@@ -496,7 +497,7 @@ async function runAnalysis(userId: string) {
               },
               rationale: {
                 type: "string",
-                description: "Why this article — cite GSC numbers when from search_console; for organic_insight, explain the gap and why it extends a winning pattern",
+                description: "Why this article - cite GSC numbers when from search_console; for organic_insight, explain the gap and why it extends a winning pattern",
               },
               relevanceReason: {
                 type: "string",
@@ -528,7 +529,8 @@ ${gscKeywordsText}
 Propose 3 article ideas. At least 1 MUST be an organic_insight (your own keyword proposal, NOT from the GSC list). The others can be from GSC or organic.
 
 Rules:
-- Build on what already works — pick angles that extend a top-performing pattern, not random new bets
+- ${NO_EM_DASH_RULE_EN}
+- Build on what already works - pick angles that extend a top-performing pattern, not random new bets
 - No banal listicles, no generic "what is X" definitions, no "top 10 tips" filler
 - Each article must have a distinctive angle that positions Coachello as the expert HR/L&D buyers should hire
 - For search_console picks: cite the impressions/position numbers
@@ -646,9 +648,9 @@ async function runThemeSuggestion(userId: string, theme: string) {
   const keywordsText = eligibleKeywords.length > 0
     ? eligibleKeywords.slice(0, 50).map((k) => {
         const rel = relOf(k.keyword)!;
-        return `- "${k.keyword}" — ${k.impressions} imp., ${k.clicks} clicks, CTR ${k.ctr}%, pos. ${k.position} · relevance ${rel.relevanceScore}/100 (${rel.category}): ${rel.reason}`;
+        return `- "${k.keyword}" - ${k.impressions} imp., ${k.clicks} clicks, CTR ${k.ctr}%, pos. ${k.position} · relevance ${rel.relevanceScore}/100 (${rel.category}): ${rel.reason}`;
       }).join("\n")
-    : "No business-relevant Search Console keywords after filtering — suggest based on topic relevance and existing article gaps.";
+    : "No business-relevant Search Console keywords after filtering - suggest based on topic relevance and existing article gaps.";
 
   const themeTool: Anthropic.Tool = {
     name: "suggest_articles_on_theme",
@@ -663,7 +665,7 @@ async function runThemeSuggestion(userId: string, theme: string) {
             type: "object",
             properties: {
               topic: { type: "string", description: "Specific article title, not a generic topic" },
-              targetKeyword: { type: "string", description: "Target keyword — prefer one from the filtered Search Console list if relevant, otherwise a natural keyword for the theme" },
+              targetKeyword: { type: "string", description: "Target keyword - prefer one from the filtered Search Console list if relevant, otherwise a natural keyword for the theme" },
               rationale: { type: "string", description: "Data-backed justification citing real numbers when available, or explaining how it fills a content gap" },
               difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
               priority: { type: "string", enum: ["high", "medium", "low"] },
@@ -685,19 +687,20 @@ ${BUSINESS_CONTEXT_PROMPT_BLOCK}
 The user wants article recommendations around this theme: "${theme}"
 
 Generate 3-5 specific article ideas that:
-1. Fit the user's theme closely — do not stray into unrelated topics
+1. Fit the user's theme closely - do not stray into unrelated topics
 2. Complement what Coachello has already published (avoid duplicates)
 3. Leverage real search demand when possible (use keywords from the filtered list)
 4. Are specific article TITLES, not vague topics
-5. Align with Coachello's B2B leadership-coaching ICP — reject any angle that targets consumer / wellness / job-seeker audiences
+5. Align with Coachello's B2B leadership-coaching ICP - reject any angle that targets consumer / wellness / job-seeker audiences
 
-## All published Coachello articles (${articles.length} total — avoid duplicating these)
+## All published Coachello articles (${articles.length} total - avoid duplicating these)
 ${articlesText}
 
 ## Business-relevant Search Console keywords (pre-filtered)
 ${keywordsText}
 
 ## Rules
+- ${NO_EM_DASH_RULE_EN}
 - Do NOT invent metrics. If citing a number, cite from the keywords list above.
 - Each recommendation needs a data-backed rationale (keyword impressions, content gap vs existing articles, etc.)
 - Target keyword should come from the filtered Search Console list when there's a relevant match

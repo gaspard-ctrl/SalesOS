@@ -4,6 +4,7 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { logUsage } from "@/lib/log-usage";
 import { db } from "@/lib/db";
 import { BUSINESS_CONTEXT_PROMPT_BLOCK } from "@/lib/business-context";
+import { NO_EM_DASH_RULE_EN } from "@/lib/no-em-dash";
 import { getModelPreference } from "@/lib/models/get-model-preference";
 import { fetchLinkedInTrends, fetchWebCoachingTrends } from "@/lib/marketing/linkedin-trends";
 import { runLinkedInPostGeneration } from "@/lib/marketing/generate-linkedin-post";
@@ -297,7 +298,7 @@ async function runAnalysis(userId: string, theme?: string) {
   }
 
   const liText = linkedinTrends.length > 0
-    ? linkedinTrends.map((t, i) => `${i + 1}. "${t.title}"${t.snippet ? ` — ${t.snippet.slice(0, 160)}` : ""}`).join("\n")
+    ? linkedinTrends.map((t, i) => `${i + 1}. "${t.title}"${t.snippet ? ` - ${t.snippet.slice(0, 160)}` : ""}`).join("\n")
     : "(none)";
   const webText = webTrends.length > 0
     ? webTrends.map((t, i) => `${i + 1}. "${t.title}" (${t.source})`).join("\n")
@@ -318,7 +319,7 @@ async function runAnalysis(userId: string, theme?: string) {
               topic: { type: "string", description: "Specific, scroll-worthy post subject (not a vague theme)" },
               angle: { type: "string", description: "The distinctive angle / POV the post should take" },
               targetAudience: { type: "string", description: "Who this post speaks to (e.g. 'HRDs in scaleups', 'first-time managers')" },
-              rationale: { type: "string", description: "Why now — tie it to a trend from the lists above" },
+              rationale: { type: "string", description: "Why now - tie it to a trend from the lists above" },
               priority: { type: "string", enum: ["high", "medium", "low"] },
             },
             required: ["topic", "angle", "targetAudience", "rationale", "priority"],
@@ -343,8 +344,9 @@ ${webText}
 Propose 3 distinct LinkedIn post ideas that:
 - Ride a real trend above (reference it in the rationale), not random new bets
 - Take a sharp, opinionated angle that positions Coachello as the expert HR/L&D buyers should hire
-- Speak to Coachello's B2B leadership-coaching ICP — reject consumer/wellness/job-seeker angles
+- Speak to Coachello's B2B leadership-coaching ICP - reject consumer/wellness/job-seeker angles
 - Are specific post subjects, not vague themes
+- ${NO_EM_DASH_RULE_EN}
 
 Call \`propose_linkedin_posts\`.`;
 

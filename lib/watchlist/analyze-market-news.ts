@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { withAnthropicRetry } from "@/lib/anthropic-retry";
+import { NO_EM_DASH_RULE } from "@/lib/no-em-dash";
 import { logUsage } from "@/lib/log-usage";
 import type { MarketArticle } from "@/lib/brightdata/serp";
 import type { NewsSignalSnapshot } from "@/lib/watchlist/briefs";
@@ -29,6 +30,7 @@ Règles ABSOLUES :
 - Dans le doute, keep=false. Mieux vaut 3 vrais signaux que 11 articles tièdes.
 - Pour chaque article gardé, écris un "insight" : une phrase disant POURQUOI contacter maintenant (le trigger + l'angle d'ouverture pour le commercial).
 - "summary" : 2 à 4 phrases sur les vrais signaux d'achat du moment. S'il n'y a AUCUN signal d'achat, dis-le clairement plutôt que de meubler avec du marketing.
+- ${NO_EM_DASH_RULE}
 - Tu RÉPONDS UNIQUEMENT via l'outil emit_market_intel.`;
 
 const INTEL_TOOL: Anthropic.Tool = {

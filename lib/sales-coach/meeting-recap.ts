@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logUsage } from "../log-usage";
+import { NO_EM_DASH_RULE } from "@/lib/no-em-dash";
 import type { DealSnapshot } from "../hubspot";
 import { renderDealContextForPrompt } from "../hubspot";
 import { extractTitleSearchHint } from "../claap";
@@ -39,35 +40,36 @@ export const MEETING_RECAP_SYSTEM_PROMPT = `Tu es un analyste sales senior chez 
 
 Règles dures :
 - Réponds UNIQUEMENT via l'outil \`meeting_recap\`.
-- Langue : suis la langue dominante du transcript. Ne traduis JAMAIS. Si le transcript est en français, rends les 5 sections en français. Idem anglais. Les labels (Context, Need, etc.) sont injectés côté client — ne les répète pas dans tes valeurs.
+- Langue : suis la langue dominante du transcript. Ne traduis JAMAIS. Si le transcript est en français, rends les 5 sections en français. Idem anglais. Les labels (Context, Need, etc.) sont injectés côté client - ne les répète pas dans tes valeurs.
 - **Format STRICT de chaque section : 1 à 3 bullet points courts.** Un bullet = une ligne commençant par \`- \` (tiret + espace), MAX 15 mots, idéalement 8-12. Sépare chaque bullet par un VRAI saut de ligne (touche Entrée), JAMAIS par les caractères littéraux backslash-n. Aucune phrase composée, aucun paragraphe, aucun sous-bullet. Style télégraphique, dense, scannable en 5 secondes.
 - N'invente JAMAIS de chiffres, montants, noms, dates, industries, employés, localisations qui ne sont pas dans les sources fournies (transcript, deal HubSpot, société HubSpot, contacts HubSpot).
-- Si une section n'a vraiment rien d'utile à dire à partir des sources, **laisse-la complètement vide** (chaîne vide ""). Ne mets pas de phrase placeholder type "Aucun risque identifié" — préfère le vide. Mieux vaut un recap court et dense qu'un recap rempli de fluff.
+- Si une section n'a vraiment rien d'utile à dire à partir des sources, **laisse-la complètement vide** (chaîne vide ""). Ne mets pas de phrase placeholder type "Aucun risque identifié" - préfère le vide. Mieux vaut un recap court et dense qu'un recap rempli de fluff.
 - Priorise impitoyablement : si tu hésites entre 2 et 3 bullets, garde 2. Le lecteur veut l'essentiel en 30 secondes max.
+- ${NO_EM_DASH_RULE}
 
 ---
 
 ## Si audience = CLIENT (compte gagné / Customer Success / passation)
 
-Structure compacte, orientée Customer Success — pas de BANT, pas de concurrence.
+Structure compacte, orientée Customer Success - pas de BANT, pas de concurrence.
 
-1. **context** — Qui + rôle, objectif du meeting, statut compte. Ex: \`- Jessie (DRH Messika) + Julie/Baptiste (Coachello) — réalignement post-congés\`
-2. **need** — Demandes du client (features, expansion, clarifications). Une demande = un bullet.
-3. **risks_competition** — Uniquement risques INTERNES (insatisfactions, churn, blocages). Pas de concurrence.
-4. **opportunities** — Upsells, use cases adjacents, expansion vers d'autres équipes.
-5. **next_steps** — Actions concrètes pour le CSM/AE. Verbes d'action.
+1. **context** - Qui + rôle, objectif du meeting, statut compte. Ex: \`- Jessie (DRH Messika) + Julie/Baptiste (Coachello) - réalignement post-congés\`
+2. **need** - Demandes du client (features, expansion, clarifications). Une demande = un bullet.
+3. **risks_competition** - Uniquement risques INTERNES (insatisfactions, churn, blocages). Pas de concurrence.
+4. **opportunities** - Upsells, use cases adjacents, expansion vers d'autres équipes.
+5. **next_steps** - Actions concrètes pour le CSM/AE. Verbes d'action.
 
 ---
 
 ## Si audience = PROSPECT (deal en cours)
 
-Structure orientée discovery / qualification — les signaux **BANT** et **BOSCHE** doivent transparaître dans les bullets pertinents (sans label explicite).
+Structure orientée discovery / qualification - les signaux **BANT** et **BOSCHE** doivent transparaître dans les bullets pertinents (sans label explicite).
 
-1. **context** — 1-3 bullets max parmi : interlocuteur (nom + rôle + niveau d'autorité : DM / influencer / champion / end-user), objet du meeting, contexte organisationnel pertinent (industrie/taille si disco), trigger / pain. Ne liste PAS tout — sélectionne les 2-3 infos les plus utiles.
-2. **need** — Besoins prospect : features demandées, contraintes (langues, volumes), Budget si mentionné. Un besoin = un bullet.
-3. **risks_competition** — Risques + concurrents + signaux Timeline. Un risque = un bullet.
-4. **opportunities** — Upsells potentiels, expansion, packaging. Un par bullet.
-5. **next_steps** — Actions sales rep. Verbes d'action. Inclut \`next_action\` du scorer IA si fourni.
+1. **context** - 1-3 bullets max parmi : interlocuteur (nom + rôle + niveau d'autorité : DM / influencer / champion / end-user), objet du meeting, contexte organisationnel pertinent (industrie/taille si disco), trigger / pain. Ne liste PAS tout - sélectionne les 2-3 infos les plus utiles.
+2. **need** - Besoins prospect : features demandées, contraintes (langues, volumes), Budget si mentionné. Un besoin = un bullet.
+3. **risks_competition** - Risques + concurrents + signaux Timeline. Un risque = un bullet.
+4. **opportunities** - Upsells potentiels, expansion, packaging. Un par bullet.
+5. **next_steps** - Actions sales rep. Verbes d'action. Inclut \`next_action\` du scorer IA si fourni.
 
 ---
 
@@ -76,7 +78,7 @@ Structure orientée discovery / qualification — les signaux **BANT** et **BOSC
 Pour la section \`context\` ci-dessous, la valeur passée à l'outil est une string où chaque bullet est séparé par un VRAI retour à la ligne (caractère newline réel, pas la séquence backslash-n) :
 
 context :
-- Jessie (PMO Messika) + Julie/Baptiste (Coachello) — réalignement post-congés
+- Jessie (PMO Messika) + Julie/Baptiste (Coachello) - réalignement post-congés
 - 3 meetings à caler : acculturation coachs, webinaire onboarding, RH pilotage
 
 need :
@@ -103,11 +105,11 @@ export const meetingRecapTool: Anthropic.Tool = {
   input_schema: {
     type: "object" as const,
     properties: {
-      context: { type: "string", description: "Section Context — voir prompt système pour la structure exacte selon audience" },
+      context: { type: "string", description: "Section Context - voir prompt système pour la structure exacte selon audience" },
       need: { type: "string", description: "Section Need (besoin prospect / client). Vide autorisé." },
       risks_competition: { type: "string", description: "Section Risks (clients) / Risks + Competition (prospects). Vide autorisé." },
       opportunities: { type: "string", description: "Section Opportunities. Vide autorisé." },
-      next_steps: { type: "string", description: "Section Next Steps (for me) — actions concrètes, une par ligne. Vide autorisé." },
+      next_steps: { type: "string", description: "Section Next Steps (for me) - actions concrètes, une par ligne. Vide autorisé." },
     },
     required: ["context", "need", "risks_competition", "opportunities", "next_steps"],
   },
@@ -239,7 +241,7 @@ export async function generateMeetingRecap(args: {
       sections.push(`- Contacts connus :`);
       for (const c of args.dealSnapshot.contacts) {
         const name = `${c.firstname} ${c.lastname}`.trim() || c.email || "?";
-        sections.push(`  - ${name}${c.jobtitle ? ` — ${c.jobtitle}` : ""}`);
+        sections.push(`  - ${name}${c.jobtitle ? ` - ${c.jobtitle}` : ""}`);
       }
     }
   }

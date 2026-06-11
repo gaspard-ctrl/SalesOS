@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db";
 import { logUsage } from "@/lib/log-usage";
 import { withAnthropicRetry } from "@/lib/anthropic-retry";
+import { stripEmDashes } from "@/lib/no-em-dash";
 import {
   fetchDealContext,
   hubspotBatchAssociations,
@@ -210,7 +211,7 @@ async function extractLeadInfo(lead: Lead): Promise<{
     company: typeof input.company === "string" ? input.company.trim() || null : null,
     source: typeof input.source === "string" ? input.source.trim() || null : null,
     confidence: typeof input.confidence === "number" ? input.confidence : 0,
-    notes: typeof input.notes === "string" ? input.notes : "",
+    notes: typeof input.notes === "string" ? stripEmDashes(input.notes) : "",
   };
 
   return {

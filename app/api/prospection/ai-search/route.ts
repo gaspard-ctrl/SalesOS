@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { logUsage } from "@/lib/log-usage";
 import { db } from "@/lib/db";
+import { NO_EM_DASH_RULE, stripEmDashes } from "@/lib/no-em-dash";
 
 export const dynamic = "force-dynamic";
 
@@ -161,7 +162,8 @@ Analyse sa demande en langage naturel, utilise l'outil search_contacts pour trou
 Tu peux faire 1 à 3 appels selon la complexité de la demande.
 À la fin, réponds en JSON avec exactement ce format :
 { "explanation": "phrase courte expliquant ce que tu as trouvé", "contact_ids": ["id1", "id2", ...] }
-Mets uniquement les IDs des contacts les plus pertinents dans contact_ids (max 20).`;
+Mets uniquement les IDs des contacts les plus pertinents dans contact_ids (max 20).
+${NO_EM_DASH_RULE}`;
 
   const messages: Anthropic.MessageParam[] = [
     {
@@ -197,7 +199,7 @@ Mets uniquement les IDs des contacts les plus pertinents dans contact_ids (max 2
       if (jsonMatch) {
         try {
           const parsed = JSON.parse(jsonMatch[0]);
-          const explanation: string = parsed.explanation ?? "";
+          const explanation: string = stripEmDashes(parsed.explanation ?? "");
           const ids: string[] = parsed.contact_ids ?? [];
           const results = ids
             .map((id) => allContacts[id])

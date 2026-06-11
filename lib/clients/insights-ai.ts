@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { withAnthropicRetry } from "../anthropic-retry";
 import { logUsage } from "../log-usage";
 import { getModelPreference } from "../models/get-model-preference";
+import { NO_EM_DASH_RULE_EN } from "@/lib/no-em-dash";
 import type { ClientEnrichmentContext } from "./context";
 import type { ClientFields, Health, Insights } from "./types";
 
@@ -88,7 +89,7 @@ export async function generateInsightsAI(
     .map((m) => {
       const date = m.meeting_started_at?.slice(0, 10) ?? "?";
       const recap = m.meeting_recap_summary?.slice(0, 600) ?? "(no recap)";
-      return `- ${date} — ${m.meeting_title ?? "Meeting"}: ${recap}`;
+      return `- ${date} - ${m.meeting_title ?? "Meeting"}: ${recap}`;
     })
     .join("\n");
 
@@ -117,16 +118,18 @@ ACCOUNT
 - Owner (AE): ${deal?.owner_name ?? deal?.owner_email ?? "unknown"}
 
 HEALTH
-- Score: ${health.score}/100 — ${labelEn}
+- Score: ${health.score}/100 - ${labelEn}
 - Drivers: ${health.drivers?.join("; ") || "(none)"}
 
-KEY FIELDS (from the enriched fiche — "missing" = not captured yet)
+KEY FIELDS (from the enriched fiche - "missing" = not captured yet)
 ${keyFields}
 
 RECENT MEETINGS
 ${recentMeetings || "(no recent analyzed meeting)"}
 
-Call the client_insights tool. Give 2 to 5 prioritized, CONCRETE actions specific to THIS account's onboarding/handover — e.g. kicking off with the right contact, securing the billing or IT/SSO setup when a key contact is missing, driving early adoption, mitigating a churn risk surfaced in meetings, or an upsell opportunity. Each action needs a one-sentence rationale grounded in the data above. Add up to 3 factual observations. Do not restate the score. Be specific, avoid generic advice. Write everything in English.`;
+Call the client_insights tool. Give 2 to 5 prioritized, CONCRETE actions specific to THIS account's onboarding/handover - e.g. kicking off with the right contact, securing the billing or IT/SSO setup when a key contact is missing, driving early adoption, mitigating a churn risk surfaced in meetings, or an upsell opportunity. Each action needs a one-sentence rationale grounded in the data above. Add up to 3 factual observations. Do not restate the score. Be specific, avoid generic advice. Write everything in English.
+
+${NO_EM_DASH_RULE_EN}`;
 
   const client = new Anthropic({ timeout: 120_000 });
   const msg = await withAnthropicRetry(

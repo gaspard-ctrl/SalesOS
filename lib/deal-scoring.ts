@@ -3,6 +3,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { db } from "./db";
 import { logUsage } from "./log-usage";
+import { NO_EM_DASH_RULE } from "@/lib/no-em-dash";
 
 export const DEFAULT_SCORE_MODEL = "claude-haiku-4-5-20251001";
 
@@ -347,7 +348,7 @@ export async function scoreOneDeal(dealId: string, userId: string | null, claude
         .filter((c) => c.status === "fulfilled")
         .map((c) => {
           const cp = (c as PromiseFulfilledResult<{ properties: Record<string, string> }>).value.properties;
-          return `${cp.firstname ?? ""} ${cp.lastname ?? ""} — ${cp.jobtitle ?? "?"}`.trim();
+          return `${cp.firstname ?? ""} ${cp.lastname ?? ""} - ${cp.jobtitle ?? "?"}`.trim();
         })
         .join(", ");
     }
@@ -443,7 +444,7 @@ export async function scoreOneDeal(dealId: string, userId: string | null, claude
 
   const systemPrompt = `Tu es un expert en vente B2B pour Coachello (coaching professionnel).
 Analyse le deal ci-dessous et attribue un score entier entre 0 et le maximum pour chaque dimension.
-Tu peux utiliser n'importe quelle valeur entière dans cet intervalle — sois précis et EXIGEANT.
+Tu peux utiliser n'importe quelle valeur entière dans cet intervalle - sois précis et EXIGEANT.
 Modèle détecté : ${model}.
 
 === MÉTHODE DE SCORING ===
@@ -492,7 +493,7 @@ Quand le dealstage indique un stage très avancé (contient "agreement", "contra
 - competition ≥ 6 : si on en est à l'agreement, on est en position forte
 - engagement reste fonction de l'activité récente (pas de plancher)
 
-Signale dans reasoning.strengths : "Stage avancé (<nom stage>) — qualification rétrospective."
+Signale dans reasoning.strengths : "Stage avancé (<nom stage>) - qualification rétrospective."
 
 Cas closedlost : score normalement mais ajoute la raison probable de la perte dans reasoning.weaknesses si identifiable.
 
@@ -522,12 +523,12 @@ Cas closedlost : score normalement mais ajoute la raison probable de la perte da
 - 1 pt : au-delà de 6 mois
 - 0 pts : aucune information sur le calendrier
 
-4. ${names[3]} (0 à ${maxes.business_need} pts) — SCORING DUR
+4. ${names[3]} (0 à ${maxes.business_need} pts) - SCORING DUR
 Évalue l'intensité RÉELLE du besoin, pas ce qu'on voudrait croire.
-- ${maxes.business_need} pts : douleur critique DOCUMENTÉE — le prospect a verbalisé le problème ET son impact chiffré/concret (turnover, perte de productivité, échec de transformation, etc.)
+- ${maxes.business_need} pts : douleur critique DOCUMENTÉE - le prospect a verbalisé le problème ET son impact chiffré/concret (turnover, perte de productivité, échec de transformation, etc.)
 - 9 pts : besoin significatif et clair, objectifs concrets identifiés, mais pas encore chiffré en impact
-- 4 pts : "nice to have" — intéressé par le coaching mais pas urgent, pas de douleur identifiée
-- 1 pt : exploration pure — le prospect est curieux, aucun problème concret identifié
+- 4 pts : "nice to have" - intéressé par le coaching mais pas urgent, pas de douleur identifiée
+- 1 pt : exploration pure - le prospect est curieux, aucun problème concret identifié
 - 0 pts : aucun besoin identifié ou pas assez d'info pour juger
 IMPORTANT : Un prospect qui dit "on veut du coaching" sans expliquer POURQUOI = 4 max. Pour aller au-dessus de 9, il faut un impact business articulé.
 
@@ -546,16 +547,16 @@ RÈGLE RFP → BUSINESS_NEED (OBLIGATOIRE) :
 Si un RFP officiel est détecté, business_need ≥ 12/${maxes.business_need}. Un RFP prouve qu'il existe un besoin validé, budgété et porté en interne. Ne descends sous 12 que si le RFP est explicitement qualifié d'"exploratoire" ou de "benchmark".
 
 RÈGLE RFP → COMPETITION (nuance) :
-RFP multi-fournisseurs = competition basse (3 par défaut). MAIS si shortlist/finaliste atteint, remonte competition à 6/${maxes.competition} minimum — on est en position forte.
+RFP multi-fournisseurs = competition basse (3 par défaut). MAIS si shortlist/finaliste atteint, remonte competition à 6/${maxes.competition} minimum - on est en position forte.
 
 Pour chaque étape RFP bonifiée, cite une phrase courte (≤ 15 mots) de l'échange concerné dans reasoning.strengths. Sans citation concrète, pas de bonus.
 
-5. ${names[4]} (0 à ${maxes.engagement} pts) — SCORING TRÈS DUR
+5. ${names[4]} (0 à ${maxes.engagement} pts) - SCORING TRÈS DUR
 Évalue la dynamique RÉELLE du deal à partir de signaux cumulés. Un seul email récent ne vaut PAS 25.
 Additionne les signaux suivants :
 - Recency (dernier échange < 7j = +4, 7-14j = +2, > 14j = 0)
 - Volume (5+ engagements sur 30j = +5, 3-4 = +3, 1-2 = +1, 0 = 0)
-- Variété (au moins 2 types d'échange — ex: email + call, call + meeting = +3)
+- Variété (au moins 2 types d'échange - ex: email + call, call + meeting = +3)
 - Bilatéral (au moins 1 réponse/email entrant ou meeting initié par le prospect dans les 30j = +4, sinon 0)
 - Multi-threading (2+ contacts/interlocuteurs impliqués = +4, 1 seul = 0)
 - Stagnation (deal créé depuis > 60 jours ET aucun changement de stage récent = −5)
@@ -570,7 +571,7 @@ IMPORTANT : un seul email envoyé sans réponse la semaine dernière = ~5 pts ma
 
 6. ${names[5]} (0 à ${maxes.strategic_fit} pts)
 Évalue l'adéquation avec l'offre Coachello (coaching professionnel/managérial).
-- ${maxes.strategic_fit} pts : transformation RH, développement du leadership, coaching d'équipes — fit parfait
+- ${maxes.strategic_fit} pts : transformation RH, développement du leadership, coaching d'équipes - fit parfait
 - 4 pts : entreprise en croissance, montée en compétences managériales
 - 2 pts : besoin de formation mais pas spécifiquement coaching
 - 0 pts : besoin sans rapport avec Coachello
@@ -583,7 +584,7 @@ IMPORTANT : un seul email envoyé sans réponse la semaine dernière = ~5 pts ma
 - 0 pts : concurrent(s) identifié(s) et en compétition directe (nommé dans les échanges ou shortlist)
 Indices de compétition : mentions de "benchmark", "autres prestataires", "comparaison", noms de concurrents (BetterUp, CoachHub, Ezra, MentorCity, etc.), RFP envoyé à plusieurs, demande de "références" comparatives.
 
-=== DICTIONNAIRE FR — MOTS-CLÉS À DÉTECTER PAR DIMENSION ===
+=== DICTIONNAIRE FR - MOTS-CLÉS À DÉTECTER PAR DIMENSION ===
 
 AUTHORITY : COMEX, CODIR, C-level, CEO, CHRO, CPO, DG, DRH, VP People, Head of People/L&D/Talent, Directeur Learning/Formation, HRBP, Chief People Officer. Un de ces titres parmi les contacts → authority ≥ 14 même sans autre signal.
 
@@ -591,7 +592,7 @@ BUDGET : "enveloppe", "pré-budgété", "arbitrage DAF", "PO émis", "bon de com
 
 TIMELINE : "Q1-Q4 2026", "T1/T2", "rentrée", "budget 2026", "clôture d'exercice", "deadline", "kick-off", "go-live". Date précise + proche (< 90j) = timeline ≥ 7.
 
-BUSINESS NEED — pain points coaching : turnover cadres, désengagement, managers promus sans formation, transformation culturelle, post-M&A, nouveau DG/DRH, restructuration, ENPS en baisse, succession planning, pivot stratégique. ≥ 1 pain point articulé → business_need ≥ 9.
+BUSINESS NEED - pain points coaching : turnover cadres, désengagement, managers promus sans formation, transformation culturelle, post-M&A, nouveau DG/DRH, restructuration, ENPS en baisse, succession planning, pivot stratégique. ≥ 1 pain point articulé → business_need ≥ 9.
 
 STRATEGIC FIT : "développement du leadership", "coaching dirigeants/managers", "parcours managérial", "onboarding dirigeants", "executive coaching", "coaching d'équipe", "codev", "feedback 360". Un de ces termes → strategic_fit ≥ 4.
 
@@ -633,7 +634,9 @@ COMPETITION : BetterUp, CoachHub, Ezra, MentorCity, MoovOne, Simundia, Bloom at 
   ]
 }
 
-key_events : extrais les moments DATÉS qui retracent le parcours du deal (devis/proposition envoyé, échange ou réunion important, objection majeure, relance décisive, décision ou engagement du prospect…). Convertis les dates DD/MM/YYYY du contexte en YYYY-MM-DD. N'invente JAMAIS de date : si un événement ne peut pas être daté depuis le contexte, ne l'inclus pas. Renvoie un tableau vide s'il n'y a aucun événement datable.`;
+key_events : extrais les moments DATÉS qui retracent le parcours du deal (devis/proposition envoyé, échange ou réunion important, objection majeure, relance décisive, décision ou engagement du prospect…). Convertis les dates DD/MM/YYYY du contexte en YYYY-MM-DD. N'invente JAMAIS de date : si un événement ne peut pas être daté depuis le contexte, ne l'inclus pas. Renvoie un tableau vide s'il n'y a aucun événement datable.
+
+${NO_EM_DASH_RULE}`;
 
   const client = new Anthropic();
   const message = await client.messages.create({

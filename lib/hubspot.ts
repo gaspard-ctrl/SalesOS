@@ -571,8 +571,8 @@ export function renderDealContextForPrompt(snapshot: DealSnapshot | null): strin
     for (const c of snapshot.contacts) {
       const name = `${c.firstname} ${c.lastname}`.trim() || c.email || "?";
       const sourceParts = [c.lead_source, c.lead_source_detail].filter(Boolean).join(" / ");
-      const sourceSuffix = sourceParts ? ` — origine : ${sourceParts}` : "";
-      lines.push(`- ${name}${c.jobtitle ? ` — ${c.jobtitle}` : ""}${sourceSuffix}`);
+      const sourceSuffix = sourceParts ? ` - origine : ${sourceParts}` : "";
+      lines.push(`- ${name}${c.jobtitle ? ` - ${c.jobtitle}` : ""}${sourceSuffix}`);
     }
   }
 
@@ -591,7 +591,7 @@ export function renderDealContextForPrompt(snapshot: DealSnapshot | null): strin
       const date = e.date ? new Date(e.date).toLocaleDateString("fr-FR") : "?";
       const directionSuffix = e.type === "email" && e.direction ? ` ${e.direction === "in" ? "←" : "→"}` : "";
       const label = `${e.type.toUpperCase()}${directionSuffix}`;
-      const title = e.title ? ` — ${e.title}` : "";
+      const title = e.title ? ` - ${e.title}` : "";
       // Emails et notes méritent un budget plus large (souvent denses) que
       // les calls/meetings qui sont déjà résumés par les Claap recaps.
       const bodyLimit = e.type === "email" || e.type === "note" ? 1200 : 500;
