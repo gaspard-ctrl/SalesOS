@@ -80,7 +80,11 @@ export async function loadClientContext(
   opts?: { confirmedRecordingIds?: string[] },
 ): Promise<ClientEnrichmentContext> {
   const [deal, indexed] = await Promise.all([
-    fetchDealContext(dealId),
+    // includeCompanyActivities : on compte aussi l'activité associée à la
+    // company (emails/meetings d'intro logués au niveau compte ou contacts mais
+    // pas au deal), sinon le health rate ces touchpoints et sur-estime le
+    // silence. Dédup deal/company gérée dans fetchDealContext.
+    fetchDealContext(dealId, { includeCompanyActivities: true }),
     loadClaapMeetingsForDeal(dealId),
   ]);
 
