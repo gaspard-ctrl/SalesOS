@@ -36,6 +36,8 @@ export function EmailHistoryCard({ companyId }: { companyId: string }) {
   }, [contactsData]);
 
   const emails = data?.emails ?? [];
+  // Carte repliée par défaut ; le header sert de toggle.
+  const [open, setOpen] = React.useState(false);
 
   return (
     <section
@@ -47,7 +49,10 @@ export function EmailHistoryCard({ companyId }: { companyId: string }) {
         overflow: "hidden",
       }}
     >
-      <header style={{ display: "flex", alignItems: "center", gap: 9, padding: "14px 16px" }}>
+      <header
+        onClick={() => setOpen((v) => !v)}
+        style={{ display: "flex", alignItems: "center", gap: 9, padding: "14px 16px", cursor: "pointer", userSelect: "none" }}
+      >
         <span style={{ display: "inline-flex", color: COLORS.ink3 }}>
           <Mail size={16} />
         </span>
@@ -55,24 +60,36 @@ export function EmailHistoryCard({ companyId }: { companyId: string }) {
           Email history
         </h2>
         {emails.length > 0 && <span style={{ fontSize: 11, color: COLORS.ink3 }}>{emails.length}</span>}
-        {isLoading && <Loader2 size={12} className="animate-spin" style={{ color: COLORS.brand, marginLeft: "auto" }} />}
+        {isLoading && <Loader2 size={12} className="animate-spin" style={{ color: COLORS.brand }} />}
+        <ChevronRight
+          size={14}
+          style={{
+            marginLeft: "auto",
+            color: COLORS.ink4,
+            flexShrink: 0,
+            transform: open ? "rotate(90deg)" : "none",
+            transition: "transform .12s",
+          }}
+        />
       </header>
 
-      <div style={{ padding: "0 16px 16px" }}>
-        {isLoading && emails.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 12, color: COLORS.ink3 }}>Loading…</p>
-        ) : emails.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 12, color: COLORS.ink3 }}>
-            No emails sent yet from the platform for this company. Emails you send from the drafter will appear here.
-          </p>
-        ) : (
-          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-            {emails.map((e) => (
-              <EmailRow key={e.id} email={e} nameByEmail={nameByEmail} />
-            ))}
-          </ul>
-        )}
-      </div>
+      {open && (
+        <div style={{ padding: "0 16px 16px" }}>
+          {isLoading && emails.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: COLORS.ink3 }}>Loading…</p>
+          ) : emails.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: COLORS.ink3 }}>
+              No emails sent yet from the platform for this company. Emails you send from the drafter will appear here.
+            </p>
+          ) : (
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+              {emails.map((e) => (
+                <EmailRow key={e.id} email={e} nameByEmail={nameByEmail} />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </section>
   );
 }
