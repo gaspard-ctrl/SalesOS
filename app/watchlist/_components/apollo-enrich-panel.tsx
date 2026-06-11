@@ -77,7 +77,9 @@ export function ApolloEnrichPanel({
 
   // ── ICP search ────────────────────────────────────────────────────────────
   const [titles, setTitles] = React.useState(ICP_PRESET);
-  const [seniorities, setSeniorities] = React.useState<Set<string>>(new Set(["c_suite", "vp", "head", "director"]));
+  const [seniorities, setSeniorities] = React.useState<Set<string>>(
+    new Set(["c_suite", "vp", "head", "director", "manager", "senior"]),
+  );
   const [location, setLocation] = React.useState("");
   const [perPage, setPerPage] = React.useState(10);
   const [searching, setSearching] = React.useState(false);
