@@ -190,14 +190,14 @@ export function WatchCompanyPage({ id }: { id: string }) {
             />
           </main>
 
+          {/* Pas de sticky : la colonne droite défile avec la page, en même temps
+              que la colonne gauche. */}
           <aside
             style={{
               display: "flex",
               flexDirection: "column",
               gap: 12,
               alignSelf: "start",
-              position: "sticky",
-              top: 0,
               minWidth: 0,
             }}
             className="watch-drafter-col"
@@ -217,9 +217,6 @@ export function WatchCompanyPage({ id }: { id: string }) {
         @media (max-width: 1100px) {
           .watch-detail-grid {
             grid-template-columns: 1fr !important;
-          }
-          .watch-detail-grid > aside.watch-drafter-col {
-            position: static !important;
           }
         }
       `}</style>

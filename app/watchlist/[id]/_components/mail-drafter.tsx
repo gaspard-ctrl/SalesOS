@@ -288,6 +288,28 @@ export function MailDrafter({
       </header>
 
       <div style={{ padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+        {!personalized && (
+          <Field label="To (required · e.g. your address, prospects stay in BCC)">
+            <input
+              type="text"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              placeholder="you@coachello.io"
+              style={inputStyle()}
+            />
+          </Field>
+        )}
+
+        <Field label="Cc (optional)">
+          <input
+            type="text"
+            value={cc}
+            onChange={(e) => setCc(e.target.value)}
+            placeholder="email1@x.com, email2@y.com"
+            style={inputStyle()}
+          />
+        </Field>
+
         {/* BCC : prospects ajoutés depuis les contacts / l'analyse */}
         <Field label={personalized ? `Prospects (${recipients.length}) · one email each` : `BCC · prospects (${recipients.length})`}>
           <div
@@ -392,33 +414,12 @@ export function MailDrafter({
             style={{ marginTop: 2, accentColor: COLORS.brand }}
           />
           <span style={{ fontSize: 12, lineHeight: 1.45, color: COLORS.ink0 }}>
-            <strong>Personalized send</strong> · one email per prospect (To = the prospect), with{" "}
-            <code style={{ fontSize: 11 }}>[prénom]</code> / <code style={{ fontSize: 11 }}>[first name]</code> replaced by each
-            prospect&apos;s first name.
+            <strong>Personalized send</strong> · instead of one email with everyone in BCC, each prospect gets their own
+            individual email, addressed directly to them (To = the prospect). The tokens{" "}
+            <code style={{ fontSize: 11 }}>[prénom]</code> / <code style={{ fontSize: 11 }}>[first name]</code> in the subject
+            or body are replaced by each prospect&apos;s first name.
           </span>
         </label>
-
-        {!personalized && (
-          <Field label="To (required · e.g. your address, prospects stay in BCC)">
-            <input
-              type="text"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              placeholder="you@coachello.io"
-              style={inputStyle()}
-            />
-          </Field>
-        )}
-
-        <Field label="Cc (optional)">
-          <input
-            type="text"
-            value={cc}
-            onChange={(e) => setCc(e.target.value)}
-            placeholder="email1@x.com, email2@y.com"
-            style={inputStyle()}
-          />
-        </Field>
 
         <Field label="Instructions for Claude (optional)">
           <textarea

@@ -734,6 +734,7 @@ export default function MassProspectionPage() {
         setEmails((prev) =>
           prev.map((e) => e.id === detailEmailId ? { ...e, status: newStatus, subject: editSubject, body: editBody } : e)
         );
+        setView("review");
       }
     } catch { /* ignore */ }
     setSending(false);
