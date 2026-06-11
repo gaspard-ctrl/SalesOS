@@ -10,6 +10,19 @@ export interface DraftRecipient {
   email: string;
 }
 
+/**
+ * Préremplissage du drafter depuis l'analyse AE (bouton Prospect d'un contact) :
+ * email du contact en To, objet et corps proposés (appliqués seulement si les
+ * champs sont vides). `nonce` change à chaque clic pour réappliquer même si on
+ * clique deux fois sur le même contact.
+ */
+export interface DraftPrefill {
+  nonce: number;
+  to: string;
+  subject: string | null;
+  body: string | null;
+}
+
 interface DraftEmailResult {
   subject?: string;
   body?: string;
@@ -28,11 +41,13 @@ export function MailDrafter({
   recipients,
   onRecipientsChange,
   onSent,
+  prefill,
 }: {
   companyId: string;
   recipients: DraftRecipient[];
   onRecipientsChange: (next: DraftRecipient[]) => void;
   onSent?: () => void;
+  prefill?: DraftPrefill | null;
 }) {
   const { user } = useUser();
   const userEmail = user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses[0]?.emailAddress ?? "";
@@ -53,6 +68,21 @@ export function MailDrafter({
   const [sending, setSending] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [result, setResult] = React.useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Prefill depuis l'analyse AE : le contact passe en To (remplace l'adresse du
+  // user auto-préremplie, sinon s'ajoute), objet et corps seulement si vides.
+  React.useEffect(() => {
+    if (!prefill?.to) return;
+    setTo((prev) => {
+      const existing = prev.split(",").map((s) => s.trim()).filter(Boolean);
+      if (existing.some((e) => e.toLowerCase() === prefill.to.toLowerCase())) return prev;
+      const withoutSelf = existing.filter((e) => e.toLowerCase() !== userEmail.toLowerCase());
+      return [...withoutSelf, prefill.to].join(", ");
+    });
+    if (prefill.subject) setSubject((prev) => (prev.trim() ? prev : prefill.subject ?? ""));
+    if (prefill.body) setBody((prev) => (prev.trim() ? prev : prefill.body ?? ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.nonce]);
 
   function removeRecipient(email: string) {
     onRecipientsChange(recipients.filter((r) => r.email !== email));

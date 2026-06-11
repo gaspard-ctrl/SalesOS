@@ -17,7 +17,7 @@ import { AeAnalysisCard } from "./ae-analysis-card";
 import { ContactsCard } from "./contacts-card";
 import { NewsCard } from "./news-card";
 import { EmailHistoryCard } from "./email-history-card";
-import { MailDrafter, type DraftRecipient } from "./mail-drafter";
+import { MailDrafter, type DraftRecipient, type DraftPrefill } from "./mail-drafter";
 import { ApolloEnrichModal } from "../../_components/apollo-enrich-modal";
 
 export function WatchCompanyPage({ id }: { id: string }) {
@@ -62,6 +62,23 @@ export function WatchCompanyPage({ id }: { id: string }) {
       return next;
     });
   }, []);
+
+  // Prospect depuis l'analyse AE : le contact passe en To du drafter (pas en
+  // BCC) et l'objet + opening message proposés préremplissent le mail si vide.
+  const [prefill, setPrefill] = React.useState<DraftPrefill | null>(null);
+  const prospectFromAnalysis = React.useCallback(
+    (incoming: DraftRecipient[], seed?: { subject: string | null; body: string | null }) => {
+      const first = incoming.find((r) => r.email);
+      if (!first) return;
+      setPrefill({
+        nonce: Date.now(),
+        to: first.email,
+        subject: seed?.subject ?? null,
+        body: seed?.body ?? null,
+      });
+    },
+    [],
+  );
 
   React.useEffect(() => {
     router.prefetch("/watchlist");
@@ -160,7 +177,7 @@ export function WatchCompanyPage({ id }: { id: string }) {
               onRefresh={() => refresh("ae_analysis")}
               isRefreshing={isRefreshing.ae_analysis}
               clientError={errorByKind.ae_analysis ?? null}
-              onProspect={addRecipients}
+              onProspect={prospectFromAnalysis}
             />
             <ContactsCard companyId={company.id} onProspect={addRecipients} />
             <EmailHistoryCard companyId={company.id} />
@@ -189,6 +206,7 @@ export function WatchCompanyPage({ id }: { id: string }) {
               recipients={recipients}
               onRecipientsChange={setRecipients}
               onSent={() => mutate(`/api/watchlist/companies/${company.id}/emails`)}
+              prefill={prefill}
             />
           </aside>
         </div>
