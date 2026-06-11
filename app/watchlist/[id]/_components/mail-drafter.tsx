@@ -29,6 +29,20 @@ interface DraftEmailResult {
   error?: string;
 }
 
+// Tokens remplacés par le prénom du prospect en mode envoi personnalisé.
+const FIRST_NAME_TOKEN = /\[(pr[ée]nom|first[ _]?name)\]/gi;
+
+function firstNameOf(r: DraftRecipient): string {
+  const fromName = r.name?.trim().split(/\s+/)[0];
+  if (fromName) return fromName;
+  const first = r.email.split("@")[0].split(/[._-]/)[0];
+  return first ? first.charAt(0).toUpperCase() + first.slice(1) : "";
+}
+
+function personalize(text: string, r: DraftRecipient): string {
+  return text.replace(FIRST_NAME_TOKEN, firstNameOf(r));
+}
+
 /**
  * Drafteur de mail complet (panneau droit de la fiche Watch List).
  * - Les contacts sélectionnés (contacts card / analyse AE) arrivent en BCC.
@@ -63,6 +77,7 @@ export function MailDrafter({
   const [body, setBody] = React.useState("");
   const [instructions, setInstructions] = React.useState("");
   const [manualBcc, setManualBcc] = React.useState("");
+  const [personalized, setPersonalized] = React.useState(false);
 
   const [generating, setGenerating] = React.useState(false);
   const [sending, setSending] = React.useState(false);
@@ -126,7 +141,55 @@ export function MailDrafter({
     }
   }
 
+  // Active le mode personnalisé ; insère "Bonjour [prénom]," si aucun token présent.
+  function togglePersonalized(on: boolean) {
+    setPersonalized(on);
+    const hasToken = /\[(pr[ée]nom|first[ _]?name)\]/i.test(body);
+    if (on && !hasToken) {
+      setBody((prev) => `Bonjour [prénom],\n\n${prev.replace(/^\s+/, "")}`);
+    }
+  }
+
+  // Envoi personnalisé : un email par prospect (To = prospect), tokens remplacés.
+  async function sendPersonalized() {
+    setSending(true);
+    setResult(null);
+    let sent = 0;
+    const failed: string[] = [];
+    for (const r of recipients) {
+      try {
+        const fd = new FormData();
+        fd.set("to", r.email);
+        fd.set("cc", cc);
+        fd.set("bcc", "");
+        fd.set("subject", personalize(subject, r));
+        fd.set("body", personalize(body, r));
+        fd.set("source", "watchlist_drafter");
+        fd.set("scope_company_id", companyId);
+        const res = await fetch("/api/gmail/send", { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to send");
+        sent++;
+        setResult({ ok: true, msg: `Sending… ${sent}/${recipients.length}` });
+      } catch (e) {
+        failed.push(`${r.email} (${e instanceof Error ? e.message : "error"})`);
+      }
+    }
+    if (failed.length) {
+      setResult({ ok: false, msg: `Sent ${sent}/${recipients.length}. Failed: ${failed.join(", ")}` });
+    } else {
+      setResult({ ok: true, msg: `Sent ${sent} personalized email${sent > 1 ? "s" : ""} via Gmail` });
+      setSubject("");
+      setBody("");
+      setTo(userEmail);
+      onRecipientsChange([]);
+      onSent?.();
+    }
+    setSending(false);
+  }
+
   async function send() {
+    if (personalized) return sendPersonalized();
     setSending(true);
     setResult(null);
     try {
@@ -161,7 +224,9 @@ export function MailDrafter({
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const canSend = !!to.trim() && !!subject.trim() && !!body.trim() && !sending && !generating;
+  const canSend = personalized
+    ? recipients.length > 0 && !!subject.trim() && !!body.trim() && !sending && !generating
+    : !!to.trim() && !!subject.trim() && !!body.trim() && !sending && !generating;
 
   return (
     <section
@@ -214,7 +279,7 @@ export function MailDrafter({
 
       <div style={{ padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
         {/* BCC : prospects ajoutés depuis les contacts / l'analyse */}
-        <Field label={`BCC · prospects (${recipients.length})`}>
+        <Field label={personalized ? `Prospects (${recipients.length}) · one email each` : `BCC · prospects (${recipients.length})`}>
           <div
             style={{
               display: "flex",
@@ -281,15 +346,43 @@ export function MailDrafter({
           </div>
         </Field>
 
-        <Field label="To (required · e.g. your address, prospects stay in BCC)">
+        {/* Mode envoi personnalisé : un email par prospect, prénom injecté */}
+        <label
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            padding: "9px 11px",
+            borderRadius: 8,
+            border: `1px solid ${personalized ? COLORS.brand : COLORS.line}`,
+            background: personalized ? COLORS.brandTint : COLORS.bgSoft,
+            cursor: "pointer",
+          }}
+        >
           <input
-            type="text"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            placeholder="you@coachello.io"
-            style={inputStyle()}
+            type="checkbox"
+            checked={personalized}
+            onChange={(e) => togglePersonalized(e.target.checked)}
+            style={{ marginTop: 2, accentColor: COLORS.brand }}
           />
-        </Field>
+          <span style={{ fontSize: 12, lineHeight: 1.45, color: COLORS.ink0 }}>
+            <strong>Personalized send</strong> · one email per prospect (To = the prospect), with{" "}
+            <code style={{ fontSize: 11 }}>[prénom]</code> / <code style={{ fontSize: 11 }}>[first name]</code> replaced by each
+            prospect&apos;s first name.
+          </span>
+        </label>
+
+        {!personalized && (
+          <Field label="To (required · e.g. your address, prospects stay in BCC)">
+            <input
+              type="text"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              placeholder="you@coachello.io"
+              style={inputStyle()}
+            />
+          </Field>
+        )}
 
         <Field label="Cc (optional)">
           <input
@@ -366,7 +459,11 @@ export function MailDrafter({
             }}
           >
             {sending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-            {sending ? "Sending…" : "Send via Gmail"}
+            {sending
+              ? "Sending…"
+              : personalized
+                ? `Send ${recipients.length} personalized email${recipients.length > 1 ? "s" : ""}`
+                : "Send via Gmail"}
           </button>
         </div>
       </div>
