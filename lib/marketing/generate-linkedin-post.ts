@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { logUsage } from "@/lib/log-usage";
 import { getModelPreference } from "@/lib/models/get-model-preference";
 import { BUSINESS_CONTEXT_PROMPT_BLOCK } from "@/lib/business-context";
+import { NO_EM_DASH_RULE_EN, stripEmDashes } from "@/lib/no-em-dash";
 import { fetchLinkedInTrends, type LinkedInTrendItem } from "@/lib/marketing/linkedin-trends";
 import type { GeneratedLinkedInPost, LinkedInPostDraft, LinkedInPostRecommendation } from "@/lib/marketing-types";
 
@@ -105,7 +106,7 @@ export async function runLinkedInPostGeneration(
       ? inspiration
           .map((p, i) => `${i + 1}. "${p.title}"${p.snippet ? `\n   ${p.snippet.slice(0, 220)}` : ""}`)
           .join("\n")
-      : "(No live LinkedIn examples retrieved — rely on proven LinkedIn best practices below.)";
+      : "(No live LinkedIn examples retrieved - rely on proven LinkedIn best practices below.)";
 
     const sharedContext = `${BUSINESS_CONTEXT_PROMPT_BLOCK}
 
@@ -115,20 +116,21 @@ export async function runLinkedInPostGeneration(
 - Target audience: ${rec.targetAudience || "HR/L&D leaders and managers"}
 - Why now (data-driven): ${rec.justification}
 
-## Real, CURRENT LinkedIn posts on this theme (inspiration — what is working right now)
-These were just pulled live from LinkedIn. Take them seriously: study the hook style, the structure, the line breaks, the tone, and the kind of claims that earn engagement. Do NOT copy them — extract the patterns and apply them to Coachello's own POV. If they reveal a current conversation or a recurring objection, address it.
+## Real, CURRENT LinkedIn posts on this theme (inspiration - what is working right now)
+These were just pulled live from LinkedIn. Take them seriously: study the hook style, the structure, the line breaks, the tone, and the kind of claims that earn engagement. Do NOT copy them - extract the patterns and apply them to Coachello's own POV. If they reveal a current conversation or a recurring objection, address it.
 ${inspirationText}
 
 ## LinkedIn best practices (non-negotiable)
 - The FIRST line is a scroll-stopping hook (a sharp claim, a surprising stat, a tension). It must work before the "...see more" cut.
 - Short lines. Generous line breaks. White space between ideas. No dense paragraphs.
-- One clear idea per post, defended with a concrete example or a specific number — never generic advice.
+- One clear idea per post, defended with a concrete example or a specific number - never generic advice.
 - Conversational, opinionated, human. No corporate jargon, no "In today's fast-paced world".
 - Length: aim for ~${targetChars} characters (keep each post between ${minChars} and ${maxChars}).
-- End with ONE engagement CTA (a question, an invitation to comment) — not a hard sell.
-- NO external links inside the body (LinkedIn throttles them) — a soft mention of Coachello is fine.
+- End with ONE engagement CTA (a question, an invitation to comment) - not a hard sell.
+- NO external links inside the body (LinkedIn throttles them) - a soft mention of Coachello is fine.
 - 3 to 5 relevant hashtags, returned separately (not inside the body).
-- Use ONLY real, verifiable numbers (ICF, PwC, Gartner, McKinsey, HBR, BCG, Deloitte) — never invent statistics.
+- Use ONLY real, verifiable numbers (ICF, PwC, Gartner, McKinsey, HBR, BCG, Deloitte) - never invent statistics.
+- ${NO_EM_DASH_RULE_EN}
 
 ## What to produce
 TWO distinct posts on this topic, with genuinely DIFFERENT angles (e.g. a contrarian take vs. a practical how-to, or a story-driven post vs. a data-driven one). They must not feel like rewrites of each other.
@@ -163,7 +165,7 @@ Write the posts in ENGLISH only.`;
     const client = new Anthropic();
     const model = await getModelPreference("marketing", POST_MODEL_DEFAULT);
 
-    const prompt = `You are Coachello's senior social editor. You write LinkedIn posts that HR/L&D leaders actually stop to read and comment on — opinionated, concrete, human.
+    const prompt = `You are Coachello's senior social editor. You write LinkedIn posts that HR/L&D leaders actually stop to read and comment on - opinionated, concrete, human.
 
 ${sharedContext}
 
@@ -190,9 +192,14 @@ Call the \`write_linkedin_posts\` tool with your complete output.`;
 
     const out = toolUse.input as { posts: GeneratedLinkedInPost[] };
     // Keep only posts with a real body; tolerate one weak post as long as one is solid.
-    const posts = (Array.isArray(out.posts) ? out.posts : []).filter(
-      (p) => typeof p?.body === "string" && p.body.trim().length >= 50,
-    );
+    const posts = (Array.isArray(out.posts) ? out.posts : [])
+      .filter((p) => typeof p?.body === "string" && p.body.trim().length >= 50)
+      .map((p) => ({
+        ...p,
+        angle: typeof p.angle === "string" ? stripEmDashes(p.angle) : p.angle,
+        hook: typeof p.hook === "string" ? stripEmDashes(p.hook) : p.hook,
+        body: stripEmDashes(p.body),
+      }));
     if (posts.length === 0) {
       throw new Error(`No usable post returned. stop_reason: ${response.stop_reason}`);
     }

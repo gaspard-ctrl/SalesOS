@@ -5,6 +5,7 @@ import { fetchTopPages } from "@/lib/google-analytics";
 import { fetchKeywords } from "@/lib/google-search-console";
 import { fetchAllArticles, hydrateArticleBodies } from "@/lib/wordpress";
 import { getModelPreference } from "@/lib/models/get-model-preference";
+import { NO_EM_DASH_RULE_EN, stripEmDashes } from "@/lib/no-em-dash";
 import type { ArticleDraft, ArticleRecommendation, InternalLink } from "@/lib/marketing-types";
 
 const ARTICLE_MODEL_DEFAULT = "claude-sonnet-4-6";
@@ -158,7 +159,7 @@ export async function runArticleGeneration(
         .filter(Boolean);
       ga4Available = topPages.length > 0;
     } catch {
-      // GA4 unavailable — fall back to most recent
+      // GA4 unavailable - fall back to most recent
     }
 
     const styleArticles = topPerformingSlugs.length > 0
@@ -240,8 +241,8 @@ ${a.contentText.slice(0, 3500)}
 
 This means the keyword already has real search demand. Your article must target this exact keyword and satisfy the search intent behind it.`
       : searchConsoleAvailable
-        ? `## Note: "${rec.targetKeyword}" is a priority keyword but has no Search Console history yet — it's an emerging opportunity.`
-        : `## Note: Search Console data unavailable — optimize for the target keyword based on topic relevance.`;
+        ? `## Note: "${rec.targetKeyword}" is a priority keyword but has no Search Console history yet - it's an emerging opportunity.`
+        : `## Note: Search Console data unavailable - optimize for the target keyword based on topic relevance.`;
 
     const sharedContext = `## Topic
 ${rec.topic}
@@ -254,10 +255,10 @@ ${rec.justification}
 
 ${metricsSection}
 
-## Reference articles (tonal context only — depth rules below take precedence)
+## Reference articles (tonal context only - depth rules below take precedence)
 ${ga4Available
-  ? `The 3 articles below are Coachello's TOP-PERFORMING articles by GA4 sessions (last 30 days). Use them to calibrate the overall tone of voice and the type of audience we address — NOT to copy their heading density or section count.`
-  : `The 3 articles below are recent Coachello articles. Use them to calibrate the overall tone of voice — NOT to copy their heading density or section count.`}
+  ? `The 3 articles below are Coachello's TOP-PERFORMING articles by GA4 sessions (last 30 days). Use them to calibrate the overall tone of voice and the type of audience we address - NOT to copy their heading density or section count.`
+  : `The 3 articles below are recent Coachello articles. Use them to calibrate the overall tone of voice - NOT to copy their heading density or section count.`}
 
 For reference, those articles average ~${avgStructure.h2Count} H2 sections and ~${avgStructure.h3Count} H3 subsections, but the structural targets below override that.
 
@@ -265,11 +266,11 @@ ${styleReferenceText}
 
 ## Editorial POV (non-negotiable)
 The article must take a position, not present a balanced overview.
-1. State a clear thesis within the first 200 words — what is the ONE thing this article argues?
-2. Defend that thesis through the rest of the article. Every H2 should advance it, contrast with it, or qualify it — never wander.
+1. State a clear thesis within the first 200 words - what is the ONE thing this article argues?
+2. Defend that thesis through the rest of the article. Every H2 should advance it, contrast with it, or qualify it - never wander.
 3. Identify the common misconception or default approach that HR/L&D buyers fall into, and explain why it falls short.
 4. Then present the better approach the article argues for. Specifics, not principles.
-5. Do NOT write "here are the X things to consider" or "best practices for Y" — those are the formats we are explicitly avoiding.
+5. Do NOT write "here are the X things to consider" or "best practices for Y" - those are the formats we are explicitly avoiding.
 
 ## Voice and authorship
 Write as a senior editor at HBR, First Round Review, or Lenny's Newsletter would:
@@ -281,7 +282,7 @@ Write as a senior editor at HBR, First Round Review, or Lenny's Newsletter would
 
 ## Structural targets (HARD constraints)
 - Word count: between 1500 and 2000 words
-- H2 sections: between 4 and 6 (NOT more — fewer, deeper sections)
+- H2 sections: between 4 and 6 (NOT more - fewer, deeper sections)
 - H3 subsections: between 0 and 3 TOTAL across the article (use sparingly, only when an H2 genuinely needs a sub-division)
 - Bullet lists: 2 to 4 (good for actionable lists, decision criteria, contrasts)
 - Tables: 0 to 1 (only if a real comparison warrants it)
@@ -292,20 +293,21 @@ Write as a senior editor at HBR, First Round Review, or Lenny's Newsletter would
 - Each body paragraph: 80-150 words. No 1-2 sentence paragraphs except for deliberate emphasis (a punchy thesis statement, a transition).
 - Minimum 3 substantial paragraphs per H2 before any bullet list or table.
 - A bullet list or table can replace ONE paragraph in a section, never all of them. Lists are accents, not the spine.
-- If a section can be summarized in 2 sentences, it should not exist as its own section — merge it into a neighbor.
+- If a section can be summarized in 2 sentences, it should not exist as its own section - merge it into a neighbor.
 
-## All Coachello articles — pick 6-8 for internal links
+## All Coachello articles - pick 6-8 for internal links
 ${availableForLinking}
 
 ---
 
 STRICT RULES:
-1. Use ONLY real numbers. If you cite a statistic, source it from ICF, PwC/ICF study, Gartner, McKinsey, HBR, BCG, or Deloitte — never invent %. If you don't have a verifiable number, use a qualitative statement.
+1. Use ONLY real numbers. If you cite a statistic, source it from ICF, PwC/ICF study, Gartner, McKinsey, HBR, BCG, or Deloitte - never invent %. If you don't have a verifiable number, use a qualitative statement.
 2. Never mention "one in X companies", fake ROI figures, or fabricated study names.
 3. **Word count MUST be between 1500 and 2000 words.** Count carefully.
-4. **Include between 6 and 8 internal links** picked from the "All Coachello articles" list above. Distribute them naturally across the article — do not cluster them.
+4. **Include between 6 and 8 internal links** picked from the "All Coachello articles" list above. Distribute them naturally across the article - do not cluster them.
 5. End with a CTA section pointing to Coachello.
 6. Output valid HTML only (use <h2>, <h3>, <p>, <ul><li>, <table>, <strong>, <a href="...">), no <html>/<body> wrappers.
+7. ${NO_EM_DASH_RULE_EN}
 `;
 
     const writeLanguageTool: Anthropic.Tool = {
@@ -351,10 +353,10 @@ STRICT RULES:
       internalLinks: InternalLink[];
     }> {
       const langInstruction = lang === "fr"
-        ? "Write this article in French, adapted to a French-speaking HR/L&D audience. Do not translate — write natively for this audience."
-        : "Write this article in English, adapted to an English-speaking HR/L&D audience. Do not translate — write natively for this audience.";
+        ? "Write this article in French, adapted to a French-speaking HR/L&D audience. Do not translate - write natively for this audience."
+        : "Write this article in English, adapted to an English-speaking HR/L&D audience. Do not translate - write natively for this audience.";
 
-      const langPrompt = `You are a senior editor writing for Coachello — the kind of writer HBR or First Round Review would commission. You write opinionated, deeply-researched pieces for HR/L&D buyers. You do not present "best practices"; you argue for one approach over its alternatives.
+      const langPrompt = `You are a senior editor writing for Coachello - the kind of writer HBR or First Round Review would commission. You write opinionated, deeply-researched pieces for HR/L&D buyers. You do not present "best practices"; you argue for one approach over its alternatives.
 
 Write a NEW blog article in ${lang === "fr" ? "French" : "English"}.
 
@@ -393,7 +395,12 @@ Call the \`write_article_language\` tool with your complete output.`;
         throw new Error(`${lang.toUpperCase()}: content too short (${out.content?.length || 0} chars). stop_reason: ${response.stop_reason}`);
       }
 
-      return out;
+      return {
+        ...out,
+        content: stripEmDashes(out.content),
+        wordpressFormat: { ...out.wordpressFormat, excerpt: stripEmDashes(out.wordpressFormat?.excerpt ?? "") },
+        internalLinks: (out.internalLinks ?? []).map((l) => ({ ...l, anchorText: stripEmDashes(l.anchorText ?? "") })),
+      };
     }
 
     const [frResult, enResult] = await Promise.all([writeLanguage("fr"), writeLanguage("en")]);
