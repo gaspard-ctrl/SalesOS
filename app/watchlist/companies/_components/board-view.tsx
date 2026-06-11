@@ -1,15 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Search, Download, Loader2, Trash2, X, CheckSquare, Check, ChevronRight, ChevronDown } from "lucide-react";
+import { Search, Download, Loader2, Trash2, X, CheckSquare, Check, ChevronRight } from "lucide-react";
 import { COLORS, RADIUS, SHADOWS, repAccent } from "@/lib/design/tokens";
 import { CompanyAvatar } from "@/components/ui/company-avatar";
-import { useWatchSalesReps, useWatchAccounts, setCompanyStatus } from "@/lib/hooks/use-watchlist";
+import { useWatchSalesReps, useWatchAccounts } from "@/lib/hooks/use-watchlist";
 import { SalesRail, type RailRep } from "./sales-rail";
 import { BoardStats } from "./board-stats";
-import { UNASSIGNED_KEY, STATUS_STYLE, STATUS_OPTIONS, type ScopeCompany } from "./types";
+import { UNASSIGNED_KEY, STATUS_STYLE, type ScopeCompany } from "./types";
 
 const ALL = "__all__";
 
@@ -164,11 +163,6 @@ export function BoardView() {
     URL.revokeObjectURL(url);
   }
 
-  async function changeStatus(c: ScopeCompany, status: string | null) {
-    const r = await setCompanyStatus(c.id, status);
-    if (r.ok) await reloadAccounts();
-  }
-
   const loading = (repsLoading || accLoading) && accounts.length === 0;
 
   return (
@@ -303,7 +297,6 @@ export function BoardView() {
                       selectionActive={selectedIds.size > 0}
                       onToggleSelect={toggleSelect}
                       onRemove={removeCompany}
-                      onStatusChange={(status) => changeStatus(c, status)}
                     />
                   ))}
                 </tbody>
@@ -423,14 +416,12 @@ function CompanyRow({
   selectionActive,
   onToggleSelect,
   onRemove,
-  onStatusChange,
 }: {
   company: ScopeCompany;
   selected: boolean;
   selectionActive: boolean;
   onToggleSelect: (id: string, e: React.MouseEvent) => void;
   onRemove: (company: ScopeCompany) => void;
-  onStatusChange: (status: string | null) => void;
 }) {
   const router = useRouter();
   const [hover, setHover] = React.useState(false);
@@ -520,7 +511,7 @@ function CompanyRow({
       </td>
       <td style={{ ...tdStyle, color: platform ? COLORS.ink2 : COLORS.ink4 }}>{platform ?? "—"}</td>
       <td style={tdStyle}>
-        <StatusCell company={company} onChange={onStatusChange} />
+        <StatusCell company={company} />
       </td>
       <td style={{ ...tdStyle, textAlign: "right" }} className="num">
         {company.email_count > 0 ? (
@@ -560,154 +551,34 @@ function CompanyRow({
   );
 }
 
-// Status pill with an inline override menu (click -> pick a status -> POST + reload).
-// The menu is portaled to <body> so the table card's `overflow: hidden` never clips it.
-function StatusCell({
-  company,
-  onChange,
-}: {
-  company: ScopeCompany;
-  onChange: (status: string | null) => void;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const [pos, setPos] = React.useState<{ top: number; left: number } | null>(null);
-  const btnRef = React.useRef<HTMLButtonElement>(null);
-  const menuRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    if (!open) return;
-    function onDoc(e: MouseEvent) {
-      const t = e.target as Node;
-      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
-      setOpen(false);
-    }
-    function close() {
-      setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
-    };
-  }, [open]);
-
-  function toggle(e: React.MouseEvent) {
-    e.stopPropagation();
-    if (!open && btnRef.current) {
-      const r = btnRef.current.getBoundingClientRect();
-      setPos({ top: r.bottom + 4, left: r.left });
-    }
-    setOpen((v) => !v);
-  }
-
-  function pick(e: React.MouseEvent, status: string | null) {
-    e.stopPropagation();
-    setOpen(false);
-    onChange(status);
-  }
-
+// Status pill (auto-derived, read-only): To enrich / Enriched / Contacted (X).
+function StatusCell({ company }: { company: ScopeCompany }) {
   const s = STATUS_STYLE[company.status] ?? STATUS_STYLE["To enrich"];
+  // "Contacted (X)" : on annexe le nombre d'emails envoyés quand il y en a.
+  const label =
+    company.status === "Contacted" && company.email_count > 0
+      ? `Contacted (${company.email_count})`
+      : company.status;
 
   return (
-    <div style={{ display: "inline-block" }} onClick={(e) => e.stopPropagation()}>
-      <button
-        ref={btnRef}
-        type="button"
-        title="Change status"
-        onClick={toggle}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 5,
-          height: 22,
-          padding: "0 9px",
-          borderRadius: 999,
-          border: "none",
-          background: s.bg,
-          color: s.fg,
-          fontSize: 11.5,
-          fontWeight: 600,
-          letterSpacing: "-0.01em",
-          whiteSpace: "nowrap",
-          cursor: "pointer",
-        }}
-      >
-        <span style={{ width: 6, height: 6, borderRadius: 999, background: s.dot }} />
-        {company.status}
-        <ChevronDown size={12} style={{ opacity: 0.7, marginLeft: 1 }} />
-      </button>
-      {open && pos &&
-        createPortal(
-          <div
-            ref={menuRef}
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              position: "fixed",
-              top: pos.top,
-              left: pos.left,
-              minWidth: 168,
-              background: COLORS.bgCard,
-              border: `1px solid ${COLORS.line}`,
-              borderRadius: RADIUS.md,
-              boxShadow: SHADOWS.pop,
-              padding: 4,
-              zIndex: 1000,
-            }}
-          >
-            {STATUS_OPTIONS.map((opt) => {
-              const os = STATUS_STYLE[opt];
-              return (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={(e) => pick(e, opt)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "7px 9px",
-                    fontSize: 12.5,
-                    fontWeight: 500,
-                    color: COLORS.ink1,
-                    background: opt === company.status ? COLORS.bgSoft : "transparent",
-                    border: "none",
-                    borderRadius: 6,
-                    cursor: "pointer",
-                  }}
-                >
-                  <span style={{ width: 7, height: 7, borderRadius: 999, background: os.dot, flexShrink: 0 }} />
-                  {opt}
-                </button>
-              );
-            })}
-            <div style={{ height: 1, background: COLORS.line, margin: "4px 2px" }} />
-            <button
-              type="button"
-              onClick={(e) => pick(e, null)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                width: "100%",
-                textAlign: "left",
-                padding: "7px 9px",
-                fontSize: 12,
-                color: COLORS.ink3,
-                background: "transparent",
-                border: "none",
-                borderRadius: 6,
-                cursor: "pointer",
-              }}
-            >
-              Reset (auto)
-            </button>
-          </div>,
-          document.body,
-        )}
-    </div>
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        height: 22,
+        padding: "0 9px",
+        borderRadius: 999,
+        background: s.bg,
+        color: s.fg,
+        fontSize: 11.5,
+        fontWeight: 600,
+        letterSpacing: "-0.01em",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: 999, background: s.dot }} />
+      {label}
+    </span>
   );
 }

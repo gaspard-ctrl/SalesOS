@@ -55,11 +55,25 @@ export async function GET(req: NextRequest) {
     emailCounts.set(cid, set);
   }
 
+  // Companies dont l'AE analysis a tourné avec succès => statut auto "Enriched".
+  const enrichedIds = new Set<string>();
+  const { data: briefRows } = await db
+    .from("watchlist_company_briefs")
+    .select("scope_company_id")
+    .eq("kind", "ae_analysis")
+    .eq("status", "ok");
+  for (const b of briefRows ?? []) {
+    const cid = b.scope_company_id as string | null;
+    if (cid) enrichedIds.add(cid);
+  }
+
   const accounts: WatchAccount[] = companies.map((c) => {
     const id = String(c.id);
     const emailCount = emailCounts.get(id)?.size ?? 0;
     const manual = (c.status ?? "").trim();
-    const status = manual || (emailCount > 0 ? "Contacted" : "To enrich");
+    // Auto: contacté (>=1 email) prime sur enrichi (AE analysis), sinon à enrichir.
+    const auto = emailCount > 0 ? "Contacted" : enrichedIds.has(id) ? "Enriched" : "To enrich";
+    const status = manual || auto;
     return {
       id,
       name: c.name ?? "",
