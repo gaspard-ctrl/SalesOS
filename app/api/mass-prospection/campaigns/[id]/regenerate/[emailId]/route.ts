@@ -4,6 +4,7 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logUsage } from "@/lib/log-usage";
 import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/guides/prospection";
+import { NO_EM_DASH_RULE, stripEmDashes } from "@/lib/no-em-dash";
 import {
   fetchCompanyLinkedInContext,
   fetchCompanyWebContext,
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     "LANGUE : détecte la langue du PROSPECT à partir, dans l'ordre, de la FICHE LINKEDIN ENTREPRISE / CONTEXTE ENTREPRISE (pays, langue des contenus), puis du poste du prospect, puis de l'EMAIL ACTUEL. Les instructions de réécriture et l'objectif de campagne ne définissent pas la langue, sauf demande explicite de l'utilisateur (ex : 'en français'). En cas de doute, repli sur l'anglais. Rédige TOUT (subject, body, signature) dans cette langue.",
     "Mobilise ta connaissance générale de l'entreprise du prospect pour ancrer l'accroche. Si des blocs CONTEXTE ENTREPRISE ou FICHE LINKEDIN ENTREPRISE sont fournis, priorise ces informations. Reste factuel : n'invente jamais un fait, un chiffre ou un nom.",
     `L'email doit être signé par : ${senderName}.`,
+    NO_EM_DASH_RULE,
     "Réponds UNIQUEMENT en JSON valide avec exactement ces trois clés, dans cet ordre : { \"language\": \"...\", \"subject\": \"...\", \"body\": \"...\" }. \"language\" est le code de la langue détectée (ex : \"en\", \"fr\") ; déclare-la AVANT d'écrire le reste. Le subject et le body doivent être STRICTEMENT dans cette même langue, sans aucun mélange.",
     "Le body doit être en texte brut (pas de HTML, pas de markdown).",
     guide ? `\n---\nGUIDE DE PROSPECTION :\n${guide}` : "",
@@ -86,15 +88,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const prospectBlock = [
     `Nom : ${email.first_name} ${email.last_name}`,
     `Email : ${email.email}`,
-    `Poste : ${email.job_title || "—"}`,
-    `Entreprise : ${email.company || "—"}`,
-    `Secteur : ${email.industry || "—"}`,
+    `Poste : ${email.job_title || "-"}`,
+    `Entreprise : ${email.company || "-"}`,
+    `Secteur : ${email.industry || "-"}`,
   ].join("\n");
 
   const userPrompt = [
     `OBJECTIF DE LA CAMPAGNE :\n${campaign.objective}`,
     `\nINFORMATIONS SUR LE PROSPECT :\n${prospectBlock}`,
-    linkedin.text ? `\nPROFIL LINKEDIN ENRICHI (utilise-le pour personnaliser : 1 élément précis du parcours, d'une compétence ou d'une expérience pertinente — pas de namedropping forcé) :\n${linkedin.text}` : "",
+    linkedin.text ? `\nPROFIL LINKEDIN ENRICHI (utilise-le pour personnaliser : 1 élément précis du parcours, d'une compétence ou d'une expérience pertinente, pas de namedropping forcé) :\n${linkedin.text}` : "",
     companyLinkedIn ? `\nFICHE LINKEDIN ENTREPRISE :\n${companyLinkedIn}` : "",
     companyContext.text ? `\nCONTEXTE ENTREPRISE (sources web récentes, à utiliser en priorité si pertinent) :\n${companyContext.text}` : "",
     `\nEMAIL ACTUEL (à améliorer) :\nObjet : ${email.subject}\n\n${email.body}`,
@@ -125,6 +127,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   } catch {
     body = raw;
   }
+  subject = stripEmDashes(subject);
+  body = stripEmDashes(body);
 
   const provenance: DraftProvenance = {
     linkedinProfile: Boolean(linkedin.text),

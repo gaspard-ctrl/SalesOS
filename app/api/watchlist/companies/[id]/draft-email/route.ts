@@ -7,6 +7,7 @@ import { loadCompanyHubspotContext } from "@/lib/watchlist/fetch-company-recap";
 import { loadClientsRoster, formatClientsRoster } from "@/lib/watchlist/clients-roster";
 import { getBriefs, type AeAnalysisContent, type HubspotRecapContent, type NewsContent } from "@/lib/watchlist/briefs";
 import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/guides/prospection";
+import { NO_EM_DASH_RULE, stripEmDashes } from "@/lib/no-em-dash";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -52,7 +53,8 @@ const DRAFT_TOOL: Anthropic.Tool = {
 
 const SYSTEM_PROMPT = `Tu es un Account Executive sénior chez Coachello. Tu rédiges un email de prospection à froid ou de relance pour un compte cible.
 
-Ton style : direct, humain, concret. Pas de jargon commercial creux, pas de tirets longs (em dash) - utilise des virgules, parenthèses ou tirets courts.
+Ton style : direct, humain, concret. Pas de jargon commercial creux.
+${NO_EM_DASH_RULE}
 LANGUE : rédige dans la langue du PROSPECT, pas celle des instructions. Détecte-la depuis le compte lui-même : pays et implantation de l'entreprise, langue des emails reçus de leur part, langue de ses news. Un compte non francophone = anglais, même si les instructions sont en français (sauf si l'utilisateur demande explicitement une langue). En cas de doute, rédige TOUT l'email en anglais.
 
 Règles de rédaction :
@@ -138,8 +140,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     const draft = block.input as { subject?: string; body?: string };
     return NextResponse.json({
-      subject: typeof draft.subject === "string" ? draft.subject : "",
-      body: typeof draft.body === "string" ? draft.body : "",
+      subject: typeof draft.subject === "string" ? stripEmDashes(draft.subject) : "",
+      body: typeof draft.body === "string" ? stripEmDashes(draft.body) : "",
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

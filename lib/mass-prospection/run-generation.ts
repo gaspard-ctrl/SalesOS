@@ -136,7 +136,7 @@ export async function runCampaignGeneration(
           previousEmail?.body
             ? "\nC'est une RELANCE. Écris un follow-up court qui s'appuie sur l'email précédent (rappelle brièvement le contexte sans le copier-coller), apporte un nouvel angle ou une nouvelle raison de répondre, et reste poli sans culpabiliser le prospect."
             : "",
-          linkedin.text ? `\nPROFIL LINKEDIN ENRICHI (utilise-le pour personnaliser : 1 élément précis du parcours, d'une compétence ou d'une expérience pertinente — pas de namedropping forcé) :\n${linkedin.text}` : "",
+          linkedin.text ? `\nPROFIL LINKEDIN ENRICHI (utilise-le pour personnaliser : 1 élément précis du parcours, d'une compétence ou d'une expérience pertinente, pas de namedropping forcé) :\n${linkedin.text}` : "",
           companyLinkedIn ? `\nFICHE LINKEDIN ENTREPRISE :\n${companyLinkedIn}` : "",
           companyContext.text ? `\nCONTEXTE ENTREPRISE (sources web récentes, à utiliser en priorité si pertinent) :\n${companyContext.text}` : "",
           "\nRédige un email de prospection personnalisé pour cette personne.",
@@ -164,6 +164,8 @@ export async function runCampaignGeneration(
         } catch {
           body = raw;
         }
+        subject = stripEmDashes(subject);
+        body = stripEmDashes(body);
 
         const provenance: DraftProvenance = {
           linkedinProfile: Boolean(linkedin.text),

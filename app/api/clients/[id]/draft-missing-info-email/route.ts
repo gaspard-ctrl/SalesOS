@@ -10,6 +10,7 @@ import {
   type ClientRow,
   type MissingInfoEmailDraft,
 } from "@/lib/clients/types";
+import { NO_EM_DASH_RULE, stripEmDashes } from "@/lib/no-em-dash";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -62,7 +63,7 @@ async function generateDraft(client: ClientRow, senderName: string, userId: stri
     "Tu rédiges un email court, chaleureux et professionnel à l'interlocuteur d'un client qui vient de signer, pour récupérer les informations manquantes nécessaires au démarrage (onboarding).",
     "L'email liste poliment les éléments manquants (regroupés et reformulés de façon naturelle, pas en jargon CRM), et propose un échange rapide si besoin.",
     "LANGUE : détecte la langue dominante à partir du nom de l'interlocuteur et du contexte fourni ; en cas de doute, repli sur le français. Rédige TOUT (subject, body) dans cette langue.",
-    "N'utilise JAMAIS de tiret long (—). Utilise une virgule, des parenthèses ou un tiret court à la place.",
+    NO_EM_DASH_RULE,
     'Réponds UNIQUEMENT en JSON valide : { "subject": "...", "body": "..." }',
     "Le body est en texte brut (pas de HTML, pas de markdown), avec une formule d'appel et une signature au nom de l'expéditeur.",
   ].join("\n");
@@ -91,6 +92,8 @@ async function generateDraft(client: ClientRow, senderName: string, userId: stri
   } catch {
     body = raw;
   }
+  subject = stripEmDashes(subject);
+  body = stripEmDashes(body);
 
   return { to: contact.email, subject, body, missing, generated_at: new Date().toISOString() };
 }
