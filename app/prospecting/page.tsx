@@ -5,6 +5,7 @@ import { useGmailStatus } from "@/lib/hooks/use-gmail-status";
 import { useOutreachCounts } from "@/lib/hooks/use-outreach-counts";
 import { ExchangesBadge } from "@/components/ui/exchanges-badge";
 import { DraftProvenanceCard } from "@/components/draft-provenance";
+import { ProspectingModeToggle } from "@/components/prospecting-mode-toggle";
 import type { DraftProvenance } from "@/lib/prospection/provenance";
 import { useUser } from "@clerk/nextjs";
 import { Paperclip, Send, Save, X, Search, Loader2, Sparkles, RotateCcw, ChevronDown, ChevronRight, ChevronUp, Linkedin, Copy, Check, Mail, MailOpen, Phone, Calendar, MessageSquare } from "lucide-react";
@@ -810,9 +811,12 @@ export default function ProspectingPage() {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b shrink-0" style={{ borderColor: "#f0f0f0" }}>
-        <div>
-          <h1 className="text-sm font-semibold" style={{ color: "#111" }}>Prospecting</h1>
-          <p className="text-xs" style={{ color: "#aaa" }}>Generate and send ultra-personalized prospecting emails</p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-sm font-semibold" style={{ color: "#111" }}>Prospecting</h1>
+            <p className="text-xs" style={{ color: "#aaa" }}>Generate and send ultra-personalized prospecting emails</p>
+          </div>
+          <ProspectingModeToggle />
         </div>
         <div className="flex items-center gap-3">
           <button
