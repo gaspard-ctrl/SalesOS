@@ -7,6 +7,7 @@ import { useEnrichmentLists } from "@/lib/hooks/use-enrichment";
 import type { EnrichmentProfile } from "@/lib/intel-types";
 import { ExchangesBadge } from "@/components/ui/exchanges-badge";
 import { DraftProvenanceCard } from "@/components/draft-provenance";
+import { ProspectingModeToggle } from "@/components/prospecting-mode-toggle";
 import type { DraftProvenance } from "@/lib/prospection/provenance";
 import {
   Search, Loader2, Sparkles, X, Upload, Plus, ChevronLeft, ChevronRight,
@@ -792,6 +793,7 @@ export default function MassProspectionPage() {
           <h1 className="text-base font-semibold" style={{ color: "#111" }}>
             {view === "setup" ? "Mass Prospection" : view === "review" ? (campaignName || "Campaign") : "Edit email"}
           </h1>
+          {view === "setup" && <ProspectingModeToggle />}
           {view === "review" && generating && (
             <div className="flex items-center gap-2 text-xs" style={{ color: "#7c3aed" }}>
               <Loader2 size={14} className="animate-spin" />

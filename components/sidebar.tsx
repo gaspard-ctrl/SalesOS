@@ -10,7 +10,6 @@ import {
   GraduationCap,
   Handshake,
   Crosshair,
-  Target,
   Megaphone,
   Video,
   Eye,
@@ -28,7 +27,7 @@ import { useUserMe } from "@/lib/hooks/use-user-me";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useSidebar } from "@/components/sidebar/sidebar-context";
 
-type NavEntry = { href: string; label: string; icon: LucideIcon };
+type NavEntry = { href: string; label: string; icon: LucideIcon; match?: string[] };
 
 const nav: NavEntry[] = [
   { href: "/", label: "CoachelloGPT", icon: Sparkles },
@@ -36,8 +35,7 @@ const nav: NavEntry[] = [
   { href: "/deals", label: "Deals", icon: Briefcase },
   { href: "/sales-coach", label: "Sales Coach", icon: GraduationCap },
   { href: "/clients", label: "Clients", icon: Handshake },
-  { href: "/prospecting", label: "Prospecting", icon: Crosshair },
-  { href: "/mass-prospection", label: "Mass Prospection", icon: Target },
+  { href: "/prospecting", label: "Prospecting", icon: Crosshair, match: ["/mass-prospection"] },
   { href: "/watchlist", label: "Watch List", icon: Eye },
   { href: "/marketing", label: "Marketing", icon: Megaphone },
   { href: "/video-studio", label: "Video Studio", icon: Video }
@@ -198,8 +196,8 @@ function SidebarBody({
         style={{ padding: collapsed ? "16px 6px" : "16px 8px" }}
         aria-label="Main navigation"
       >
-        {nav.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href;
+        {nav.map(({ href, label, icon: Icon, match }) => {
+          const active = pathname === href || (match?.includes(pathname ?? "") ?? false);
           return (
             <NavLink
               key={href}
