@@ -38,7 +38,7 @@ const nav: NavEntry[] = [
   { href: "/clients", label: "Clients", icon: Handshake },
   { href: "/prospecting", label: "Prospecting", icon: Crosshair, match: ["/mass-prospection"] },
   { href: "/watchlist", label: "Watch List", icon: Eye },
-  { href: "/orgchart", label: "Org Chart", icon: Network },
+  //{ href: "/orgchart", label: "Org Chart", icon: Network },
   { href: "/marketing", label: "Marketing", icon: Megaphone },
   { href: "/video-studio", label: "Video Studio", icon: Video }
 ];
