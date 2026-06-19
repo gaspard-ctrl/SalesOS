@@ -11,7 +11,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const { data, error } = await db
     .from("orgchart_import_jobs")
-    .select("id, source, status, account_id, result, error, created_at, updated_at")
+    .select("id, source, status, account_id, result, progress, error, created_at, updated_at")
     .eq("id", id)
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

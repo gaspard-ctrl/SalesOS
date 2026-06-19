@@ -165,6 +165,34 @@ export interface AccountChart {
   clusters: OrgCluster[];
 }
 
+// Changement de poste proposé sur HubSpot (à confirmer par l'utilisateur avant
+// écriture). Apollo n'écrit JAMAIS sur HubSpot sans confirmation.
+export interface HubspotTitleProposal {
+  contactId: string;
+  personId: string | null;
+  name: string;
+  from: string | null; // poste actuel sur HubSpot
+  to: string; // poste proposé par Apollo
+}
+
+// Contact qu'Apollo place dans une AUTRE entreprise (pas une sous-entité du
+// groupe) -> proposition : MAJ company HubSpot + "Left" dans le chart.
+export interface HubspotCompanyProposal {
+  contactId: string;
+  personId: string | null;
+  name: string;
+  currentCompany: string | null;
+  newCompany: string;
+}
+
+// Progression d'un job (fenêtre de suivi). total=0 -> spinner indéterminé.
+export interface JobProgress {
+  phase: string;
+  done: number;
+  total: number;
+  label?: string;
+}
+
 // Résultat agrégé d'un import (HubSpot ou CSV).
 export interface ImportResult {
   total: number;
@@ -172,6 +200,9 @@ export interface ImportResult {
   classified: number;
   managers_linked: number;
   errors: number;
+  // Changements proposés (Refresh/Import) à confirmer avant push HubSpot.
+  proposals?: HubspotTitleProposal[];
+  companyProposals?: HubspotCompanyProposal[];
 }
 
 export interface OrgImportJob {
@@ -184,6 +215,7 @@ export interface OrgImportJob {
   status: "running" | "done" | "error";
   params: unknown;
   result: ImportResult | null;
+  progress: JobProgress | null;
   error: string | null;
   created_at: string;
   updated_at: string;

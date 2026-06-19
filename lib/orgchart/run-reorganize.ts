@@ -3,7 +3,7 @@
 // cycle. Exécuté en background ; statut suivi dans orgchart_import_jobs
 // (source = "reorganize") pour réutiliser le même polling côté front.
 import { db } from "@/lib/db";
-import { listPeople } from "./db";
+import { listPeople, setJobProgress } from "./db";
 import { classifyHierarchy, type ClassifyInput } from "./classify-hierarchy";
 import { wouldCreateCycle } from "./graph";
 import type { ImportResult } from "./types";
@@ -72,6 +72,7 @@ export async function runReorganize(input: { jobId: string }): Promise<{ ok: boo
     const accountId = job.account_id as string;
     if (!accountId) throw new Error("missing account_id");
 
+    await setJobProgress(jobId, { phase: "classify", done: 0, total: 0, label: "Analyzing roles & links (AI)" });
     const r = await reclassifyAccount(accountId, (job.user_id as string) ?? null);
     const result: ImportResult = {
       total: r.total,

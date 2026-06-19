@@ -14,6 +14,7 @@ interface ImportBody {
   name?: string;
   companies?: { id: string; name?: string | null; domain?: string | null }[];
   validate?: boolean;
+  classify?: boolean; // analyser la hiérarchie maintenant (wizard=false)
   accountId?: string; // mode append : rattacher à un compte existant
   // csv (interne, plus exposé dans l'UI)
   rows?: string[][];
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
         account_id: body.accountId ?? null,
         company_name: companyName,
         status: "running",
-        params: { name: companyName, companies, validate: body.validate !== false },
+        params: { name: companyName, companies, validate: body.validate !== false, classify: body.classify !== false },
       })
       .select("id")
       .single();

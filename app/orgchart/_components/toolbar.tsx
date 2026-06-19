@@ -179,7 +179,7 @@ export function Toolbar({
         items={[
           { icon: UserSearch, label: "Find on Apollo", onClick: onFindApollo, hint: "Discover new ICP profiles" },
           { icon: UserPlus, label: "Add person", onClick: onAddPerson, hint: "Reveal email + title, push HubSpot" },
-          { icon: RefreshCw, label: "Sync from HubSpot", onClick: onSyncFromHubspot, busy: busyRefresh, hint: "Refresh titles & re-analyze links" },
+          { icon: RefreshCw, label: "Refresh", onClick: onSyncFromHubspot, busy: busyRefresh, hint: "Fetch titles via Apollo + update HubSpot + re-analyze links" },
         ]}
       />
 

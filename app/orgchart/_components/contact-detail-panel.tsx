@@ -8,6 +8,9 @@ import {
   LEVELS,
   DECISION_ROLES,
   RELATIONSHIP_STATUSES,
+  DEPARTMENTS,
+  DEPARTMENT_LABELS,
+  canonicalDepartment,
   type OrgPerson,
   type OrgPersonInput,
 } from "@/lib/orgchart/types";
@@ -173,11 +176,18 @@ export function ContactDetailPanel({
             <input style={inputStyle} value={form.entity ?? ""} onChange={(e) => set("entity", e.target.value)} />
           </Field>
           <Field label="Department">
-            <input
+            <select
               style={inputStyle}
-              value={form.department ?? ""}
-              onChange={(e) => set("department", e.target.value)}
-            />
+              value={canonicalDepartment(form.department) ?? ""}
+              onChange={(e) => set("department", e.target.value || null)}
+            >
+              <option value="">— None —</option>
+              {DEPARTMENTS.map((d) => (
+                <option key={d} value={d}>
+                  {DEPARTMENT_LABELS[d]}
+                </option>
+              ))}
+            </select>
           </Field>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>

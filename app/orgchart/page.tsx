@@ -8,17 +8,20 @@ import { useOrgchartAccounts } from "@/lib/hooks/use-orgchart-accounts";
 import { useOrgchart } from "@/lib/hooks/use-orgchart";
 import { useOrgImportJob } from "@/lib/hooks/use-orgchart-import";
 import { useApolloEnrichJob } from "@/lib/hooks/use-orgchart-enrich";
-import type { OrgPersonInput } from "@/lib/orgchart/types";
+import type { OrgPersonInput, HubspotTitleProposal, HubspotCompanyProposal } from "@/lib/orgchart/types";
 import { AccountRail } from "./_components/account-rail";
 import { Toolbar, type OrgView } from "./_components/toolbar";
 import { OrgFlow, type OrgFlowHandle } from "./_components/org-flow";
 import { DataTable } from "./_components/data-table";
 import { ContactDetailPanel } from "./_components/contact-detail-panel";
 import { AddPersonModal } from "./_components/add-person-modal";
-import { ImportHubspotModal } from "./_components/import-hubspot-modal";
+import { OnboardingWizard } from "./_components/onboarding-wizard";
 import { ApolloDiscoveryModal } from "./_components/apollo-discovery-modal";
 import { AccountsManager } from "./_components/accounts-manager";
 import { CompaniesManager } from "./_components/companies-manager";
+import { ConfirmChangesModal } from "./_components/confirm-changes-modal";
+import { Modal, GhostBtn } from "./_components/modal";
+import { JobProgressView } from "./_components/job-progress";
 
 export default function OrgChartPage() {
   const { toast } = useToast();
@@ -39,6 +42,10 @@ export default function OrgChartPage() {
   const [showCompanies, setShowCompanies] = useState(false);
   const [showApollo, setShowApollo] = useState(false);
   const [showAccounts, setShowAccounts] = useState(false);
+  // Changements détectés au Refresh, à confirmer avant écriture HubSpot.
+  const [titleProps, setTitleProps] = useState<HubspotTitleProposal[]>([]);
+  const [companyProps, setCompanyProps] = useState<HubspotCompanyProposal[]>([]);
+  const [refreshHidden, setRefreshHidden] = useState(false); // fenêtre de progression masquée
 
   // Jobs : side-effects déclenchés à la complétion via les callbacks du hook.
   const [reorgJobId, setReorgJobId] = useState<string | null>(null);
@@ -46,6 +53,7 @@ export default function OrgChartPage() {
     onDone: (job) => {
       setReorgJobId(null);
       reload();
+      setTimeout(() => flowRef.current?.autoArrange(), 400); // re-range après restructuration
       toast(`Org chart organized (${job.result?.managers_linked ?? 0} reporting links)`, "success");
     },
     onError: (job) => {
@@ -54,15 +62,24 @@ export default function OrgChartPage() {
     },
   });
   const [refreshJobId, setRefreshJobId] = useState<string | null>(null);
-  useOrgImportJob(refreshJobId, {
+  const { job: refreshJob } = useOrgImportJob(refreshJobId, {
     onDone: (job) => {
       setRefreshJobId(null);
       reload();
-      toast(`Synced from HubSpot (${job.result?.created ?? 0} new, links re-analyzed)`, "success");
+      setTimeout(() => flowRef.current?.autoArrange(), 400); // re-range (nouveaux contacts + structure)
+      const props = job.result?.proposals ?? [];
+      const coProps = job.result?.companyProposals ?? [];
+      if (props.length) setTitleProps(props); // -> pop-up de confirmation HubSpot
+      if (coProps.length) setCompanyProps(coProps);
+      const changes = props.length + coProps.length;
+      toast(
+        `Refreshed (${job.result?.created ?? 0} new). ${changes ? `${changes} change(s) to confirm.` : "Everything up to date."}`,
+        "success",
+      );
     },
     onError: (job) => {
       setRefreshJobId(null);
-      toast(job.error ?? "Sync from HubSpot failed", "error");
+      toast(job.error ?? "Refresh failed", "error");
     },
   });
   const [enrichJobId, setEnrichJobId] = useState<string | null>(null);
@@ -203,13 +220,15 @@ export default function OrgChartPage() {
   const startEnrich = async (id: string) => {
     try {
       const res = await api(`/api/orgchart/people/${id}/enrich`, "POST");
-      if (res.skipped) {
-        toast("Already in HubSpot — linked without an Apollo credit", "info");
-        reload();
+      if (res.jobId) {
+        // Nouveau contact : reveal email + poste en background.
+        setEnrichJobId(res.jobId);
+        toast("Enriching with Apollo (revealing email)…", "info");
         return;
       }
-      setEnrichJobId(res.jobId);
-      toast("Enriching with Apollo…", "info");
+      // Contact déjà sur HubSpot : match Apollo synchrone (poste, 0 crédit).
+      reload();
+      toast(res.title ? `Title fetched from Apollo: ${res.title}` : "Linked — Apollo found no current title", res.title ? "success" : "info");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Enrich failed", "error");
     }
@@ -228,28 +247,27 @@ export default function OrgChartPage() {
 
   const startSyncFromHubspot = async () => {
     if (!activeAccountId) return;
+    setRefreshHidden(false); // ré-affiche la fenêtre de progression
     try {
       const { jobId } = await api(`/api/orgchart/accounts/${activeAccountId}/refresh`, "POST");
       setRefreshJobId(jobId);
-      toast("Syncing from HubSpot (titles + links)…", "info");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Failed", "error");
     }
   };
 
-  const onNewAccountDone = (newAccountId: string) => {
+  // Fin du wizard (new account OU add company) : bascule sur le compte, vue
+  // whiteboard, et range le layout une fois les données chargées.
+  const onWizardComplete = (id: string) => {
     setShowNewAccount(false);
-    reloadAccounts();
-    setAccountId(newAccountId);
-    setSelectedId(null);
-    toast("Account imported", "success");
-  };
-
-  const onAddCompanyDone = () => {
     setShowAddCompany(false);
     reloadAccounts();
+    setAccountId(id);
+    setSelectedId(null);
+    setView("whiteboard");
     reload();
-    toast("Companies added", "success");
+    setTimeout(() => flowRef.current?.autoArrange(), 800);
+    toast("Org chart ready", "success");
   };
 
   const removeCompany = async (hubspotCompanyId: string) => {
@@ -347,11 +365,11 @@ export default function OrgChartPage() {
 
       {/* Modals */}
       {showAdd && <AddPersonModal onClose={() => setShowAdd(false)} onCreate={createPerson} />}
-      {showNewAccount && <ImportHubspotModal onClose={() => setShowNewAccount(false)} onDone={onNewAccountDone} />}
+      {showNewAccount && <OnboardingWizard onClose={() => setShowNewAccount(false)} onComplete={onWizardComplete} />}
       {showAddCompany && account && (
-        <ImportHubspotModal
+        <OnboardingWizard
           onClose={() => setShowAddCompany(false)}
-          onDone={onAddCompanyDone}
+          onComplete={onWizardComplete}
           appendAccountId={account.id}
           appendAccountName={account.name}
         />
@@ -384,6 +402,36 @@ export default function OrgChartPage() {
           onClose={() => setShowAccounts(false)}
           onRename={renameAccount}
           onDelete={deleteAccount}
+        />
+      )}
+      {/* Fenêtre de progression du Refresh (suivi de l'avancée) */}
+      {refreshJobId && !refreshHidden && (
+        <Modal
+          title="Refreshing account"
+          width={460}
+          onClose={() => setRefreshHidden(true)}
+          footer={<GhostBtn onClick={() => setRefreshHidden(true)}>Run in background</GhostBtn>}
+        >
+          <JobProgressView progress={refreshJob?.progress} fallback="Fetching HubSpot, validating titles on Apollo…" />
+        </Modal>
+      )}
+
+      {(titleProps.length > 0 || companyProps.length > 0) && activeAccountId && (
+        <ConfirmChangesModal
+          accountId={activeAccountId}
+          titleProposals={titleProps}
+          companyProposals={companyProps}
+          onClose={() => {
+            setTitleProps([]);
+            setCompanyProps([]);
+          }}
+          onApplied={({ titles, companies }) => {
+            setTitleProps([]);
+            setCompanyProps([]);
+            reload();
+            const n = titles + companies;
+            toast(n > 0 ? `${n} contact(s) updated on HubSpot` : "No HubSpot update applied", n > 0 ? "success" : "info");
+          }}
         />
       )}
     </div>

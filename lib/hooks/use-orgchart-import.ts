@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import useSWR from "swr";
-import type { ImportResult } from "@/lib/orgchart/types";
+import type { ImportResult, JobProgress } from "@/lib/orgchart/types";
 
 interface ImportJob {
   id: string;
@@ -8,6 +8,7 @@ interface ImportJob {
   status: "running" | "done" | "error";
   account_id: string | null;
   result: ImportResult | null;
+  progress: JobProgress | null;
   error: string | null;
 }
 
@@ -65,7 +66,7 @@ export function useOrgImportJob(jobId: string | null, opts?: Opts) {
       if (tracker.current.jobId !== jobId) {
         tracker.current = { jobId, status: null, startedAt: Date.now(), fired: false };
       }
-      fire({ id: jobId ?? "", source: "hubspot", status: "error", account_id: null, result: null, error: err?.message ?? "Polling failed" });
+      fire({ id: jobId ?? "", source: "hubspot", status: "error", account_id: null, result: null, progress: null, error: err?.message ?? "Polling failed" });
     },
   });
 
