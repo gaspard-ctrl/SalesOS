@@ -7,10 +7,20 @@ import type {
   AccountChart,
   AccountCompany,
   CustomColumn,
+  JobProgress,
   OrgAccount,
   OrgPerson,
   OrgPersonInput,
 } from "./types";
+
+// Écrit la progression d'un job (fenêtre de suivi côté front). Best-effort.
+export async function setJobProgress(jobId: string, progress: JobProgress): Promise<void> {
+  await db
+    .from("orgchart_import_jobs")
+    .update({ progress, updated_at: new Date().toISOString() })
+    .eq("id", jobId)
+    .then(undefined, () => {});
+}
 
 type Row = Record<string, unknown>;
 

@@ -1,16 +1,16 @@
-// "Sync from HubSpot" : re-tire les contacts des company du compte, VALIDE les
-// postes via Apollo (match sans reveal -> 0 crédit), met à jour HubSpot + les
-// fiches (titres, noms email -> vrais noms, changement de company), ajoute les
-// nouveaux contacts, puis RE-ANALYSE toute la hiérarchie (Claude). Background ;
-// statut dans orgchart_import_jobs (source = "hubspot_refresh").
+// "Refresh" (ex "Sync from HubSpot") : re-tire les contacts des company du
+// compte, VALIDE les postes via Apollo (match sans reveal -> 0 crédit), met à
+// jour L'ORGANIGRAMME (titres, noms email -> vrais noms), ajoute les nouveaux
+// contacts, ré-analyse la hiérarchie. N'ÉCRIT JAMAIS sur HubSpot : les
+// changements de poste sont collectés dans result.proposals et confirmés par
+// l'utilisateur avant push. Background ; statut dans orgchart_import_jobs.
 import { db } from "@/lib/db";
 import { matchPerson, isApolloConfigured } from "@/lib/apollo/client";
-import { hubspotUpdate } from "@/lib/hubspot";
 import { normalizeCompany } from "@/lib/fuzzy-match";
-import { getAccount, listAccountCompanies, listPeople, createPerson } from "./db";
+import { getAccount, listAccountCompanies, listPeople, createPerson, setJobProgress } from "./db";
 import { fetchContactsForCompany } from "./fetch-hubspot-contacts";
 import { reclassifyAccount } from "./run-reorganize";
-import type { ImportResult, OrgPerson } from "./types";
+import type { HubspotTitleProposal, HubspotCompanyProposal, ImportResult } from "./types";
 
 function splitName(full: string): { first: string; last: string } {
   const t = (full ?? "").trim().split(/\s+/).filter(Boolean);
@@ -34,11 +34,29 @@ export async function runAccountRefresh(input: { jobId: string }): Promise<{ ok:
     const existing = await listPeople(accountId);
     const existingByContact = new Map(existing.filter((p) => p.hubspot_contact_id).map((p) => [p.hubspot_contact_id as string, p]));
     const apollo = isApolloConfigured();
-    const result: ImportResult = { total: 0, created: 0, classified: 0, managers_linked: 0, errors: 0 };
+    const result: ImportResult = { total: 0, created: 0, classified: 0, managers_linked: 0, errors: 0, proposals: [], companyProposals: [] };
+    const proposals: HubspotTitleProposal[] = [];
+    const companyProposals: HubspotCompanyProposal[] = [];
+
+    // Même groupe ? (ex : "Allianz Partners" pour le compte "Allianz"). On
+    // compare au token le plus discriminant du nom du compte. Si l'org Apollo le
+    // contient -> même groupe -> ce n'est PAS un départ.
+    const accountToken =
+      normalizeCompany(account.name)
+        .split(" ")
+        .filter(Boolean)
+        .sort((a, b) => b.length - a.length)[0] ?? "";
+    const sameGroup = (org: string | null): boolean => {
+      if (!org) return true;
+      const o = normalizeCompany(org);
+      return !accountToken || o.includes(accountToken) || accountToken.includes(o.split(" ")[0] ?? "");
+    };
 
     // 1. Re-tire les contacts de toutes les company (dédup par contact).
     const fetched = new Map<string, { name: string; title: string | null; email: string | null; linkedin: string | null; companyId: string; companyName: string | null; domain: string | null }>();
-    for (const c of companies) {
+    for (let ci = 0; ci < companies.length; ci++) {
+      const c = companies[ci];
+      await setJobProgress(jobId, { phase: "fetch", done: ci, total: companies.length, label: "Fetching HubSpot contacts" });
       const f = await fetchContactsForCompany(c.hubspot_company_id).catch(() => null);
       for (const contact of f?.contacts ?? []) {
         if (fetched.has(contact.hubspot_contact_id)) continue;
@@ -56,13 +74,15 @@ export async function runAccountRefresh(input: { jobId: string }): Promise<{ ok:
     result.total = fetched.size;
 
     // 2. Pour chaque contact : valide poste/nom/company via Apollo, met à jour
-    //    HubSpot + la fiche (existante) ou crée la nouvelle personne.
-    for (const [contactId, info] of fetched) {
+    //    L'ORGANIGRAMME (jamais HubSpot ici) + collecte les propositions.
+    const fetchedList = [...fetched.entries()];
+    for (let i = 0; i < fetchedList.length; i++) {
+      const [contactId, info] = fetchedList[i];
+      if (i % 3 === 0) await setJobProgress(jobId, { phase: "validate", done: i, total: fetchedList.length, label: "Validating job titles via Apollo" });
       try {
         let apolloTitle: string | null = null; // poste validé par Apollo (seul à écraser `title`)
         let name = info.name;
-        let relationship: OrgPerson["relationship_status"] | null = null;
-        let note: string | null = null;
+        const ex = existingByContact.get(contactId);
 
         if (apollo) {
           const { first, last } = splitName(info.name.includes("@") ? "" : info.name);
@@ -76,30 +96,36 @@ export async function runAccountRefresh(input: { jobId: string }): Promise<{ ok:
           const aOrg = m?.person?.organization_name ?? null;
           const aName = `${m?.person?.first_name ?? ""} ${m?.person?.last_name ?? ""}`.trim();
 
-          if (aTitle && aTitle.trim()) apolloTitle = aTitle.trim();
-          // Nom email -> vrai nom Apollo.
+          // On n'applique le poste Apollo QUE si même groupe (ex : "Allianz
+          // Partners" pour "Allianz" = OK ; "Axa" = autre boîte -> proposition de départ).
+          if (aOrg && !sameGroup(aOrg)) {
+            companyProposals.push({ contactId, personId: ex?.id ?? null, name, currentCompany: info.companyName, newCompany: aOrg });
+          } else if (aTitle && aTitle.trim()) {
+            apolloTitle = aTitle.trim();
+          }
           if (info.name.includes("@") && aName) name = aName;
-          // Changement de company.
-          if (aOrg && normalizeCompany(aOrg) && normalizeCompany(aOrg) !== normalizeCompany(info.companyName ?? account.name)) {
-            relationship = "left";
-            note = `⚠ Apollo: now at ${aOrg}${aTitle ? ` (${aTitle})` : ""}`;
-          }
-          // Met à jour HubSpot si le poste a changé.
-          if (apolloTitle && apolloTitle !== (info.title ?? "").trim()) {
-            await hubspotUpdate("contacts", contactId, { jobtitle: apolloTitle }).catch(() => {});
-          }
         }
 
-        const ex = existingByContact.get(contactId);
+        // Proposition de mise à jour HubSpot (poste) -> confirmée par l'utilisateur.
+        if (apolloTitle && apolloTitle !== (info.title ?? "").trim()) {
+          proposals.push({ contactId, personId: ex?.id ?? null, name, from: info.title, to: apolloTitle });
+        }
+
         if (ex) {
           const patch: Record<string, unknown> = { updated_at: new Date().toISOString(), in_hubspot: true, hubspot_company_id: info.companyId };
-          // title_hubspot suit toujours HubSpot ; title (vérifié) n'est écrasé que par Apollo.
           if (info.title && info.title !== ex.title_hubspot) patch.title_hubspot = info.title;
           if (apolloTitle && apolloTitle !== ex.title) patch.title = apolloTitle;
-          // Ne remplace le nom que s'il était un email.
           if (ex.name.includes("@") && name && !name.includes("@")) patch.name = name;
-          if (relationship) patch.relationship_status = relationship;
-          if (note && !(ex.notes ?? "").includes("now at")) patch.notes = `${ex.notes ? ex.notes + " | " : ""}${note}`;
+          // Self-heal : nettoie les faux "left company" posés par l'ancien refresh.
+          if (ex.relationship_status === "left" && (ex.notes ?? "").includes("Apollo: now at")) {
+            patch.relationship_status = null;
+            const cleaned = (ex.notes ?? "")
+              .split("|")
+              .map((s) => s.trim())
+              .filter((s) => s && !s.includes("Apollo: now at"))
+              .join(" | ");
+            patch.notes = cleaned || null;
+          }
           await db.from("orgchart_people").update(patch).eq("id", ex.id);
         } else {
           await createPerson(accountId, {
@@ -112,8 +138,6 @@ export async function runAccountRefresh(input: { jobId: string }): Promise<{ ok:
             hubspot_company_id: info.companyId,
             entity: info.companyName,
             in_hubspot: true,
-            relationship_status: relationship ?? undefined,
-            notes: note ?? undefined,
             source: "hubspot",
           });
           result.created++;
@@ -123,8 +147,11 @@ export async function runAccountRefresh(input: { jobId: string }): Promise<{ ok:
         result.errors++;
       }
     }
+    result.proposals = proposals;
+    result.companyProposals = companyProposals;
 
     // 3. Ré-analyse toute la hiérarchie (entité/niveau/manager).
+    await setJobProgress(jobId, { phase: "classify", done: 0, total: 0, label: "Re-analyzing roles & links (AI)" });
     const r = await reclassifyAccount(accountId, userId);
     result.classified = r.classified;
     result.managers_linked = r.managersLinked;

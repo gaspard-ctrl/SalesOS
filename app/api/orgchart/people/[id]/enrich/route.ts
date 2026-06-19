@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { isApolloConfigured } from "@/lib/apollo/client";
+import { isApolloConfigured, matchPerson } from "@/lib/apollo/client";
 import { runApolloEnrichment } from "@/lib/apollo/run-enrichment";
 import { getPerson, getAccount } from "@/lib/orgchart/db";
 import { findCompanyByName } from "@/lib/intel/hubspot-company-resolve";
 import { createCompany, hubspotAssociate } from "@/lib/hubspot";
+import { normalizeCompany } from "@/lib/fuzzy-match";
 import { findExistingHubspotContact } from "@/lib/orgchart/hubspot-link";
 import type { EnrichPersonInput } from "@/lib/apollo/enrichment-types";
 
@@ -20,8 +21,12 @@ function splitName(full: string): { firstname: string; lastname: string } {
   return { firstname: t[0], lastname: t.slice(1).join(" ") };
 }
 
-// POST /api/orgchart/people/[id]/enrich -> { jobId } (reveal Apollo + HubSpot,
-// write-back sur la ligne). Poll via /api/apollo/enrich/[id].
+// POST /api/orgchart/people/[id]/enrich
+// - Personne DÉJÀ sur HubSpot -> Apollo MATCH (sans reveal, 0 crédit) pour
+//   récupérer/rafraîchir le POSTE actuel, l'écrire sur la fiche + HubSpot, lier.
+//   Réponse synchrone { matched, title }.
+// - Personne PAS sur HubSpot -> reveal (email + poste, crédit) en background.
+//   Réponse { jobId } (poll via /api/apollo/enrich/[id]).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -30,49 +35,67 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const person = await getPerson(id);
   if (!person) return NextResponse.json({ error: "Person not found" }, { status: 404 });
-
-  // Déjà lié -> rien à faire (pas de reveal).
-  if (person.hubspot_contact_id) {
-    return NextResponse.json({ ok: true, skipped: "already_linked" });
-  }
-
   const account = await getAccount(person.account_id);
   if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
   // Résout (ou crée) la company HubSpot cible.
-  let hubspotCompanyId = account.hubspot_company_id;
-  if (!hubspotCompanyId) {
+  let companyId = account.hubspot_company_id;
+  if (!companyId) {
     const hit = await findCompanyByName(account.name).catch(() => null);
-    hubspotCompanyId = hit?.id ?? null;
-    if (!hubspotCompanyId) {
-      hubspotCompanyId = await createCompany(account.name, account.domain).catch(() => null);
-    }
-    if (hubspotCompanyId) {
-      await db.from("orgchart_accounts").update({ hubspot_company_id: hubspotCompanyId }).eq("id", account.id);
-    }
-  }
-  if (!hubspotCompanyId) {
-    return NextResponse.json({ error: "Could not resolve a HubSpot company for this account" }, { status: 400 });
-  }
-
-  // RÈGLE : ne JAMAIS révéler quelqu'un déjà sur HubSpot. Pré-check par email
-  // connu, sinon par nom dans la company. Si trouvé -> on LIE (sans crédit) et
-  // on s'arrête. Si la personne est flaggée in_hubspot mais introuvable, on ne
-  // révèle pas non plus.
-  const existingId = await findExistingHubspotContact(person, hubspotCompanyId).catch(() => null);
-  if (existingId) {
-    await hubspotAssociate("contacts", existingId, "companies", hubspotCompanyId).catch(() => {});
-    await db
-      .from("orgchart_people")
-      .update({ hubspot_contact_id: existingId, in_hubspot: true, hubspot_company_id: hubspotCompanyId })
-      .eq("id", person.id);
-    return NextResponse.json({ ok: true, skipped: "linked_existing" });
-  }
-  if (person.in_hubspot) {
-    return NextResponse.json({ ok: true, skipped: "in_hubspot_not_found" });
+    companyId = hit?.id ?? (await createCompany(account.name, account.domain).catch(() => null));
+    if (companyId) await db.from("orgchart_accounts").update({ hubspot_company_id: companyId }).eq("id", account.id);
   }
 
   const { firstname, lastname } = splitName(person.name);
+
+  // Contact HubSpot existant ? (id stocké, sinon email/nom dans la company)
+  let contactId = person.hubspot_contact_id;
+  if (!contactId && companyId) contactId = await findExistingHubspotContact(person, companyId).catch(() => null);
+  const alreadyOnHubspot = !!contactId || person.in_hubspot;
+
+  // DÉJÀ sur HubSpot -> match Apollo (gratuit) pour le poste, jamais de reveal.
+  // On remplit L'ORGANIGRAMME ; on N'ÉCRIT PAS le poste sur HubSpot ici (ça se
+  // confirme via Save + "Also sync to HubSpot", ou en masse via Refresh).
+  if (alreadyOnHubspot) {
+    const m = await matchPerson({
+      apolloId: person.apollo_id || undefined,
+      firstName: firstname || undefined,
+      lastName: lastname || undefined,
+      domain: account.domain ?? undefined,
+      organizationName: account.name,
+    }).catch(() => null);
+    // N'applique le poste que si même entreprise/groupe (ex : Allianz Partners
+    // pour Allianz = OK ; autre boîte = on ignore).
+    const aOrg = m?.person?.organization_name ?? null;
+    const accountToken =
+      normalizeCompany(account.name).split(" ").filter(Boolean).sort((a, b) => b.length - a.length)[0] ?? "";
+    const sameGroup =
+      !aOrg || !accountToken || normalizeCompany(aOrg).includes(accountToken);
+    const title = sameGroup ? (m?.person?.title ?? "").trim() || null : null;
+
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (contactId) {
+      patch.hubspot_contact_id = contactId;
+      patch.in_hubspot = true;
+      if (companyId) patch.hubspot_company_id = companyId;
+    }
+    if (title) {
+      patch.title = title;
+      patch.title_hubspot = title;
+    }
+    if (m?.person?.linkedin_url && !person.linkedin_url) patch.linkedin_url = m.person.linkedin_url;
+    await db.from("orgchart_people").update(patch).eq("id", person.id);
+
+    if (contactId && companyId) await hubspotAssociate("contacts", contactId, "companies", companyId).catch(() => {});
+
+    return NextResponse.json({ ok: true, matched: true, title });
+  }
+
+  // PAS sur HubSpot -> reveal (email + poste). Nécessite une company cible.
+  if (!companyId) {
+    return NextResponse.json({ error: "Could not resolve a HubSpot company for this account" }, { status: 400 });
+  }
+
   const input: EnrichPersonInput = {
     apolloId: person.apollo_id ?? "",
     firstName: firstname,
@@ -81,7 +104,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     title: person.title ?? person.title_hubspot ?? null,
     linkedinUrl: person.linkedin_url,
     email: person.email,
-    hubspotCompanyId,
+    hubspotCompanyId: companyId,
     companyName: account.name,
     domain: account.domain,
   };
@@ -93,7 +116,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .from("apollo_enrichment_jobs")
     .insert({
       user_id: user.id,
-      hubspot_company_id: hubspotCompanyId,
+      hubspot_company_id: companyId,
       hubspot_company_name: account.name,
       hubspot_company_domain: account.domain,
       hubspot_owner_id: ownerId,
