@@ -1131,3 +1131,36 @@ export function isClientAnalysis(
 ): a is ClientSalesCoachAnalysis {
   return !!a && typeof a === "object" && "customer_health" in a;
 }
+
+/**
+ * Résout client vs prospect en privilégiant l'`audience` de la row (recalculée
+ * depuis le deal HubSpot : pipeline Customer Success / passation / closed-won)
+ * sur la forme du JSON stocké. Sans ça, une analyse générée sur le chemin
+ * prospect (axes commerciaux + MEDDIC) reste affichée en prospect même après
+ * que le compte soit passé en client. L'`audience` fait foi ; on ne retombe sur
+ * la shape de l'analyse que lorsqu'elle est inconnue (aucun deal lié).
+ */
+export function resolveIsClient(
+  audience: "prospect" | "client" | null | undefined,
+  analysis: Partial<AnySalesCoachAnalysis> | null | undefined,
+): boolean {
+  if (audience === "client") return true;
+  if (audience === "prospect") return false;
+  return isClientAnalysis(analysis);
+}
+
+/**
+ * Vrai quand l'`audience` de la row contredit la forme de l'analyse stockée :
+ * compte désormais client mais analyse encore au format prospect (ou l'inverse).
+ * L'UI doit alors inviter à relancer l'analyse pour régénérer le bon format
+ * (Customer Health côté client, MEDDIC côté prospect).
+ */
+export function isAnalysisAudienceStale(
+  audience: "prospect" | "client" | null | undefined,
+  analysis: Partial<AnySalesCoachAnalysis> | null | undefined,
+): boolean {
+  if (!analysis) return false;
+  if (audience === "client") return !isClientAnalysis(analysis);
+  if (audience === "prospect") return isClientAnalysis(analysis);
+  return false;
+}

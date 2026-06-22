@@ -8,7 +8,7 @@ import type {
   KeyMomentKind,
   SalesCoachAnalysis,
 } from "@/lib/guides/sales-coach";
-import { extractStringArray, isClientAnalysis } from "@/lib/guides/sales-coach";
+import { extractStringArray, resolveIsClient } from "@/lib/guides/sales-coach";
 import type { TalkRatio } from "@/lib/sales-coach/talk-ratio";
 import { COLORS, scoreToColor } from "@/lib/design/tokens";
 import { Card } from "@/components/ui/card";
@@ -79,6 +79,7 @@ const CUSTOMER_HEALTH_LABELS = [
 
 interface Props {
   analysis: AnySalesCoachAnalysis;
+  audience?: "prospect" | "client" | null;
   talkRatio: TalkRatio | null;
   onOpenEmailDraft: () => void;
   onGoToAxes: () => void;
@@ -92,13 +93,14 @@ function isMeddicNA(score: number, notes: string): boolean {
 
 export function SynthesisTab({
   analysis,
+  audience,
   talkRatio,
   onOpenEmailDraft,
   onGoToAxes,
   onGoToMeddic,
   onGoToCustomerHealth,
 }: Props) {
-  const isClient = isClientAnalysis(analysis);
+  const isClient = resolveIsClient(audience, analysis);
   const strengths = extractStringArray(analysis.strengths);
   const weaknesses = extractStringArray(analysis.weaknesses);
   const priorities = extractStringArray(analysis.coaching_priorities);
