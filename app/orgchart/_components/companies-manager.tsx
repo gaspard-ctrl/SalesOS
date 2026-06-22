@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Building2, Trash2, Plus, ExternalLink } from "lucide-react";
-import { Modal, GhostBtn } from "./modal";
+import { useMemo, useState } from "react";
+import { Building2, Trash2, Plus, ExternalLink, Merge } from "lucide-react";
+import { Modal, GhostBtn, PrimaryBtn } from "./modal";
 import { COLORS } from "@/lib/design/tokens";
 import type { AccountCompany, OrgPerson } from "@/lib/orgchart/types";
 
@@ -12,6 +12,7 @@ interface Props {
   onClose: () => void;
   onAddCompany: () => void;
   onRemove: (hubspotCompanyId: string) => void;
+  onMerge: (from: string[], into: string) => void;
 }
 
 const th: React.CSSProperties = {
@@ -29,10 +30,44 @@ const td: React.CSSProperties = {
   borderBottom: `1px solid ${COLORS.line}`,
 };
 
-export function CompaniesManager({ companies, people, onClose, onAddCompany, onRemove }: Props) {
+export function CompaniesManager({ companies, people, onClose, onAddCompany, onRemove, onMerge }: Props) {
   const [confirm, setConfirm] = useState<string | null>(null);
   const countFor = (hubspotCompanyId: string) =>
     people.filter((p) => p.hubspot_company_id === hubspotCompanyId).length;
+
+  // Entités présentes sur le whiteboard (= cartes regroupées par `entity`).
+  const entities = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of people) {
+      const e = (p.entity ?? "").trim();
+      if (!e) continue;
+      m.set(e, (m.get(e) ?? 0) + 1);
+    }
+    return [...m.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [people]);
+
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [target, setTarget] = useState("");
+  const toggleEntity = (name: string) => {
+    setSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      // Cible par défaut = 1ʳᵉ sélectionnée (la plus grosse, l'ordre est par taille).
+      if (!next.has(target)) setTarget(next.size ? [...next][0] : "");
+      return next;
+    });
+  };
+  const doMerge = () => {
+    const into = target || [...sel][0];
+    const from = [...sel].filter((n) => n !== into);
+    if (!into || from.length === 0) return;
+    onMerge(from, into);
+    setSel(new Set());
+    setTarget("");
+  };
 
   return (
     <Modal
@@ -89,6 +124,66 @@ export function CompaniesManager({ companies, people, onClose, onAddCompany, onR
             ))}
           </tbody>
         </table>
+      )}
+
+      {entities.length >= 2 && (
+        <div style={{ marginTop: 18, borderTop: `1px solid ${COLORS.line}`, paddingTop: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700, color: COLORS.ink2, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 6 }}>
+            <Merge size={13} /> Merge companies
+          </div>
+          <p style={{ fontSize: 12, color: COLORS.ink3, margin: "0 0 10px" }}>
+            Two companies that are the same in practice (e.g. Allianz / Allianz Trade)? Check them and merge into a single
+            box. The HubSpot companies stay linked - only the grouping changes.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto" }}>
+            {entities.map((e) => {
+              const on = sel.has(e.name);
+              return (
+                <label
+                  key={e.name}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 9,
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: `1px solid ${on ? COLORS.brand : COLORS.line}`,
+                    background: on ? COLORS.brandTint : COLORS.bgCard,
+                    cursor: "pointer",
+                  }}
+                >
+                  <input type="checkbox" checked={on} onChange={() => toggleEntity(e.name)} />
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: COLORS.ink0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {e.name}
+                  </span>
+                  <span style={{ fontSize: 11.5, color: COLORS.ink3, flexShrink: 0 }}>
+                    {e.count} {e.count === 1 ? "person" : "people"}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          {sel.size >= 2 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, color: COLORS.ink2 }}>Keep name:</span>
+              <select
+                value={target || [...sel][0]}
+                onChange={(e) => setTarget(e.target.value)}
+                style={{ fontSize: 12.5, padding: "6px 9px", border: `1px solid ${COLORS.lineStrong}`, borderRadius: 8, color: COLORS.ink0, background: COLORS.bgCard }}
+              >
+                {[...sel].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+              <div style={{ flex: 1 }} />
+              <PrimaryBtn onClick={doMerge}>
+                Merge {sel.size} → {target || [...sel][0]}
+              </PrimaryBtn>
+            </div>
+          )}
+        </div>
       )}
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 14 }}>

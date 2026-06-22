@@ -56,8 +56,9 @@ Pour CHAQUE contact, renvoie via l'outil classify_org :
 - confidence : 0 à 1, confiance sur reportsToIndex.
 
 Règles de rattachement (reportsToIndex) :
-- Relie EN PRIORITÉ au sein du MÊME département ET de la même entity : la personne reporte au contact du même département le plus proche au-dessus en séniorité (ex : un L&D Officer -> au Head of L&D du même lieu ; un HRBP -> au HR Director).
-- Le plus senior d'un département (sa tête) reporte au C-level / décideur RH de la même entity, s'il existe.
+- Un lien hiérarchique reste TOUJOURS dans la MÊME zone : même entity ET même département. Ne relie JAMAIS deux personnes de départements différents OU d'entity différentes, même si l'une est nettement plus senior (ex : un HR Manager ne reporte PAS à un L&D Director ; une personne de "France" ne reporte pas à une personne d'"Espagne").
+- Dans sa zone, la personne reporte au contact le plus proche au-dessus en séniorité (ex : un L&D Officer -> au Head of L&D de la même zone ; un HRBP -> au HR Director de la même zone).
+- S'il n'existe aucun manager plus senior dans la même zone -> reportsToIndex=null (la personne est en haut de sa zone). Mieux vaut null qu'un lien hors zone.
 - N'invente jamais : reportsToIndex doit être un index réellement présent dans la liste, jamais le contact lui-même, et d'un niveau strictement supérieur.
 - Dans le doute, reportsToIndex=null.
 - Réponds UNIQUEMENT via l'outil classify_org, pour TOUS les contacts.`;
@@ -178,6 +179,21 @@ export async function classifyHierarchy(
     if (o.reportsToIndex == null) continue;
     const mgrRank = rankByIndex.get(o.reportsToIndex) ?? 0;
     if (mgrRank <= LEVEL_RANK[o.level]) o.reportsToIndex = null;
+  }
+
+  // Passe ZONE : un lien hiérarchique ne traverse jamais une zone (même
+  // département canonique ET même entity). On annule tout lien hors zone -> la
+  // personne devient le sommet de sa zone. cf. règle "no cross-department links".
+  const deptByIndex = new Map(out.map((o) => [o.index, o.department])); // déjà canonique ou null
+  const norm = (s: string | null) => (s ?? "").trim().toLowerCase();
+  const entityByIndex = new Map(out.map((o) => [o.index, norm(o.entity)]));
+  for (const o of out) {
+    if (o.reportsToIndex == null) continue;
+    const sameDept = deptByIndex.get(o.index) === deptByIndex.get(o.reportsToIndex);
+    const eA = entityByIndex.get(o.index) ?? "";
+    const eM = entityByIndex.get(o.reportsToIndex) ?? "";
+    const entityMismatch = !!eA && !!eM && eA !== eM; // tolère une entity manquante
+    if (!sameDept || entityMismatch) o.reportsToIndex = null;
   }
   // Anti-cycle : adjacency par index.
   const adjacency = out.map((o) => ({ id: String(o.index), manager_id: o.reportsToIndex == null ? null : String(o.reportsToIndex) }));

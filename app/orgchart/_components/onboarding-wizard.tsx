@@ -38,15 +38,25 @@ interface Props {
   appendAccountName?: string;
 }
 
-type Step = "select" | "import" | "confirm" | "apollo" | "analyze" | "done";
+type Step = "select" | "people" | "import" | "confirm" | "apollo" | "analyze" | "done";
 
 const STEPS: { key: Step; label: string }[] = [
-  { key: "select", label: "Select" },
+  { key: "select", label: "Companies" },
+  { key: "people", label: "People" },
   { key: "import", label: "Import" },
   { key: "confirm", label: "Confirm" },
   { key: "apollo", label: "Find new" },
   { key: "analyze", label: "Analyze" },
 ];
+
+interface PreviewContact {
+  hubspot_contact_id: string;
+  name: string;
+  title: string | null;
+  email: string | null;
+  companyId: string;
+  companyName: string | null;
+}
 
 const SENIORITIES = ["c_suite", "vp", "head", "director", "manager", "senior"];
 const TITLE_PRESETS: { key: string; label: string; titles: string }[] = [
@@ -74,6 +84,12 @@ export function OnboardingWizard({ onClose, onComplete, appendAccountId, appendA
   const [accountName, setAccountName] = useState(appendAccountName ?? "");
   const [starting, setStarting] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Étape People (qui mettre dans l'organigramme) ──
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [previewContacts, setPreviewContacts] = useState<PreviewContact[]>([]);
+  const [selPeople, setSelPeople] = useState<Set<string>>(new Set());
+  const [peopleSearch, setPeopleSearch] = useState("");
 
   // ── Résultat import ──
   const [resultAccountId, setResultAccountId] = useState<string | null>(appendAccountId ?? null);
@@ -172,12 +188,41 @@ export function OnboardingWizard({ onClose, onComplete, appendAccountId, appendA
       return next;
     });
 
-  const startImport = async () => {
+  // Select -> charge la liste des contacts HubSpot (preview) avant l'import.
+  const loadPreview = async () => {
     if (selectedCo.size === 0) return;
     if (!append && !accountName.trim()) {
       setErr("Account name is required");
       return;
     }
+    setLoadingPreview(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/orgchart/hubspot/contacts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          companies: [...selectedCo.values()].map((c) => ({ id: c.id, name: c.name, domain: c.domain })),
+          accountId: appendAccountId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not load contacts");
+      const contacts: PreviewContact[] = data.contacts ?? [];
+      setPreviewContacts(contacts);
+      setSelPeople(new Set(contacts.map((c) => c.hubspot_contact_id)));
+      setPeopleSearch("");
+      setStep("people");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not load contacts");
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  // People -> lance l'import des contacts cochés (validation Apollo, liens…).
+  const startImport = async () => {
+    if (selPeople.size === 0) return;
     setStarting(true);
     setErr(null);
     try {
@@ -191,6 +236,7 @@ export function OnboardingWizard({ onClose, onComplete, appendAccountId, appendA
           companies: [...selectedCo.values()].map((c) => ({ id: c.id, name: c.name, domain: c.domain })),
           validate: true,
           classify: false, // l'analyse des liens est une étape séparée du wizard
+          includeContactIds: [...selPeople],
         }),
       });
       const data = await res.json();
@@ -203,6 +249,19 @@ export function OnboardingWizard({ onClose, onComplete, appendAccountId, appendA
       setStarting(false);
     }
   };
+
+  const togglePerson = (id: string) =>
+    setSelPeople((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const filteredPreview = previewContacts.filter((c) => {
+    const q = peopleSearch.trim().toLowerCase();
+    if (!q) return true;
+    return c.name.toLowerCase().includes(q) || (c.title ?? "").toLowerCase().includes(q);
+  });
 
   /* ── Confirm ── */
   const tog = (set: Set<string>, setter: (s: Set<string>) => void, id: string) => {
@@ -308,8 +367,17 @@ export function OnboardingWizard({ onClose, onComplete, appendAccountId, appendA
     footer = (
       <>
         <GhostBtn onClick={onClose}>Cancel</GhostBtn>
-        <PrimaryBtn onClick={startImport} disabled={starting || selectedCo.size === 0}>
-          Import &amp; validate{selectedCo.size > 0 ? ` (${selectedCo.size})` : ""}
+        <PrimaryBtn onClick={loadPreview} disabled={loadingPreview || selectedCo.size === 0}>
+          {loadingPreview ? "Loading contacts…" : "Continue"}
+        </PrimaryBtn>
+      </>
+    );
+  } else if (step === "people") {
+    footer = (
+      <>
+        <GhostBtn onClick={() => setStep("select")}>Back</GhostBtn>
+        <PrimaryBtn onClick={startImport} disabled={starting || selPeople.size === 0}>
+          {starting ? "Starting…" : `Import & validate (${selPeople.size})`}
         </PrimaryBtn>
       </>
     );
@@ -417,6 +485,75 @@ export function OnboardingWizard({ onClose, onComplete, appendAccountId, appendA
               Selected: {[...selectedCo.values()].map((c) => c.name).join(", ")}
             </div>
           )}
+        </>
+      )}
+
+      {/* ── People (qui mettre dans l'organigramme) ── */}
+      {step === "people" && (
+        <>
+          <p style={{ fontSize: 12.5, color: COLORS.ink2, margin: "0 0 12px" }}>
+            Uncheck anyone who shouldn&apos;t be in the org chart. {previewContacts.length} contact
+            {previewContacts.length === 1 ? "" : "s"} found across {selectedCo.size} compan
+            {selectedCo.size === 1 ? "y" : "ies"}. Titles are validated on Apollo at the next step.
+          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", border: `1px solid ${COLORS.lineStrong}`, borderRadius: 8 }}>
+              <Search size={14} style={{ color: COLORS.ink3 }} />
+              <input
+                value={peopleSearch}
+                onChange={(e) => setPeopleSearch(e.target.value)}
+                placeholder="Filter by name or title…"
+                style={{ border: "none", outline: "none", fontSize: 13, flex: 1, background: "transparent" }}
+              />
+            </div>
+            <button onClick={() => setSelPeople(new Set(previewContacts.map((c) => c.hubspot_contact_id)))} style={chip(false)}>
+              All
+            </button>
+            <button onClick={() => setSelPeople(new Set())} style={chip(false)}>
+              None
+            </button>
+          </div>
+          <div style={{ fontSize: 11.5, color: COLORS.ink3, marginBottom: 8 }}>
+            {selPeople.size} of {previewContacts.length} selected
+          </div>
+          <div style={{ maxHeight: 320, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+            {filteredPreview.map((c) => {
+              const on = selPeople.has(c.hubspot_contact_id);
+              return (
+                <button
+                  key={c.hubspot_contact_id}
+                  onClick={() => togglePerson(c.hubspot_contact_id)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "7px 10px",
+                    borderRadius: 8,
+                    border: `1px solid ${on ? COLORS.brand : COLORS.line}`,
+                    background: on ? COLORS.brandTint : COLORS.bgCard,
+                    textAlign: "left",
+                  }}
+                >
+                  <input type="checkbox" checked={on} readOnly />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: COLORS.ink0 }}>{c.name}</span>
+                    <span style={{ fontSize: 11, color: COLORS.ink3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+                      {c.title ?? "No title"}
+                      {c.companyName ? ` · ${c.companyName}` : ""}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+            {previewContacts.length === 0 && (
+              <div style={{ fontSize: 12.5, color: COLORS.ink3, padding: "8px 2px" }}>
+                No HubSpot contact found for the selected compan{selectedCo.size === 1 ? "y" : "ies"}.
+              </div>
+            )}
+            {previewContacts.length > 0 && filteredPreview.length === 0 && (
+              <div style={{ fontSize: 12.5, color: COLORS.ink3, padding: "8px 2px" }}>No match.</div>
+            )}
+          </div>
         </>
       )}
 

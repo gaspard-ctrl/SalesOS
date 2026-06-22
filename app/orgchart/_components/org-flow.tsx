@@ -195,6 +195,9 @@ function FlowInner(
   const selectedIdRef = useRef<string | null>(selectedId);
   selectedIdRef.current = selectedId;
   const entityDrag = useRef<{ ek: string; last: { x: number; y: number } } | null>(null);
+  // Position d'origine d'une carte en cours de drag : si le drop crée un lien,
+  // la carte y retourne (le lien suffit, pas de déplacement).
+  const contactDragOrigin = useRef<{ id: string; x: number; y: number } | null>(null);
 
   // person id -> entity key (pour le drag d'entité).
   const entityOf = useMemo(() => {
@@ -258,6 +261,8 @@ function FlowInner(
   const onNodeDragStart = useCallback((_e: MouseEvent | TouchEvent, node: Node) => {
     if (node.type === "cluster" && (node.data as ClusterNodeData).kind === "entity") {
       entityDrag.current = { ek: node.id.slice("entity:".length), last: { ...node.position } };
+    } else if (node.type === "contact") {
+      contactDragOrigin.current = { id: node.id, x: node.position.x, y: node.position.y };
     }
   }, []);
 
@@ -335,11 +340,24 @@ function FlowInner(
           dragged && tgt && canonicalDepartment(dragged.department) === canonicalDepartment(tgt.department);
         const adjacency = people.map((p) => ({ id: p.id, manager_id: p.manager_id }));
         if (sameDept && !wouldCreateCycle(adjacency, node.id, target.id)) {
+          // Le lien suffit : la carte retourne à sa position d'origine.
+          const origin = contactDragOrigin.current;
+          contactDragOrigin.current = null;
+          setNodes((cur) => {
+            const restored = cur.map((n) =>
+              origin && n.id === origin.id ? { ...n, position: { x: origin.x, y: origin.y } } : n,
+            );
+            const posMap = new Map<string, { x: number; y: number }>();
+            for (const n of restored) if (n.type === "contact") posMap.set(n.id, n.position);
+            const contactNodes = restored.filter((n) => n.type === "contact");
+            return [...computeClusterNodes(people, posMap), ...contactNodes];
+          });
           onReparent(node.id, target.id);
           return;
         }
       }
 
+      contactDragOrigin.current = null;
       persistPosition(node.id, node.position.x, node.position.y);
       refreshClusters();
     },

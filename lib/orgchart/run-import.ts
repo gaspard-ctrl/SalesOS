@@ -11,13 +11,16 @@
 import { db } from "@/lib/db";
 import {
   createAccount,
+  getAccount,
   batchInsertPeople,
   resolveManagerIndexByName,
   listPeople,
   linkAccountCompanies,
   setJobProgress,
+  addSeenContacts,
   type ImportPerson,
 } from "./db";
+import { resolveEntityAlias } from "./types";
 import { classifyHierarchy, type ClassifyInput, type ClassifyOutput } from "./classify-hierarchy";
 import { rowToDraft, type OrgCsvField } from "./csv-import";
 import { fetchContactsForCompany } from "./fetch-hubspot-contacts";
@@ -35,6 +38,7 @@ interface HubspotParams {
   companies: { id: string; name?: string | null; domain?: string | null }[];
   validate?: boolean; // valider les postes via Apollo (défaut true)
   classify?: boolean; // analyser la hiérarchie maintenant (défaut true ; wizard=false)
+  includeContactIds?: string[]; // si fourni : n'importer QUE ces contacts (sélection wizard)
 }
 
 type Draft = { person: OrgPersonInput; reportsToName: string | null };
@@ -62,6 +66,9 @@ export async function runOrgImport(input: { jobId: string }): Promise<{ ok: bool
     const result: ImportResult = { total: 0, created: 0, classified: 0, managers_linked: 0, errors: 0, proposals: [], companyProposals: [] };
     const titleProposals: HubspotTitleProposal[] = [];
     const companyProposals: HubspotCompanyProposal[] = [];
+    // Tous les contacts HubSpot offerts (sélectionnés OU décochés) -> mémorisés
+    // comme "vus" pour que le Refresh ne réinjecte jamais les exclus.
+    const offeredContactIds: string[] = [];
 
     if (source === "csv") {
       const params = job.params as CsvParams;
@@ -86,6 +93,7 @@ export async function runOrgImport(input: { jobId: string }): Promise<{ ok: bool
         for (const contact of fetched.contacts) {
           if (seen.has(contact.hubspot_contact_id)) continue;
           seen.add(contact.hubspot_contact_id);
+          offeredContactIds.push(contact.hubspot_contact_id);
           drafts.push({
             person: {
               name: contact.name,
@@ -93,6 +101,7 @@ export async function runOrgImport(input: { jobId: string }): Promise<{ ok: bool
               title_hubspot: contact.title,
               email: contact.email,
               linkedin_url: contact.linkedin_url,
+              last_interaction: contact.last_contacted,
               hubspot_contact_id: contact.hubspot_contact_id,
               hubspot_company_id: c.id,
               entity: fetched.name ?? c.name ?? null,
@@ -102,6 +111,12 @@ export async function runOrgImport(input: { jobId: string }): Promise<{ ok: bool
             reportsToName: null,
           });
         }
+      }
+
+      // 1b. Filtre la sélection du wizard (contacts décochés exclus de l'organigramme).
+      const include = Array.isArray(params.includeContactIds) ? new Set(params.includeContactIds) : null;
+      if (include) {
+        drafts = drafts.filter((d) => d.person.hubspot_contact_id && include.has(d.person.hubspot_contact_id));
       }
 
       // 2. Validation Apollo des postes -> organigramme + propositions (jamais HubSpot ici).
@@ -143,17 +158,20 @@ export async function runOrgImport(input: { jobId: string }): Promise<{ ok: bool
                 newCompany: apolloOrg,
               });
             } else if (apolloTitle) {
-              // Même groupe : on applique le poste à l'organigramme + propose la MAJ HubSpot.
-              if (apolloTitle !== (p.title ?? "").trim()) {
+              // Même groupe : l'organigramme GARDE le poste HubSpot (source de
+              // vérité). Si Apollo diffère, on propose seulement la MAJ HubSpot ;
+              // Apollo ne sert qu'à combler un poste manquant.
+              const hubspotTitle = (p.title_hubspot ?? p.title ?? "").trim();
+              if (apolloTitle !== hubspotTitle) {
                 titleProposals.push({
                   contactId: p.hubspot_contact_id ?? "",
                   personId: null,
                   name: p.name ?? "",
-                  from: p.title ?? null,
+                  from: hubspotTitle || null,
                   to: apolloTitle,
                 });
               }
-              p.title = apolloTitle;
+              if (!hubspotTitle) p.title = apolloTitle;
             }
           } catch {
             /* best-effort */
@@ -178,6 +196,14 @@ export async function runOrgImport(input: { jobId: string }): Promise<{ ok: bool
       await db.from("orgchart_import_jobs").update({ account_id: accountId }).eq("id", jobId);
     }
     if (companies.length) await linkAccountCompanies(accountId, companies.map((c) => ({ hubspot_company_id: c.id, name: c.name, domain: c.domain })));
+
+    // Fusion permanente : alias d'entité du compte (ex : "Allianz Trade" -> "Allianz").
+    // Appliqué aux nouveaux contacts pour qu'ils tombent direct dans la bonne box.
+    const entityAliases = (await getAccount(accountId))?.entity_aliases ?? {};
+
+    // Mémorise TOUS les contacts offerts (même décochés) comme "vus" : le Refresh
+    // n'auto-ajoutera ensuite que les contacts réellement nouveaux dans HubSpot.
+    await addSeenContacts(accountId, offeredContactIds);
 
     // Append : ne pas réimporter les contacts déjà présents.
     if (!isNewAccount) {
@@ -218,7 +244,7 @@ export async function runOrgImport(input: { jobId: string }): Promise<{ ok: bool
       if (reportsToIndex == null) reportsToIndex = c?.reportsToIndex ?? null;
       return {
         ...d.person,
-        entity: d.person.entity || c?.entity || null,
+        entity: resolveEntityAlias(d.person.entity || c?.entity || null, entityAliases),
         department: d.person.department || c?.department || null,
         level: d.person.level || c?.level || "unknown",
         decision_role: d.person.decision_role || c?.decision_role || "unknown",

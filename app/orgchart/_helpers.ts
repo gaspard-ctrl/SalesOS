@@ -78,6 +78,24 @@ export function relationshipBadge(status: RelationshipStatus | null | undefined)
   }
 }
 
+// Label binaire affiché sur CHAQUE carte de l'organigramme : Contacted / Never
+// contacted (ou "Left company" si la personne a quitté la boîte). Dérivé du
+// relationship_status, avec last_interaction comme signal de repli. Sans aucune
+// preuve de contact -> "Never contacted".
+export function contactedBadge(p: {
+  relationship_status?: RelationshipStatus | null;
+  last_interaction?: string | null;
+}): { label: string; fg: string; bg: string } {
+  if (p.relationship_status === "left") return { label: "Left company", fg: COLORS.err, bg: COLORS.errBg };
+  const contacted =
+    p.relationship_status === "engaged" ||
+    p.relationship_status === "cold" ||
+    (!!p.last_interaction && p.relationship_status !== "never_contacted");
+  return contacted
+    ? { label: "Contacted", fg: COLORS.ok, bg: COLORS.okBg }
+    : { label: "Never contacted", fg: COLORS.ink2, bg: COLORS.bgSoft };
+}
+
 export function fmtDate(d: string | null | undefined): string {
   if (!d) return "—";
   const date = new Date(d);

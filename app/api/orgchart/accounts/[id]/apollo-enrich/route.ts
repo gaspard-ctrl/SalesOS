@@ -5,7 +5,7 @@ import { isApolloConfigured } from "@/lib/apollo/client";
 import { runApolloEnrichment } from "@/lib/apollo/run-enrichment";
 import { findCompanyByName } from "@/lib/intel/hubspot-company-resolve";
 import { createCompany } from "@/lib/hubspot";
-import { getAccount, listAccountCompanies, createPerson } from "@/lib/orgchart/db";
+import { getAccount, listAccountCompanies, listPeople, createPerson } from "@/lib/orgchart/db";
 import type { EnrichPersonInput } from "@/lib/apollo/enrichment-types";
 
 export const dynamic = "force-dynamic";
@@ -32,13 +32,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const account = await getAccount(id);
   if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
-  const body = (await req.json().catch(() => ({}))) as { people?: Candidate[] };
+  const body = (await req.json().catch(() => ({}))) as { people?: Candidate[]; entity?: string | null };
   const picked = (body.people ?? []).filter((p) => p && p.apolloId);
   if (picked.length === 0) return NextResponse.json({ error: "No profiles selected" }, { status: 400 });
 
-  // Company HubSpot cible (primaire du compte) — résolue/créée si besoin.
+  // Entité (box du whiteboard) cible + company HubSpot associée. Si une entité
+  // est précisée, on place les nouveaux contacts dans CETTE box et on les associe
+  // à sa company ; sinon on retombe sur la company primaire du compte.
   const companies = await listAccountCompanies(id);
-  let companyId: string | null = account.hubspot_company_id ?? companies[0]?.hubspot_company_id ?? null;
+  const entityFilter = (body.entity ?? "").trim();
+  let companyId: string | null;
+  let entityName: string;
+  if (entityFilter) {
+    const idsInEntity = new Set(
+      (await listPeople(id))
+        .filter((p) => (p.entity ?? "").trim() === entityFilter)
+        .map((p) => p.hubspot_company_id)
+        .filter((cid): cid is string => Boolean(cid)),
+    );
+    const matched = companies.find((c) => idsInEntity.has(c.hubspot_company_id));
+    companyId = matched?.hubspot_company_id ?? account.hubspot_company_id ?? companies[0]?.hubspot_company_id ?? null;
+    entityName = entityFilter;
+  } else {
+    companyId = account.hubspot_company_id ?? companies[0]?.hubspot_company_id ?? null;
+    entityName = companies[0]?.name ?? account.name;
+  }
   if (!companyId) {
     const hit = await findCompanyByName(account.name).catch(() => null);
     const created = hit?.id ?? (await createCompany(account.name, account.domain).catch(() => null));
@@ -47,7 +65,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   if (!companyId) return NextResponse.json({ error: "Could not resolve a HubSpot company" }, { status: 400 });
 
-  const entityName = companies[0]?.name ?? account.name;
+  // Nom/domaine de la company cible : améliore la précision du reveal Apollo et
+  // l'association HubSpot quand l'enrichissement est scopé à une entité.
+  const targetCompany = companies.find((c) => c.hubspot_company_id === companyId) ?? null;
+  const enrichCompanyName = targetCompany?.name ?? account.name;
+  const enrichDomain = targetCompany?.domain ?? account.domain;
 
   // 1. Crée les lignes orgchart (source apollo, pas encore sur HubSpot).
   const inputPeople: EnrichPersonInput[] = [];
@@ -71,8 +93,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       linkedinUrl: c.linkedinUrl ?? null,
       email: null,
       hubspotCompanyId: companyId,
-      companyName: account.name,
-      domain: account.domain,
+      companyName: enrichCompanyName,
+      domain: enrichDomain,
       orgchartPersonId: person.id,
     });
   }
@@ -85,8 +107,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .insert({
       user_id: user.id,
       hubspot_company_id: companyId,
-      hubspot_company_name: account.name,
-      hubspot_company_domain: account.domain,
+      hubspot_company_name: enrichCompanyName,
+      hubspot_company_domain: enrichDomain,
       hubspot_owner_id: ownerId,
       status: "running",
       input_people: inputPeople,

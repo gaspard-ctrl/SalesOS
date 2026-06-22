@@ -87,9 +87,27 @@ export interface OrgAccount {
   domain: string | null;
   owner: string | null;
   custom_columns: CustomColumn[];
+  // Fusion permanente d'entités : { source (lowercased) -> entité canonique }.
+  // Ex : { "allianz trade": "Allianz" }. Appliqué à l'import et au Refresh.
+  entity_aliases: Record<string, string>;
+  // Contacts HubSpot déjà "vus" pour ce compte (offerts à l'import + passés par
+  // le chart). Le Refresh n'auto-ajoute QUE les contacts absents de cet ensemble.
+  seen_contact_ids: string[];
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// Résout une entité vers sa forme canonique selon les alias du compte (fusion
+// permanente). Insensible à la casse. Sans alias -> renvoie l'entité telle quelle.
+export function resolveEntityAlias(
+  name: string | null | undefined,
+  aliases: Record<string, string> | null | undefined,
+): string | null {
+  const n = (name ?? "").trim();
+  if (!n) return null;
+  const hit = aliases?.[n.toLowerCase()];
+  return hit ?? n;
 }
 
 // Une company HubSpot rattachée à un compte (multi-company).
