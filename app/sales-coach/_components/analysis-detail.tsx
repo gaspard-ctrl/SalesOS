@@ -36,9 +36,10 @@ import type {
 import {
   extractStringArray,
   getMeetingKindLabel,
-  isClientAnalysis,
+  isAnalysisAudienceStale,
   isDiscoveryKind,
   repairAnalysis,
+  resolveIsClient,
 } from "@/lib/guides/sales-coach";
 import { SynthesisTab } from "./synthesis-tab";
 import { EmailDraftModal } from "./email-draft-modal";
@@ -773,7 +774,13 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
   // Defensive repair for the malformed shape Haiku 4.5 occasionally produces
   // (everything from `coaching_priorities` onwards stuffed as one string).
   const a = repairAnalysis(detail.analysis as AnySalesCoachAnalysis);
-  const isClient = isClientAnalysis(a);
+  // L'audience de la row (recalculée depuis le deal HubSpot) fait foi : un compte
+  // passé en client ne doit jamais s'afficher en prospect (onglet MEDDIC), même
+  // si le JSON stocké a encore la forme prospect. Cf. resolveIsClient.
+  const isClient = resolveIsClient(detail.audience, a);
+  // Analyse périmée : audience ≠ forme du JSON (ex : compte devenu client mais
+  // analyse encore au format prospect). On invite à relancer l'analyse.
+  const audienceStale = isAnalysisAudienceStale(detail.audience, a);
   const meetingDate = detail.meeting_started_at
     ? new Date(detail.meeting_started_at).toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short" })
     : "";
@@ -1021,9 +1028,32 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-8 py-6">
+        {audienceStale && (
+          <div
+            className="rounded-lg p-4 mb-4 text-sm flex items-start justify-between gap-3"
+            style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}
+          >
+            <span>
+              This account is now a <strong>{isClient ? "client" : "prospect"}</strong>, but this
+              analysis was generated with the {isClient ? "prospect" : "client"} framework. Some
+              sections may be empty or off-topic. Re-analyze to regenerate it with the{" "}
+              {isClient ? "Customer Health" : "MEDDIC"} framework.
+            </span>
+            <button
+              onClick={() => forceAnalyze()}
+              disabled={forcing}
+              className="shrink-0 flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-md disabled:opacity-50"
+              style={{ background: "#f01563", color: "#fff" }}
+            >
+              <RefreshCw size={12} className={forcing ? "animate-spin" : ""} />
+              {forcing ? "Re-analyzing…" : "Re-analyze"}
+            </button>
+          </div>
+        )}
         {tab === "synthese" && (
           <SynthesisTab
             analysis={a}
+            audience={detail.audience}
             talkRatio={detail.talk_ratio}
             onOpenEmailDraft={() => setEmailModalOpen(true)}
             onGoToAxes={() => setTab("axes")}
@@ -1036,7 +1066,12 @@ export default function AnalysisDetail({ analysisId, onSlackSent, onDeleted }: P
           <div className="space-y-3">
             {isClient
               ? CLIENT_AXES_LABELS.map(({ key, label }) => (
-                  <AxisCard key={key} label={label} axis={a.axes?.[key] ?? EMPTY_AXIS} collapsible />
+                  <AxisCard
+                    key={key}
+                    label={label}
+                    axis={(a as ClientSalesCoachAnalysis).axes?.[key] ?? EMPTY_AXIS}
+                    collapsible
+                  />
                 ))
               : AXES_LABELS.map(({ key, label }) => (
                   <AxisCard
