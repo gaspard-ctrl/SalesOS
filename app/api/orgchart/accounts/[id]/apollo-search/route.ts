@@ -12,6 +12,7 @@ interface SearchBody {
   seniorities?: string[];
   location?: string | null;
   perCompany?: number;
+  entity?: string | null; // restreint la recherche à une seule entité (box du whiteboard)
 }
 
 export interface ApolloCandidate {
@@ -68,10 +69,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }),
     );
 
-    const searchTargets =
-      companies.length > 0
-        ? companies.map((c) => ({ domain: c.domain, name: c.name ?? account.name }))
-        : [{ domain: account.domain, name: account.name }];
+    // Cibles de recherche : par défaut toutes les company du compte. Si une
+    // entité (box du whiteboard) est précisée, on ne cible QUE ses company (une
+    // entité fusionnée peut en couvrir plusieurs) ; sans company rattachée, on
+    // retombe sur une recherche par nom d'organisation.
+    const entityFilter = (body.entity ?? "").trim();
+    let searchTargets: { domain: string | null; name: string }[];
+    if (entityFilter) {
+      const idsInEntity = new Set(
+        people
+          .filter((p) => (p.entity ?? "").trim() === entityFilter)
+          .map((p) => p.hubspot_company_id)
+          .filter((cid): cid is string => Boolean(cid)),
+      );
+      const matched = companies.filter((c) => idsInEntity.has(c.hubspot_company_id));
+      searchTargets =
+        matched.length > 0
+          ? matched.map((c) => ({ domain: c.domain, name: c.name ?? entityFilter }))
+          : [{ domain: null, name: entityFilter }];
+    } else {
+      searchTargets =
+        companies.length > 0
+          ? companies.map((c) => ({ domain: c.domain, name: c.name ?? account.name }))
+          : [{ domain: account.domain, name: account.name }];
+    }
 
     const seen = new Set<string>();
     const candidates: ApolloCandidate[] = [];

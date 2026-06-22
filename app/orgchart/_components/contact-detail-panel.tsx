@@ -326,9 +326,15 @@ export function ContactDetailPanel({
               background: COLORS.brand,
               borderRadius: 8,
               opacity: busy ? 0.6 : 1,
+              cursor: busy ? "default" : "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
             }}
           >
-            Save
+            {busy ? <Loader2 size={14} className="animate-spin" /> : null}
+            {busy ? "Saving…" : "Save"}
           </button>
           <button
             disabled={busy}
@@ -341,12 +347,14 @@ export function ContactDetailPanel({
               color: COLORS.brand,
               background: COLORS.brandTint,
               borderRadius: 8,
+              opacity: busy ? 0.6 : 1,
+              cursor: busy ? "default" : "pointer",
               display: "inline-flex",
               alignItems: "center",
               gap: 5,
             }}
           >
-            <Sparkles size={14} /> Enrich
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Enrich
           </button>
           <button
             disabled={busy}

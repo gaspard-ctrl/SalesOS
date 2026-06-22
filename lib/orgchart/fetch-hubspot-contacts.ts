@@ -12,9 +12,46 @@ export interface HubspotOrgContact {
   email: string | null;
   linkedin_url: string | null;
   hubspot_owner_id: string | null;
+  last_contacted: string | null; // YYYY-MM-DD : dernière activité de vente / contact loggé
 }
 
 const CONTACT_CAP = 150;
+
+// Propriétés HubSpot lues pour chaque contact. notes_last_contacted /
+// hs_last_sales_activity_timestamp servent à dériver le statut "Contacted".
+const CONTACT_PROPERTIES = [
+  "firstname",
+  "lastname",
+  "jobtitle",
+  "email",
+  "hs_linkedin_url",
+  "hubspot_owner_id",
+  "hs_last_sales_activity_timestamp",
+  "notes_last_contacted",
+];
+
+// HubSpot renvoie les dates en epoch ms (string) ou ISO -> YYYY-MM-DD (col DATE).
+function toDateStr(v: string | undefined | null): string | null {
+  if (!v) return null;
+  const d = new Date(/^\d+$/.test(v) ? Number(v) : v);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
+function mapOrgContact(r: { id: string; properties?: Record<string, string> }): HubspotOrgContact {
+  const p = r.properties ?? {};
+  const name = `${p.firstname ?? ""} ${p.lastname ?? ""}`.trim() || (p.email ?? "Unnamed");
+  return {
+    hubspot_contact_id: r.id,
+    name,
+    title: p.jobtitle || null,
+    email: p.email || null,
+    linkedin_url: p.hs_linkedin_url || null,
+    hubspot_owner_id: p.hubspot_owner_id || null,
+    // Une activité de vente OU un contact loggé => la personne a déjà été contactée.
+    // (lastmodifieddate volontairement exclu : il est non nul pour tout le monde.)
+    last_contacted: toDateStr(p.hs_last_sales_activity_timestamp) ?? toDateStr(p.notes_last_contacted),
+  };
+}
 
 export interface FetchedCompany {
   hubspot_company_id: string | null;
@@ -64,22 +101,11 @@ export async function fetchHubspotCompanyContacts(
       "/crm/v3/objects/contacts/batch/read",
       "POST",
       {
-        properties: ["firstname", "lastname", "jobtitle", "email", "hs_linkedin_url", "hubspot_owner_id"],
+        properties: CONTACT_PROPERTIES,
         inputs: ids.map((id) => ({ id })),
       },
     );
-    contacts = (res.results ?? []).map((r) => {
-      const p = r.properties ?? {};
-      const name = `${p.firstname ?? ""} ${p.lastname ?? ""}`.trim() || (p.email ?? "Unnamed");
-      return {
-        hubspot_contact_id: r.id,
-        name,
-        title: p.jobtitle || null,
-        email: p.email || null,
-        linkedin_url: p.hs_linkedin_url || null,
-        hubspot_owner_id: p.hubspot_owner_id || null,
-      };
-    });
+    contacts = (res.results ?? []).map(mapOrgContact);
   } catch (e) {
     console.error("[orgchart hubspot fetch] batch read failed:", e instanceof Error ? e.message : e);
   }
@@ -142,22 +168,11 @@ export async function fetchContactsForCompany(
       "/crm/v3/objects/contacts/batch/read",
       "POST",
       {
-        properties: ["firstname", "lastname", "jobtitle", "email", "hs_linkedin_url", "hubspot_owner_id"],
+        properties: CONTACT_PROPERTIES,
         inputs: ids.map((id) => ({ id })),
       },
     );
-    contacts = (res.results ?? []).map((r) => {
-      const p = r.properties ?? {};
-      const nm = `${p.firstname ?? ""} ${p.lastname ?? ""}`.trim() || (p.email ?? "Unnamed");
-      return {
-        hubspot_contact_id: r.id,
-        name: nm,
-        title: p.jobtitle || null,
-        email: p.email || null,
-        linkedin_url: p.hs_linkedin_url || null,
-        hubspot_owner_id: p.hubspot_owner_id || null,
-      };
-    });
+    contacts = (res.results ?? []).map(mapOrgContact);
   } catch (e) {
     console.error("[orgchart] fetchContactsForCompany batch read failed:", e instanceof Error ? e.message : e);
   }

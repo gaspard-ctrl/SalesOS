@@ -33,6 +33,9 @@ export default function OrgChartPage() {
 
   const [view, setView] = useState<OrgView>("whiteboard");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Id du contact en cours d'enregistrement/enrichissement depuis le panneau de
+  // détail -> alimente l'état `busy` (spinner + boutons désactivés).
+  const [savingId, setSavingId] = useState<string | null>(null);
   const flowRef = useRef<OrgFlowHandle>(null);
 
   // Modals
@@ -72,8 +75,9 @@ export default function OrgChartPage() {
       if (props.length) setTitleProps(props); // -> pop-up de confirmation HubSpot
       if (coProps.length) setCompanyProps(coProps);
       const changes = props.length + coProps.length;
+      const created = job.result?.created ?? 0;
       toast(
-        `Refreshed (${job.result?.created ?? 0} new). ${changes ? `${changes} change(s) to confirm.` : "Everything up to date."}`,
+        `Refreshed${created ? ` (${created} new)` : ""}. ${changes ? `${changes} change(s) to confirm.` : "Everything up to date."}`,
         "success",
       );
     },
@@ -119,6 +123,21 @@ export default function OrgChartPage() {
       reload();
     } catch (e) {
       toast(e instanceof Error ? e.message : "Update failed", "error");
+    }
+  };
+
+  // Save depuis le panneau de détail : feedback explicite (busy + toast). Séparé
+  // de patchPerson (table) pour ne pas toaster à chaque édition de cellule.
+  const savePerson = async (id: string, fields: OrgPersonInput, syncHubspot: boolean) => {
+    setSavingId(id);
+    try {
+      await api(`/api/orgchart/people/${id}`, "PATCH", { ...fields, syncHubspot });
+      reload();
+      toast(syncHubspot ? "Contact saved & synced to HubSpot" : "Contact saved", "success");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Save failed", "error");
+    } finally {
+      setSavingId(null);
     }
   };
 
@@ -281,6 +300,19 @@ export default function OrgChartPage() {
     }
   };
 
+  // Fusionne des entités (cartes du whiteboard) en une seule.
+  const mergeEntities = async (from: string[], into: string) => {
+    if (!activeAccountId || from.length === 0) return;
+    try {
+      const { moved } = await api(`/api/orgchart/accounts/${activeAccountId}/merge-entities`, "POST", { from, into });
+      reload();
+      setTimeout(() => flowRef.current?.autoArrange(), 400); // re-range : les cartes fusionnées ne se chevauchent pas
+      toast(`Merged into ${into} (${moved} ${moved === 1 ? "person" : "people"})`, "success");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Merge failed", "error");
+    }
+  };
+
   /* ── Render ──────────────────────────────────────────────── */
 
   return (
@@ -349,11 +381,19 @@ export default function OrgChartPage() {
                     key={selectedPerson.id}
                     person={selectedPerson}
                     people={people}
-                    onSave={patchPerson}
+                    busy={savingId === selectedPerson.id || !!enrichJobId}
+                    onSave={savePerson}
                     onDelete={(id) => {
                       deletePerson(id);
                     }}
-                    onEnrich={startEnrich}
+                    onEnrich={async (id) => {
+                      setSavingId(id);
+                      try {
+                        await startEnrich(id);
+                      } finally {
+                        setSavingId(null);
+                      }
+                    }}
                     onClose={() => setSelectedId(null)}
                   />
                 </div>
@@ -384,11 +424,13 @@ export default function OrgChartPage() {
             setShowAddCompany(true);
           }}
           onRemove={removeCompany}
+          onMerge={mergeEntities}
         />
       )}
       {showApollo && account && (
         <ApolloDiscoveryModal
           accountId={account.id}
+          people={people}
           onClose={() => setShowApollo(false)}
           onDone={() => {
             reload();

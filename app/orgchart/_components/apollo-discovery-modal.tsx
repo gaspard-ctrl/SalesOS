@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Loader2, Sparkles, CheckCircle2, AlertCircle, Linkedin } from "lucide-react";
 import { Modal, modalInput, PrimaryBtn, GhostBtn } from "./modal";
 import { COLORS } from "@/lib/design/tokens";
 import { useApolloEnrichJob } from "@/lib/hooks/use-orgchart-enrich";
+import type { OrgPerson } from "@/lib/orgchart/types";
 
 interface Candidate {
   apolloId: string;
@@ -19,6 +20,7 @@ interface Candidate {
 
 interface Props {
   accountId: string;
+  people: OrgPerson[];
   onClose: () => void;
   onDone: () => void;
 }
@@ -36,7 +38,20 @@ const TITLE_PRESETS: { key: string; label: string; titles: string }[] = [
 const DEFAULT_TITLES =
   "HR, People, HRBP, Talent, Head of L&D, Learning, Head of Sales, VP Sales, Head of AI, AI, Data";
 
-export function ApolloDiscoveryModal({ accountId, onClose, onDone }: Props) {
+export function ApolloDiscoveryModal({ accountId, people, onClose, onDone }: Props) {
+  // Entités présentes sur le whiteboard (= box regroupées par `entity`). Permet
+  // de restreindre la découverte/ajout à une seule entité.
+  const entities = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of people) {
+      const e = (p.entity ?? "").trim();
+      if (e) m.set(e, (m.get(e) ?? 0) + 1);
+    }
+    return [...m.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [people]);
+  const [entity, setEntity] = useState(""); // "" = toutes les companies du compte
   const [titles, setTitles] = useState(DEFAULT_TITLES);
   const [seniorities, setSeniorities] = useState<Set<string>>(new Set(["director", "manager", "head", "vp"]));
   const [location, setLocation] = useState("");
@@ -73,6 +88,7 @@ export function ApolloDiscoveryModal({ accountId, onClose, onDone }: Props) {
           titles: titles.split(",").map((t) => t.trim()).filter(Boolean),
           seniorities: [...seniorities],
           location: location.trim() || null,
+          entity: entity || null,
         }),
       });
       const data = await res.json();
@@ -104,7 +120,7 @@ export function ApolloDiscoveryModal({ accountId, onClose, onDone }: Props) {
       const res = await fetch(`/api/orgchart/accounts/${accountId}/apollo-enrich`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ people }),
+        body: JSON.stringify({ people, entity: entity || null }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Enrichment failed");
@@ -147,8 +163,33 @@ export function ApolloDiscoveryModal({ accountId, onClose, onDone }: Props) {
         <>
           <p style={{ fontSize: 12.5, color: COLORS.ink2, margin: "0 0 14px" }}>
             Discover ICP profiles at this account that are <strong>not yet in HubSpot</strong>. Selected profiles get
-            their email revealed (Apollo credit), are created in HubSpot and added to the chart.
+            their email revealed (Apollo credit), are created in HubSpot and added to the chart
+            {entity ? <> under <strong>{entity}</strong></> : null}.
           </p>
+
+          {entities.length >= 2 && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={label}>Entity to enrich</label>
+              <select
+                style={{ ...modalInput, cursor: "pointer" }}
+                value={entity}
+                onChange={(e) => {
+                  setEntity(e.target.value);
+                  // Le scope a changé : les résultats précédents ne sont plus valides.
+                  setSearched(false);
+                  setCandidates([]);
+                  setSelected(new Set());
+                }}
+              >
+                <option value="">All companies ({entities.length})</option>
+                {entities.map((e) => (
+                  <option key={e.name} value={e.name}>
+                    {e.name} ({e.count})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div style={{ marginBottom: 12 }}>
             <label style={label}>Target titles (comma-separated)</label>

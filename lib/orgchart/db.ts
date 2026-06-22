@@ -32,10 +32,36 @@ function mapAccount(r: Row): OrgAccount {
     domain: (r.domain as string) ?? null,
     owner: (r.owner as string) ?? null,
     custom_columns: Array.isArray(r.custom_columns) ? (r.custom_columns as CustomColumn[]) : [],
+    entity_aliases:
+      r.entity_aliases && typeof r.entity_aliases === "object"
+        ? (r.entity_aliases as Record<string, string>)
+        : {},
+    seen_contact_ids: Array.isArray(r.seen_contact_ids) ? (r.seen_contact_ids as string[]) : [],
     created_by: (r.created_by as string) ?? null,
     created_at: (r.created_at as string) ?? "",
     updated_at: (r.updated_at as string) ?? "",
   };
+}
+
+// Mémorise des contacts HubSpot "vus" pour un compte (union, idempotent). Sert au
+// Refresh à n'auto-ajouter QUE les contacts réellement nouveaux (absents de cet
+// ensemble) sans jamais réinjecter les exclus de l'onboarding ni les supprimés.
+// Best-effort : si la colonne n'existe pas encore (migration non rejouée), no-op.
+export async function addSeenContacts(
+  accountId: string,
+  contactIds: string[],
+  current?: string[],
+): Promise<void> {
+  const incoming = contactIds.filter(Boolean);
+  if (incoming.length === 0) return;
+  const cur = current ?? (await getAccount(accountId))?.seen_contact_ids ?? [];
+  const merged = Array.from(new Set([...cur, ...incoming]));
+  if (merged.length === cur.length) return; // rien de nouveau
+  await db
+    .from("orgchart_accounts")
+    .update({ seen_contact_ids: merged, updated_at: new Date().toISOString() })
+    .eq("id", accountId)
+    .then(undefined, () => {});
 }
 
 function mapPerson(r: Row): OrgPerson {
@@ -231,6 +257,50 @@ export async function linkAccountCompanies(
       })
       .eq("id", accountId);
   }
+}
+
+/* ── Fusion d'entités (companies du whiteboard) ─────────────────────────────── */
+
+// Fusionne des entités de façon PERMANENTE :
+//  1) réassigne l'entity des personnes des entités `from` vers la cible,
+//  2) mémorise l'alias sur le compte (appliqué ensuite à l'import et au Refresh),
+//  3) aplatit les chaînes d'alias (A->B puis B->C devient A->C).
+export async function mergeEntities(
+  accountId: string,
+  from: string[],
+  into: string,
+): Promise<{ moved: number; into: string }> {
+  const account = await getAccount(accountId);
+  const aliases: Record<string, string> = { ...(account?.entity_aliases ?? {}) };
+  const intoTrim = (into ?? "").trim();
+  const canonicalInto = aliases[intoTrim.toLowerCase()] ?? intoTrim;
+  const fromList = (from ?? [])
+    .map((f) => (f ?? "").trim())
+    .filter(Boolean)
+    .filter((f) => f.toLowerCase() !== canonicalInto.toLowerCase());
+  if (!canonicalInto || fromList.length === 0) return { moved: 0, into: canonicalInto };
+
+  // 1) Réassigne les personnes existantes (effet visible immédiat).
+  const { data, error } = await db
+    .from("orgchart_people")
+    .update({ entity: canonicalInto, updated_at: new Date().toISOString() })
+    .eq("account_id", accountId)
+    .in("entity", fromList)
+    .select("id");
+  if (error) throw new Error(error.message);
+
+  // 2) Mémorise les alias + 3) aplatit les chaînes existantes.
+  for (const f of fromList) aliases[f.toLowerCase()] = canonicalInto;
+  const fromLower = new Set(fromList.map((f) => f.toLowerCase()));
+  for (const k of Object.keys(aliases)) {
+    if (fromLower.has(aliases[k].toLowerCase())) aliases[k] = canonicalInto;
+  }
+  await db
+    .from("orgchart_accounts")
+    .update({ entity_aliases: aliases, updated_at: new Date().toISOString() })
+    .eq("id", accountId);
+
+  return { moved: data?.length ?? 0, into: canonicalInto };
 }
 
 /* ── Chart (people + edges + clusters) ──────────────────────────────────────── */

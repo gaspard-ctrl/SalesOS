@@ -10,8 +10,7 @@ import {
   DECISION_ROLE_LABELS,
   levelBadge,
   decisionRoleBadge,
-  relationshipBadge,
-  RELATIONSHIP_LABELS,
+  contactedBadge,
   initials,
   displayName,
 } from "../_helpers";
@@ -59,7 +58,7 @@ function ContactNodeImpl({ data, selected }: NodeProps<ContactNodeType>) {
   const hasTitle = !!(p.title || p.title_hubspot);
   const lvl = levelBadge(p.level);
   const role = decisionRoleBadge(p.decision_role);
-  const rel = relationshipBadge(p.relationship_status);
+  const contacted = contactedBadge(p);
 
   return (
     <div
@@ -153,6 +152,10 @@ function ContactNodeImpl({ data, selected }: NodeProps<ContactNodeType>) {
         </div>
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+        {/* Toujours présent : statut de contact (Contacted / Never contacted / Left). */}
+        <Badge fg={contacted.fg} bg={contacted.bg}>
+          {contacted.label}
+        </Badge>
         {p.level && p.level !== "unknown" && (
           <Badge fg={lvl.fg} bg={lvl.bg}>
             {LEVEL_LABELS[p.level]}
@@ -161,11 +164,6 @@ function ContactNodeImpl({ data, selected }: NodeProps<ContactNodeType>) {
         {p.decision_role && p.decision_role !== "unknown" && (
           <Badge fg={role.fg} bg={role.bg}>
             {DECISION_ROLE_LABELS[p.decision_role]}
-          </Badge>
-        )}
-        {p.relationship_status && p.relationship_status !== "unknown" && (
-          <Badge fg={rel.fg} bg={rel.bg}>
-            {RELATIONSHIP_LABELS[p.relationship_status]}
           </Badge>
         )}
       </div>
