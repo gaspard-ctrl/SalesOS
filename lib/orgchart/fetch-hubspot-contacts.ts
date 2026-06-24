@@ -15,7 +15,39 @@ export interface HubspotOrgContact {
   last_contacted: string | null; // YYYY-MM-DD : dernière activité de vente / contact loggé
 }
 
-const CONTACT_CAP = 150;
+// Plafond de contacts remontés par company. HubSpot renvoie les associations
+// v4 par pages de 500 (cf. hubspotGetAssociations, sans pagination), donc 500
+// est le ceiling naturel : un gros compte (ex. Enedis = 183) remonte en entier.
+const CONTACT_CAP = 500;
+
+// HubSpot limite contacts/batch/read à 100 inputs par appel. Envoyer plus (ex.
+// les 183 contacts d'Enedis tronqués à l'ancien cap de 150) renvoyait un 400
+// "maximum number of inputs supported in a batch is 100", avalé par le catch ->
+// 0 contact affiché alors que le compte en a des centaines. On découpe donc par
+// 100 et on lit les chunks en parallèle (même pattern que fetchDealContext).
+const BATCH_READ_MAX = 100;
+
+type ContactBatchRow = { id: string; properties?: Record<string, string> };
+
+async function batchReadContacts(ids: string[]): Promise<HubspotOrgContact[]> {
+  if (ids.length === 0) return [];
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += BATCH_READ_MAX) chunks.push(ids.slice(i, i + BATCH_READ_MAX));
+  const batches = await Promise.allSettled(
+    chunks.map((chunk) =>
+      hubspotFetch<{ results?: ContactBatchRow[] }>("/crm/v3/objects/contacts/batch/read", "POST", {
+        properties: CONTACT_PROPERTIES,
+        inputs: chunk.map((id) => ({ id })),
+      }),
+    ),
+  );
+  const failed = batches.filter((b) => b.status === "rejected").length;
+  if (failed) console.error(`[orgchart] batch read: ${failed}/${chunks.length} chunk(s) failed`);
+  return batches
+    .filter((b): b is PromiseFulfilledResult<{ results?: ContactBatchRow[] }> => b.status === "fulfilled")
+    .flatMap((b) => b.value.results ?? [])
+    .map(mapOrgContact);
+}
 
 // Propriétés HubSpot lues pour chaque contact. notes_last_contacted /
 // hs_last_sales_activity_timestamp servent à dériver le statut "Contacted".
@@ -95,21 +127,7 @@ export async function fetchHubspotCompanyContacts(
   const ids = assoc.map((a) => a.id).slice(0, CONTACT_CAP);
   if (ids.length === 0) return { hubspot_company_id: companyId, resolved_name: resolvedName, domain, contacts: [] };
 
-  let contacts: HubspotOrgContact[] = [];
-  try {
-    const res = await hubspotFetch<{ results?: Array<{ id: string; properties?: Record<string, string> }> }>(
-      "/crm/v3/objects/contacts/batch/read",
-      "POST",
-      {
-        properties: CONTACT_PROPERTIES,
-        inputs: ids.map((id) => ({ id })),
-      },
-    );
-    contacts = (res.results ?? []).map(mapOrgContact);
-  } catch (e) {
-    console.error("[orgchart hubspot fetch] batch read failed:", e instanceof Error ? e.message : e);
-  }
-
+  const contacts = await batchReadContacts(ids);
   return { hubspot_company_id: companyId, resolved_name: resolvedName, domain, contacts };
 }
 
@@ -162,19 +180,6 @@ export async function fetchContactsForCompany(
   const ids = assoc.map((a) => a.id).slice(0, CONTACT_CAP);
   if (ids.length === 0) return { id: companyId, name, domain, contacts: [] };
 
-  let contacts: HubspotOrgContact[] = [];
-  try {
-    const res = await hubspotFetch<{ results?: Array<{ id: string; properties?: Record<string, string> }> }>(
-      "/crm/v3/objects/contacts/batch/read",
-      "POST",
-      {
-        properties: CONTACT_PROPERTIES,
-        inputs: ids.map((id) => ({ id })),
-      },
-    );
-    contacts = (res.results ?? []).map(mapOrgContact);
-  } catch (e) {
-    console.error("[orgchart] fetchContactsForCompany batch read failed:", e instanceof Error ? e.message : e);
-  }
+  const contacts = await batchReadContacts(ids);
   return { id: companyId, name, domain, contacts };
 }
