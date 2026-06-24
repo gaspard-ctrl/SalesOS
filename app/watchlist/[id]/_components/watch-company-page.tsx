@@ -16,6 +16,7 @@ import { CrossPageActions } from "./cross-page-actions";
 import { AeAnalysisCard } from "./ae-analysis-card";
 import { ContactsCard } from "./contacts-card";
 import { NewsCard } from "./news-card";
+import { SignalsCard } from "./signals-card";
 import { EmailHistoryCard } from "./email-history-card";
 import { MailDrafter, type DraftRecipient, type DraftPrefill } from "./mail-drafter";
 import { ApolloEnrichModal } from "../../_components/apollo-enrich-modal";
@@ -37,6 +38,17 @@ export function WatchCompanyPage({ id }: { id: string }) {
   const { mutate } = useSWRConfig();
   const [apolloOpen, setApolloOpen] = React.useState(false);
 
+  // Token incrémenté à chaque génération : réarme le minuteur anti-blocage du
+  // polling (sinon un regénérer après un timeout ne relancerait pas le poll).
+  const [runToken, setRunToken] = React.useState(0);
+  const startRun = React.useCallback(
+    (kind: "ae_analysis" | "news", options?: { withMessages?: boolean }) => {
+      setRunToken((t) => t + 1);
+      refresh(kind, options);
+    },
+    [refresh],
+  );
+
   // Polling actif tant qu'au moins un brief est en running côté DB OU
   // qu'on a un POST en vol côté client. Le tick appelle reload() pour
   // synchroniser le payload complet.
@@ -46,7 +58,7 @@ export function WatchCompanyPage({ id }: { id: string }) {
     isRefreshing.ae_analysis ||
     isRefreshing.news;
 
-  useBriefsPolling(id, isAnyRunning, reload);
+  const { stalled } = useBriefsPolling(id, isAnyRunning, reload, runToken);
 
   // Destinataires du drafteur de mail (panneau droit). Alimenté depuis la
   // contacts card et l'analyse AE. Dédup par email.
@@ -63,21 +75,24 @@ export function WatchCompanyPage({ id }: { id: string }) {
     });
   }, []);
 
-  // Prospect depuis l'analyse AE : le contact passe en To du drafter (pas en
-  // BCC) et l'objet + opening message proposés préremplissent le mail si vide.
+  // Prospect depuis l'analyse AE / les signaux : le(s) prospect(s) vont dans la
+  // liste des destinataires (BCC en envoi groupé, un mail chacun en personnalisé),
+  // comme la contacts card. L'objet + opening message proposés préremplissent le
+  // mail si vide. Avant, le contact passait en To, ce qui le rendait invisible en
+  // mode personnalisé (canSend restait faux).
   const [prefill, setPrefill] = React.useState<DraftPrefill | null>(null);
   const prospectFromAnalysis = React.useCallback(
     (incoming: DraftRecipient[], seed?: { subject: string | null; body: string | null }) => {
-      const first = incoming.find((r) => r.email);
-      if (!first) return;
+      const valid = incoming.filter((r) => r.email);
+      if (valid.length === 0) return;
+      addRecipients(valid);
       setPrefill({
         nonce: Date.now(),
-        to: first.email,
         subject: seed?.subject ?? null,
         body: seed?.body ?? null,
       });
     },
-    [],
+    [addRecipients],
   );
 
   React.useEffect(() => {
@@ -174,12 +189,26 @@ export function WatchCompanyPage({ id }: { id: string }) {
 
           {/* Colonne centrale (60%) : analyse AE + news. */}
           <main style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+            {stalled && (
+              <div
+                style={{
+                  fontSize: 12,
+                  padding: "9px 12px",
+                  borderRadius: 8,
+                  background: COLORS.warnBg,
+                  color: COLORS.warn,
+                  border: `1px solid ${COLORS.warn}22`,
+                }}
+              >
+                Generation is taking longer than expected and may have failed. Try regenerating below.
+              </div>
+            )}
             <AeAnalysisCard
               companyId={company.id}
               notes={company.notes}
               brief={briefs.ae_analysis}
               dependencies={{ news: briefs.news }}
-              onGenerate={(withMessages) => refresh("ae_analysis", { withMessages })}
+              onGenerate={(withMessages) => startRun("ae_analysis", { withMessages })}
               isRefreshing={isRefreshing.ae_analysis}
               clientError={errorByKind.ae_analysis ?? null}
               onProspect={prospectFromAnalysis}
@@ -187,10 +216,11 @@ export function WatchCompanyPage({ id }: { id: string }) {
             />
             <NewsCard
               brief={briefs.news}
-              onRefresh={() => refresh("news")}
+              onRefresh={() => startRun("news")}
               isRefreshing={isRefreshing.news}
               clientError={errorByKind.news ?? null}
             />
+            <SignalsCard companyId={company.id} onProspect={prospectFromAnalysis} />
           </main>
 
           {/* Colonne droite : le drafteur de mail. Pas de sticky : elle défile

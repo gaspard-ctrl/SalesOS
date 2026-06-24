@@ -11,14 +11,14 @@ export interface DraftRecipient {
 }
 
 /**
- * Préremplissage du drafter depuis l'analyse AE (bouton Prospect d'un contact) :
- * email du contact en To, objet et corps proposés (appliqués seulement si les
- * champs sont vides). `nonce` change à chaque clic pour réappliquer même si on
- * clique deux fois sur le même contact.
+ * Préremplissage du drafter depuis l'analyse AE / les signaux : objet et corps
+ * proposés (appliqués seulement si les champs sont vides). `to` est optionnel
+ * (les prospects passent désormais par la liste BCC/perso). `nonce` change à
+ * chaque clic pour réappliquer même si on clique deux fois sur le même contact.
  */
 export interface DraftPrefill {
   nonce: number;
-  to: string;
+  to?: string | null;
   subject: string | null;
   body: string | null;
 }
@@ -51,9 +51,20 @@ function hasFirstNameToken(text: string): boolean {
 // sinon préfixe une salutation. Filet de sécurité après "Draft with Claude".
 function ensureFirstNameToken(text: string): string {
   if (!text.trim() || hasFirstNameToken(text)) return text;
-  const greeted = text.replace(/^(\s*(?:bonjour|hello|hi|salut|hey|dear)[ \t]+)[^,\n!]+/i, "$1[prénom]");
+  const greeted = text.replace(/^(\s*(?:bonjour|hello|hi|salut|hey|dear)[ \t]+)[^,\n!]+/i, "$1[first name]");
   if (hasFirstNameToken(greeted)) return greeted;
-  return `Bonjour [prénom],\n\n${text.replace(/^\s+/, "")}`;
+  return `Hi [first name],\n\n${text.replace(/^\s+/, "")}`;
+}
+
+// Retire les tokens de prénom pour un envoi groupé (BCC), où aucune
+// personnalisation n'est possible : sans ça un littéral "[first name]" partirait
+// tel quel dans le mail. Enlève une salutation de tête entièrement faite du token,
+// sinon retire le token inline.
+function stripFirstNameToken(text: string): string {
+  return text
+    .replace(/^\s*(?:bonjour|hello|hi|salut|hey|dear)[ \t]+\[(?:pr[ée]nom|first[ _]?name)\][ \t]*,?\s*\n+/i, "")
+    .replace(FIRST_NAME_TOKEN, "")
+    .replace(/^\s+/, "");
 }
 
 /**
@@ -104,17 +115,21 @@ export function MailDrafter({
     return () => clearTimeout(t);
   }, [result]);
 
-  // Prefill depuis l'analyse AE : le contact passe en To (remplace l'adresse du
-  // user auto-préremplie, sinon s'ajoute), objet et corps seulement si vides.
+  // Prefill depuis l'analyse AE / les signaux : objet et corps seulement si vides.
+  // Un `to` explicite (cas legacy) est ajouté en To, sinon on n'y touche pas (les
+  // prospects sont dans la liste BCC/perso).
   React.useEffect(() => {
-    if (!prefill?.to) return;
+    if (!prefill) return;
     setResult(null);
-    setTo((prev) => {
-      const existing = prev.split(",").map((s) => s.trim()).filter(Boolean);
-      if (existing.some((e) => e.toLowerCase() === prefill.to.toLowerCase())) return prev;
-      const withoutSelf = existing.filter((e) => e.toLowerCase() !== userEmail.toLowerCase());
-      return [...withoutSelf, prefill.to].join(", ");
-    });
+    const prefillTo = prefill.to;
+    if (prefillTo) {
+      setTo((prev) => {
+        const existing = prev.split(",").map((s) => s.trim()).filter(Boolean);
+        if (existing.some((e) => e.toLowerCase() === prefillTo.toLowerCase())) return prev;
+        const withoutSelf = existing.filter((e) => e.toLowerCase() !== userEmail.toLowerCase());
+        return [...withoutSelf, prefillTo].join(", ");
+      });
+    }
     if (prefill.subject) setSubject((prev) => (prev.trim() ? prev : prefill.subject ?? ""));
     if (prefill.body) setBody((prev) => (prev.trim() ? prev : prefill.body ?? ""));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,7 +158,7 @@ export function MailDrafter({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ instructions, recipients, personalized }),
       });
-      const data = (await res.json()) as DraftEmailResult;
+      const data = (await res.json().catch(() => ({}))) as DraftEmailResult;
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
       setSubject(data.subject ?? "");
       setBody(personalized ? ensureFirstNameToken(data.body ?? "") : (data.body ?? ""));
@@ -154,10 +169,14 @@ export function MailDrafter({
     }
   }
 
-  // Active le mode personnalisé ; insère le token [prénom] si absent.
+  // Bascule du mode personnalisé. ON : insère le token [first name] si absent.
+  // OFF : retire le token (sinon il partirait littéralement dans l'envoi groupé).
   function togglePersonalized(on: boolean) {
     setPersonalized(on);
-    if (on) setBody((prev) => (prev.trim() ? ensureFirstNameToken(prev) : "Bonjour [prénom],\n\n"));
+    setBody((prev) => {
+      if (on) return prev.trim() ? ensureFirstNameToken(prev) : "Hi [first name],\n\n";
+      return stripFirstNameToken(prev);
+    });
   }
 
   // Envoi personnalisé : un email par prospect (To = prospect), tokens remplacés.
@@ -177,7 +196,7 @@ export function MailDrafter({
         fd.set("source", "watchlist_drafter");
         fd.set("scope_company_id", companyId);
         const res = await fetch("/api/gmail/send", { method: "POST", body: fd });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error ?? "Failed to send");
         sent++;
         setResult({ ok: true, msg: `Sending… ${sent}/${recipients.length}` });
@@ -185,6 +204,9 @@ export function MailDrafter({
         failed.push(`${r.email} (${e instanceof Error ? e.message : "error"})`);
       }
     }
+    // Rafraîchit l'historique dès qu'au moins un mail est parti (même en échec
+    // partiel), sinon les emails envoyés n'apparaîtraient pas avant un reload.
+    if (sent > 0) onSent?.();
     if (failed.length) {
       setResult({ ok: false, msg: `Sent ${sent}/${recipients.length}. Failed: ${failed.join(", ")}` });
     } else {
@@ -193,7 +215,6 @@ export function MailDrafter({
       setBody("");
       setTo(userEmail);
       onRecipientsChange([]);
-      onSent?.();
     }
     setSending(false);
   }
@@ -207,12 +228,14 @@ export function MailDrafter({
       fd.set("to", to);
       fd.set("cc", cc);
       fd.set("bcc", recipients.map((r) => r.email).join(", "));
-      fd.set("subject", subject);
-      fd.set("body", body);
+      // Envoi groupé : pas de personnalisation possible, on neutralise tout token
+      // de prénom résiduel pour ne pas expédier un littéral "[first name]".
+      fd.set("subject", subject.replace(FIRST_NAME_TOKEN, ""));
+      fd.set("body", body.replace(FIRST_NAME_TOKEN, ""));
       fd.set("source", "watchlist_drafter");
       fd.set("scope_company_id", companyId);
       const res = await fetch("/api/gmail/send", { method: "POST", body: fd });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Failed to send");
       setResult({ ok: true, msg: "Sent via Gmail" });
       // Reset pour enchaîner sur le mail suivant : objet/corps vidés, To remis à
@@ -351,7 +374,7 @@ export function MailDrafter({
                       fontSize: 10,
                       fontWeight: 700,
                     }}
-                    title={`[prénom] will be replaced by "${firstNameOf(r)}" for this prospect`}
+                    title={`[first name] will be replaced by "${firstNameOf(r)}" for this prospect`}
                   >
                     {firstNameOf(r) || "?"}
                   </span>
@@ -415,9 +438,9 @@ export function MailDrafter({
           />
           <span style={{ fontSize: 12, lineHeight: 1.45, color: COLORS.ink0 }}>
             <strong>Personalized send</strong> · instead of one email with everyone in BCC, each prospect gets their own
-            individual email, addressed directly to them (To = the prospect). The tokens{" "}
-            <code style={{ fontSize: 11 }}>[prénom]</code> / <code style={{ fontSize: 11 }}>[first name]</code> in the subject
-            or body are replaced by each prospect&apos;s first name.
+            individual email, addressed directly to them (To = the prospect). The{" "}
+            <code style={{ fontSize: 11 }}>[first name]</code> token in the subject
+            or body is replaced by each prospect&apos;s first name.
           </span>
         </label>
 

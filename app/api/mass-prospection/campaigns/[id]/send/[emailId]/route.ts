@@ -61,7 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
     if (!sendRes.ok) {
       const err = await sendRes.json();
-      return NextResponse.json({ error: err.error?.message ?? "Échec de l'envoi" }, { status: 500 });
+      return NextResponse.json({ error: err.error?.message ?? "Failed to send" }, { status: 500 });
     }
 
     const now = new Date().toISOString();

@@ -38,6 +38,16 @@ export function ContactsCard({
   const [callOpen, setCallOpen] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
 
+  // Garde de montage : stoppe le polling téléphone récursif après démontage
+  // (navigation) pour éviter les fetch et setState orphelins.
+  const mountedRef = React.useRef(true);
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   // Reveal Apollo (crédit) -> écrit le numéro sur HubSpot. Fast-path si Apollo
   // renvoie le numéro tout de suite ; sinon on poll le GET (le webhook Apollo
   // remplit le numéro côté HubSpot de façon asynchrone).
@@ -64,9 +74,11 @@ export function ContactsCard({
         // "pending" : Apollo enverra le numéro au webhook. On poll jusqu'à 60s.
         const startedAt = Date.now();
         const tick = async () => {
+          if (!mountedRef.current) return;
           try {
             const r = await fetch(`/api/watchlist/companies/${companyId}/contacts/${contactId}/phone`);
             const j = (await r.json().catch(() => ({}))) as { phone?: string | null };
+            if (!mountedRef.current) return;
             if (j?.phone) {
               await mutate();
               clearState();
@@ -75,6 +87,7 @@ export function ContactsCard({
           } catch {
             /* ignore et on continue à poller */
           }
+          if (!mountedRef.current) return;
           if (Date.now() - startedAt > 60_000) {
             setPhoneState((s) => ({ ...s, [contactId]: "error" }));
             return;
@@ -180,6 +193,10 @@ export function ContactsCard({
       <div style={{ padding: "0 8px 8px" }}>
         {isLoading && contacts.length === 0 ? (
           <p style={{ margin: 0, padding: "8px 8px", fontSize: 12, color: COLORS.ink3 }}>Loading contacts…</p>
+        ) : data?.error && contacts.length === 0 ? (
+          <p style={{ margin: 0, padding: "8px 8px", fontSize: 12, color: COLORS.err }}>
+            Could not load contacts: {data.error}
+          </p>
         ) : contacts.length === 0 ? (
           <p style={{ margin: 0, padding: "8px 8px", fontSize: 12, color: COLORS.ink3 }}>
             {data?.hubspot_company_id

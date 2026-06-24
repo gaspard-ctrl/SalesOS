@@ -228,7 +228,10 @@ export function AeAnalysisCard({
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {visibleContacts.map((c, i) => (
                   <ContactRow
-                    key={c.email ?? c.name ?? i}
+                    // L'horodatage de génération fait partie de la clé : une
+                    // régénération remonte les lignes avec le nouvel opening
+                    // message (sinon le state local garderait l'ancien texte).
+                    key={`${brief?.completed_at ?? ""}:${c.email ?? c.name ?? i}`}
                     index={i}
                     contact={c}
                     companyId={companyId}
@@ -454,7 +457,7 @@ function OpeningMessage({
       fd.set("scope_company_id", companyId);
       if (contact.hubspot_id) fd.set("hubspot_id", contact.hubspot_id);
       const res = await fetch("/api/gmail/send", { method: "POST", body: fd });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Failed to send");
       setSentTo(contact.email);
       onSent?.(contact.email);

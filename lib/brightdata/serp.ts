@@ -34,31 +34,53 @@ export interface SerpResult {
 }
 
 /**
+ * Timeout dur d'un appel SERP. Bright Data peut pendre (zone saturée, Google
+ * lent) : sans borne, un seul appel bloqué gèle tout un worker du sweep et finit
+ * par tuer la Background Function. 20 s couvre largement une SERP normale.
+ */
+const SERP_TIMEOUT_MS = 20_000;
+
+/**
  * Appelle la SERP API Bright Data avec une URL Google déjà construite.
- * Ne lève jamais sur un statut HTTP non-2xx : renvoie le détail dans `SerpResult`
- * pour que l'appelant décide quoi en faire (le front lit `data` même en erreur).
+ * Ne lève jamais (timeout ou erreur réseau compris) : renvoie le détail dans
+ * `SerpResult` pour que l'appelant décide quoi en faire (le front lit `data`
+ * même en erreur).
  */
 export async function fetchSerp(googleUrl: string): Promise<SerpResult> {
   const sentBody = { zone: SERP_ZONE, url: googleUrl, format: "raw" };
   const start = performance.now();
-  const res = await fetch(REQUEST_ENDPOINT, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(sentBody),
-  });
-  const text = await res.text();
-  const ms = Math.round(performance.now() - start);
-
-  let data: unknown = text;
-  let isJson = false;
   try {
-    data = JSON.parse(text);
-    isJson = true;
-  } catch {
-    // garde le texte brut (HTML d'erreur, page non parsée, etc.)
-  }
+    const res = await fetch(REQUEST_ENDPOINT, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify(sentBody),
+      signal: AbortSignal.timeout(SERP_TIMEOUT_MS),
+    });
+    const text = await res.text();
+    const ms = Math.round(performance.now() - start);
 
-  return { status: res.status, ok: res.ok, ms, sentBody, data, isJson };
+    let data: unknown = text;
+    let isJson = false;
+    try {
+      data = JSON.parse(text);
+      isJson = true;
+    } catch {
+      // garde le texte brut (HTML d'erreur, page non parsée, etc.)
+    }
+
+    return { status: res.status, ok: res.ok, ms, sentBody, data, isJson };
+  } catch (e) {
+    const ms = Math.round(performance.now() - start);
+    const aborted = e instanceof Error && e.name === "TimeoutError";
+    return {
+      status: 0,
+      ok: false,
+      ms,
+      sentBody,
+      data: aborted ? `SERP timeout after ${SERP_TIMEOUT_MS}ms` : String(e),
+      isJson: false,
+    };
+  }
 }
 
 // ── Veille marché d'une entreprise via Google News (zone SERP) ──────────────

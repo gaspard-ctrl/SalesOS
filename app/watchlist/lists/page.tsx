@@ -29,7 +29,7 @@ export default function WatchlistListsPage() {
         </Link>
         <div style={{ width: 1, height: 16, background: COLORS.line }} />
         <h1 style={{ fontSize: 16, fontWeight: 600, color: COLORS.ink0, margin: 0, display: "inline-flex", alignItems: "center", gap: 8 }}>
-          <ListIcon size={15} /> Listes de prospection
+          <ListIcon size={15} /> Prospecting lists
         </h1>
       </div>
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>

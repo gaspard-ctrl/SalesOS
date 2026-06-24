@@ -131,8 +131,15 @@ export function EnrichWizard({
   }
 
   async function launch() {
+    if (launching) return; // garde anti double-lancement
     setLaunching(true);
     setErr(null);
+    // Coupe un éventuel polling précédent avant d'en démarrer un nouveau, sinon
+    // l'ancien interval continue de tourner en orphelin.
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
     try {
       const stamp = new Date().toISOString().slice(0, 10);
       const list = await saveList({

@@ -6,7 +6,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_req: NextRequest) {
   const user = await getAuthenticatedUser();
-  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  // Forme complète même en erreur ({ lists: [] }) : le fetcher SWR global ne throw
+  // pas sur non-2xx, donc sans la clé `lists` l'UI afficherait "No lists yet".
+  if (!user) return NextResponse.json({ lists: [], error: "Not authenticated" }, { status: 401 });
 
   const { data, error } = await db
     .from("enrichment_lists")
@@ -15,7 +17,7 @@ export async function GET(_req: NextRequest) {
     .order("updated_at", { ascending: false })
     .limit(100);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ lists: [], error: error.message }, { status: 500 });
 
   const lists = data ?? [];
 
