@@ -20,6 +20,7 @@ interface PendingPost {
   id: string;
   post_url: string;
   source: "pro" | "perso";
+  author: string | null;
   content: string;
   posted_at: string | null;
   likes: number;
@@ -53,8 +54,24 @@ function renderMessage(posts: PendingPost[], appUrl: string): string {
     const group = bySource[source];
     if (!group.length) continue;
     lines.push("", `*${SOURCE_LABEL[source]}*`);
+
+    // Sous-groupes par auteur (= par employe pour le perso).
+    const byAuthor = new Map<string, PendingPost[]>();
     for (const p of group) {
-      lines.push(`• <${p.post_url}|${dayLabel(p.posted_at)}> · ${p.likes} likes · ${p.comments} comments`);
+      const key = p.author?.trim() || "Unknown";
+      const arr = byAuthor.get(key);
+      if (arr) arr.push(p);
+      else byAuthor.set(key, [p]);
+    }
+    // Le plus de posts à renseigner d'abord, puis ordre alphabétique.
+    const authors = [...byAuthor.entries()].sort(
+      (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]),
+    );
+    for (const [author, authorPosts] of authors) {
+      lines.push(`_${author}_ · ${authorPosts.length} post${authorPosts.length > 1 ? "s" : ""}`);
+      for (const p of authorPosts) {
+        lines.push(`• <${p.post_url}|${dayLabel(p.posted_at)}> · ${p.likes} likes · ${p.comments} comments`);
+      }
     }
   }
 
@@ -81,7 +98,7 @@ export async function buildAndSendPostsDigest(opts: { force?: boolean } = {}): P
   // En mode test forcé, on n'applique pas le filtre notified_at (envoi répétable).
   let query = db
     .from("marketing_linkedin_posts")
-    .select("id, post_url, source, content, posted_at, likes, comments")
+    .select("id, post_url, source, author, content, posted_at, likes, comments")
     .is("impressions", null)
     .lte("posted_at", cutoff)
     .gte("posted_at", yearAgo);
