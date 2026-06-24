@@ -3,6 +3,7 @@ import type { EnrichmentList, EnrichmentProfile, HubspotCriteria } from "@/lib/i
 
 interface ListsResponse {
   lists: EnrichmentList[];
+  error?: string;
 }
 
 export function useEnrichmentLists() {
@@ -10,10 +11,12 @@ export function useEnrichmentLists() {
     revalidateOnFocus: false,
     dedupingInterval: 30_000,
   });
+  // Le fetcher global ne throw pas : une erreur arrive dans `data.error`, pas
+  // dans `error`. On lit les deux pour ne pas masquer un 500 derrière un faux vide.
   return {
     lists: data?.lists ?? [],
     isLoading,
-    error: error ? (error instanceof Error ? error.message : "") : "",
+    error: data?.error ?? (error instanceof Error ? error.message : ""),
     reload: () => mutate(),
   };
 }
@@ -27,7 +30,7 @@ export async function searchHubspot(
     body: JSON.stringify(criteria),
   });
   const data = await r.json();
-  if (!r.ok) throw new Error(data.error ?? "Erreur HubSpot");
+  if (!r.ok) throw new Error(data.error ?? "HubSpot error");
   return data;
 }
 
@@ -44,11 +47,11 @@ export async function saveList(input: {
     body: JSON.stringify(input),
   });
   const data = await r.json();
-  if (!r.ok) throw new Error(data.error ?? "Erreur");
+  if (!r.ok) throw new Error(data.error ?? "Error");
   return data.list as EnrichmentList;
 }
 
 export async function deleteList(id: string) {
   const r = await fetch(`/api/intel/enrich/lists/${id}`, { method: "DELETE" });
-  if (!r.ok) throw new Error("Suppression échouée");
+  if (!r.ok) throw new Error("Delete failed");
 }

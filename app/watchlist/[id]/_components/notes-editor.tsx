@@ -24,6 +24,17 @@ export function NotesEditor({
     };
   }, []);
 
+  // Resynchronise avec une mise à jour serveur (reload après analyse AE / enrich)
+  // SANS écraser une saisie en cours : on n'applique la valeur serveur que si
+  // l'utilisateur n'a pas d'édition non sauvegardée (value === savedValue).
+  React.useEffect(() => {
+    const server = initialNotes ?? "";
+    if (server === savedValue) return;
+    setValue((cur) => (cur === savedValue ? server : cur));
+    setSavedValue(server);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialNotes]);
+
   function onChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const next = e.target.value;
     setValue(next);

@@ -77,6 +77,8 @@ export function EmailHistoryCard({ companyId }: { companyId: string }) {
         <div style={{ padding: "0 16px 16px" }}>
           {isLoading && emails.length === 0 ? (
             <p style={{ margin: 0, fontSize: 12, color: COLORS.ink3 }}>Loading…</p>
+          ) : data?.error && emails.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: COLORS.err }}>Could not load email history: {data.error}</p>
           ) : emails.length === 0 ? (
             <p style={{ margin: 0, fontSize: 12, color: COLORS.ink3 }}>
               No emails sent yet from the platform for this company. Emails you send from the drafter will appear here.

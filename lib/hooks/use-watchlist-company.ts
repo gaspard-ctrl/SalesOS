@@ -24,22 +24,42 @@ export function useWatchCompanyDetail(id: string | null) {
   };
 }
 
+// Au-delà de cette durée sans que le brief sorte de "running", on cesse de
+// poller : le job fire-and-forget a probablement échoué sans écrire son statut
+// (crash, crédit Claude épuisé). Évite un polling perpétuel toutes les 3s.
+const POLL_MAX_MS = 4 * 60_000;
+
 /**
- * Poll /briefs toutes les 3s tant que `isRunning` est true.
- * Renvoie les briefs courants ; chaque tick déclenche aussi un refresh
- * du payload détaillé (via la callback) pour que la page complète soit
- * mise à jour quand un brief passe en "ok".
+ * Poll /briefs toutes les 3s tant que `isRunning` est true, avec un garde-fou de
+ * durée. Chaque tick déclenche un refresh du payload détaillé (via la callback).
+ * `runToken` doit changer à chaque nouvelle génération pour réarmer le minuteur.
+ * Renvoie `{ briefs, stalled }` ; `stalled` = le job semble bloqué (timeout).
  */
-export function useBriefsPolling(id: string | null, isRunning: boolean, onTick?: () => void) {
-  const key = id && isRunning ? `/api/watchlist/companies/${id}/briefs` : null;
+export function useBriefsPolling(id: string | null, isRunning: boolean, onTick?: () => void, runToken?: number) {
+  const [stalled, setStalled] = React.useState(false);
+  const startedRef = React.useRef<number | null>(null);
+
+  // (Ré)arme le minuteur quand une génération démarre ou qu'un nouveau run est
+  // déclenché ; le désarme à l'arrêt.
+  React.useEffect(() => {
+    startedRef.current = isRunning ? Date.now() : null;
+    setStalled(false);
+  }, [isRunning, runToken]);
+
+  const active = isRunning && !stalled;
+  const key = id && active ? `/api/watchlist/companies/${id}/briefs` : null;
   const { data } = useSWR<BriefsResponse>(key, {
-    refreshInterval: isRunning ? 3000 : 0,
+    refreshInterval: active ? 3000 : 0,
     revalidateOnFocus: false,
     onSuccess: () => {
+      if (startedRef.current && Date.now() - startedRef.current > POLL_MAX_MS) {
+        setStalled(true);
+        return;
+      }
       if (onTick) onTick();
     },
   });
-  return data?.briefs ?? EMPTY_BRIEFS;
+  return { briefs: data?.briefs ?? EMPTY_BRIEFS, stalled };
 }
 
 export async function patchCompanyNotes(
@@ -82,7 +102,7 @@ export function useBriefRefresh(id: string | null, onComplete?: () => void) {
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok && !json?.alreadyRunning) {
-          setErrorByKind((prev) => ({ ...prev, [kind]: json?.error ?? `Erreur ${res.status}` }));
+          setErrorByKind((prev) => ({ ...prev, [kind]: json?.error ?? `Error ${res.status}` }));
         }
         if (onComplete) onComplete();
       } catch (e) {
