@@ -7,6 +7,19 @@ import { chatToolLabel } from "@/lib/chat/tool-labels";
 // plus toutes les MIN_FLUSH_MS, plus un flush forcé à la fin (done/error).
 const MIN_FLUSH_MS = 1000;
 
+// Watchdog : la Background Function Netlify est tuée à ~15 min. On clôt nous-
+// mêmes AVANT (réponse partielle + note) pour ne jamais laisser une job bloquée
+// sur "running" si le modèle enchaîne trop d'outils (typiquement Better thinking).
+const WATCHDOG_MS = 6 * 60 * 1000;
+
+// Heartbeat : touche updated_at régulièrement tant que le process tourne, même
+// pendant un long appel d'outil sans event. Permet au front de distinguer
+// "lent mais vivant" (heartbeat frais) de "process tué" (heartbeat gelé).
+const HEARTBEAT_MS = 8000;
+
+const STOP_NOTE =
+  "\n\n_(Stopped: the request ran too long. Try a narrower question or turn off Better thinking.)_";
+
 type JobRow = {
   user_id: string;
   status: string;
@@ -33,6 +46,13 @@ export async function runChatJob(input: { jobId: string }): Promise<{ ok: boolea
   let lastFlushAt = 0;
   let isFlushing = false;
   let flushPromise: Promise<void> = Promise.resolve();
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+  const stopHeartbeat = () => {
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = null;
+    }
+  };
 
   const writeRow = async (): Promise<void> => {
     await db
@@ -73,6 +93,14 @@ export async function runChatJob(input: { jobId: string }): Promise<{ ok: boolea
       ? data.input_messages
       : [];
 
+    // Bat le cœur tant que le worker tourne (front: détection de process tué).
+    heartbeat = setInterval(() => {
+      db.from("chat_jobs")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", jobId)
+        .then(undefined, () => {});
+    }, HEARTBEAT_MS);
+
     const onEvent = (event: ChatEvent) => {
       switch (event.type) {
         case "text":
@@ -100,14 +128,41 @@ export async function runChatJob(input: { jobId: string }): Promise<{ ok: boolea
       maybeFlush(Date.now());
     };
 
-    const result = await runChat({
-      userId: data.user_id,
-      messages,
-      onEvent,
-      betterThinking: data.better_thinking === true,
-    });
+    // Course runChat vs watchdog : le 1er à finir gagne. Si le watchdog gagne,
+    // runChat continue en arrière-plan (non annulable) jusqu'à ce que Netlify
+    // tue le process, mais la job est déjà clôturée avec la réponse partielle.
+    const TIMED_OUT = Symbol("timeout");
+    const result = await Promise.race([
+      runChat({
+        userId: data.user_id,
+        messages,
+        onEvent,
+        betterThinking: data.better_thinking === true,
+      }),
+      new Promise<typeof TIMED_OUT>((resolve) =>
+        setTimeout(() => resolve(TIMED_OUT), WATCHDOG_MS)
+      ),
+    ]);
 
+    stopHeartbeat();
     await flushPromise.catch(() => {});
+
+    if (result === TIMED_OUT) {
+      const text = (streamingText ? streamingText + STOP_NOTE : STOP_NOTE.trim());
+      await db
+        .from("chat_jobs")
+        .update({
+          status: "done",
+          streaming_text: text,
+          final_text: text,
+          tool_steps: toolSteps,
+          cost,
+          history: history ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", jobId);
+      return { ok: true };
+    }
 
     await db
       .from("chat_jobs")
@@ -123,6 +178,7 @@ export async function runChatJob(input: { jobId: string }): Promise<{ ok: boolea
       .eq("id", jobId);
     return { ok: true };
   } catch (e) {
+    stopHeartbeat();
     await flushPromise.catch(() => {});
     const message =
       e instanceof ChatAuthError

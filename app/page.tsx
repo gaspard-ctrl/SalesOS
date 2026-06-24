@@ -203,7 +203,13 @@ export default function IntelligencePage() {
       if (!jobId) throw new Error("No job id");
 
       // L'agentic loop tourne dans une Background Function ; on lit la
-      // progression écrite dans chat_jobs par polling toutes les ~1s.
+      // progression écrite dans chat_jobs par polling toutes les ~1s. Le worker
+      // bat un heartbeat (updated_at) toutes les ~8s : si updated_at gèle plus
+      // de STALE_MS, le process a été tué -> on débloque l'UI au lieu de tourner
+      // indéfiniment.
+      const STALE_MS = 45000;
+      let lastStamp = "";
+      let lastChangeMs = Date.now();
       while (!token.cancelled) {
         await new Promise((r) => setTimeout(r, 1000));
         if (token.cancelled) return;
@@ -212,6 +218,14 @@ export default function IntelligencePage() {
         if (!pr.ok) throw new Error(`HTTP ${pr.status}`);
         const { job } = await pr.json();
         if (token.cancelled) return;
+
+        const stamp = typeof job.updated_at === "string" ? job.updated_at : "";
+        if (stamp !== lastStamp) {
+          lastStamp = stamp;
+          lastChangeMs = Date.now();
+        } else if (job.status === "running" && Date.now() - lastChangeMs > STALE_MS) {
+          throw new Error("The response stopped (connection lost). Please try again.");
+        }
 
         if (typeof job.streaming_text === "string") setStreamingText(job.streaming_text);
         if (Array.isArray(job.tool_steps)) setToolSteps(job.tool_steps);
