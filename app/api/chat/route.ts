@@ -40,14 +40,20 @@ export async function POST(req: NextRequest) {
 
   const cronSecret = process.env.CRON_SECRET;
   const siteUrl = process.env.URL ?? process.env.SITE_URL ?? req.nextUrl.origin;
+  // process.env.NETLIFY n'est PAS fiable au runtime du handler Next.js (souvent
+  // unset), ce qui faisait tomber l'agentic loop dans `after()` (tué à ~26s). On
+  // détecte "déployé" via URL/DEPLOY_URL, injectées au runtime (même idiome que
+  // app/api/clients/[id]/refresh/route.ts, éprouvé en prod).
+  const isNetlifyEnv = !!(process.env.NETLIFY || process.env.URL || process.env.DEPLOY_URL);
   console.log(
-    `[chat] dispatch jobId=${job.id} NETLIFY=${process.env.NETLIFY ?? "<unset>"} ` +
+    `[chat] dispatch jobId=${job.id} isNetlifyEnv=${isNetlifyEnv} ` +
     `hasCronSecret=${!!cronSecret} siteUrl=${siteUrl}`
   );
 
-  if (process.env.NETLIFY === "true") {
-    // En prod, sans CRON_SECRET la Background Function refuserait l'appel : on
-    // échoue bruyamment plutôt que de tomber sur `after()` qui meurt à ~26s.
+  if (isNetlifyEnv) {
+    // Déployé : l'agentic loop DOIT tourner dans la Background Function (15 min).
+    // Sans CRON_SECRET elle refuserait l'appel : on échoue bruyamment plutôt que
+    // de tomber sur `after()` qui meurt à ~26s.
     if (!cronSecret) {
       await db.from("chat_jobs").update({ status: "error", error: "CRON_SECRET manquant" }).eq("id", job.id);
       return NextResponse.json({ error: "Server misconfigured (CRON_SECRET)" }, { status: 503 });
@@ -60,6 +66,7 @@ export async function POST(req: NextRequest) {
         method: "POST",
         headers: { authorization: `Bearer ${cronSecret}`, "content-type": "application/json" },
         body: JSON.stringify({ jobId: job.id }),
+        signal: AbortSignal.timeout(8000),
       });
       console.log(`[chat] background invoke status=${resp.status} jobId=${job.id}`);
       if (!resp.ok && resp.status !== 202) {
@@ -75,8 +82,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, jobId: job.id }, { status: 202 });
   }
 
-  // Dev (hors Netlify) : exécution in-process après la réponse.
-  console.log(`[chat] running in-process via after() jobId=${job.id} (NETLIFY not "true")`);
+  // Dev local : exécution in-process après la réponse.
+  console.log(`[chat] running in-process via after() jobId=${job.id} (local dev)`);
   after(async () => {
     const res = await runChatJob({ jobId: job.id });
     if (!res.ok) console.error("[chat] dev run failed:", res.error);
