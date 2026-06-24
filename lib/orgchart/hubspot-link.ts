@@ -41,15 +41,19 @@ async function matchByNameInCompany(companyId: string, name: string): Promise<st
     const assoc = await hubspotGetAssociations("companies", companyId, "contacts");
     const ids = assoc.map((a) => a.id).slice(0, 200);
     if (ids.length === 0) return null;
-    const res = await hubspotFetch<{ results?: Array<{ id: string; properties?: Record<string, string> }> }>(
-      "/crm/v3/objects/contacts/batch/read",
-      "POST",
-      { properties: ["firstname", "lastname"], inputs: ids.map((id) => ({ id })) },
-    );
+    // HubSpot plafonne contacts/batch/read à 100 inputs : un gros compte (ex.
+    // Enedis = 183 contacts) renvoyait un 400 avalé par le catch -> dédup ratée.
     const target = normalizePerson(name);
-    for (const r of res.results ?? []) {
-      const n = `${r.properties?.firstname ?? ""} ${r.properties?.lastname ?? ""}`.trim();
-      if (normalizePerson(n) === target) return r.id;
+    for (let i = 0; i < ids.length; i += 100) {
+      const res = await hubspotFetch<{ results?: Array<{ id: string; properties?: Record<string, string> }> }>(
+        "/crm/v3/objects/contacts/batch/read",
+        "POST",
+        { properties: ["firstname", "lastname"], inputs: ids.slice(i, i + 100).map((id) => ({ id })) },
+      );
+      for (const r of res.results ?? []) {
+        const n = `${r.properties?.firstname ?? ""} ${r.properties?.lastname ?? ""}`.trim();
+        if (normalizePerson(n) === target) return r.id;
+      }
     }
   } catch {
     /* ignore */
