@@ -606,7 +606,7 @@ async function executeTool(
       const ownerFilter = filterId
         ? [{ propertyName: "hubspot_owner_id", operator: "EQ", value: filterId }]
         : [];
-      onProgress(`Récupération des deals... 0 chargés`);
+      onProgress(`Loading deals... 0 loaded`);
       do {
         const data = await hubspot("/crm/v3/objects/deals/search", "POST", {
           ...(ownerFilter.length ? { filterGroups: [{ filters: ownerFilter }] } : {}),
@@ -620,7 +620,7 @@ async function executeTool(
         }
         after = (data.paging as { next?: { after?: string } } | undefined)?.next?.after;
         pages++;
-        onProgress(`Récupération des deals... ${allResults.length} chargés${after ? " (suite...)" : ""}`);
+        onProgress(`Loading deals... ${allResults.length} loaded${after ? " (more...)" : ""}`);
         if (pages >= MAX_PAGES && after) { truncated = true; break; }
       } while (after);
       const note = truncated
@@ -920,7 +920,7 @@ async function executeTool(
     }
     case "get_billing_revenue": {
       try {
-        onProgress("Lecture du sheet revenue...");
+        onProgress("Reading revenue sheet...");
         const rows = await fetchBillingRows();
         if (rows.length === 0) {
           return "Sheet revenue indisponible ou vide (vérifier BILLING_DRIVE_FILE_ID et l'onglet Historique).";
@@ -1097,7 +1097,7 @@ async function executeTool(
 
       try {
         if (dealId) {
-          onProgress(`Recherche des meetings Claap du deal ${dealId}...`);
+          onProgress(`Searching Claap meetings for deal ${dealId}...`);
           const deal = await fetchDealContext(dealId);
           if (!deal) return `Deal HubSpot ${dealId} introuvable.`;
 
@@ -1134,7 +1134,7 @@ async function executeTool(
           });
         }
 
-        onProgress(`Recherche dans les meetings Claap...`);
+        onProgress(`Searching Claap meetings...`);
         const matches = await searchClaapMeetings({
           participant_email: participantEmail,
           participant_domain: participantDomain,
@@ -1155,7 +1155,7 @@ async function executeTool(
       const recordingId = (input.recording_id as string | undefined)?.trim();
       if (!recordingId) return "Erreur : recording_id requis.";
       try {
-        onProgress(`Chargement du transcript Claap ${recordingId}...`);
+        onProgress(`Loading Claap transcript ${recordingId}...`);
         const detail = await fetchClaapMeetingDetail(recordingId);
         if (!detail) return `Meeting Claap ${recordingId} introuvable.`;
         return JSON.stringify(detail);
