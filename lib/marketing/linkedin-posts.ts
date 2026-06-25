@@ -9,9 +9,9 @@
  * appliqués aux DEUX sources : le `getPeopleActivity` existant perd
  * texte/likes/comments, on ne le réutilise pas.
  *
- * Effets : upsert dans `marketing_linkedin_posts` (clé post_url, impressions
- * préservées) + actualisation des marqueurs `linkedin_pro`/`linkedin_perso` du
- * graphe Trafic (`marketing_events`, dédup par linkedin_post_url).
+ * Effets : upsert dans `marketing_linkedin_posts` (clé post_url) +
+ * actualisation des marqueurs `linkedin_pro`/`linkedin_perso` du graphe Trafic
+ * (`marketing_events`, dédup par linkedin_post_url).
  */
 
 import { DATASETS, triggerDataset, pollSnapshot } from "@/lib/brightdata/dataset";
@@ -201,7 +201,7 @@ export interface SourceScrapeResult {
 
 /**
  * Scrape une source : trigger (discover_new) → poll (timeout long) → map →
- * upsert posts (impressions préservées) → sync events. Best-effort : ne throw pas.
+ * upsert posts → sync events. Best-effort : ne throw pas.
  */
 export async function scrapeOwnPostsForSource(
   src: PostSource,
@@ -209,6 +209,10 @@ export async function scrapeOwnPostsForSource(
 ): Promise<SourceScrapeResult> {
   const base: SourceScrapeResult = { source: src.source, url: src.url, discovered: 0, scraped: 0, upserted: 0 };
   try {
+    // NB : on NE passe PAS start_date/end_date à la discovery. Beaucoup de posts
+    // n'ont pas de date côté Bright Data, et une plage de dates les filtre tous
+    // (Bright Data recommande lui-même de laisser ces champs vides). On borne donc
+    // l'âge uniquement côté client, sur les posts effectivement datés.
     const snapshotId = await triggerDataset(
       DATASETS.posts,
       [{ url: src.url }],
@@ -241,8 +245,6 @@ export async function scrapeOwnPostsForSource(
     base.scraped = rows.length;
     if (!rows.length) return base;
 
-    // IMPORTANT : payload SANS impressions/impressions_*/notified_at → un re-scrape
-    // met à jour likes/comments/texte mais n'écrase jamais la saisie manuelle.
     const now = new Date().toISOString();
     const { error } = await db
       .from("marketing_linkedin_posts")
@@ -302,4 +304,91 @@ export async function runWeeklyPostScrape(
   const errors = perSource.filter((r) => r.error).length;
   console.log(`[linkedin-posts] DONE sources=${sources.length} discovered=${discovered} kept=${scraped} upserted=${upserted} errors=${errors}`);
   return { ok: errors < sources.length, sources: sources.length, scraped, upserted, errors, perSource };
+}
+
+// ── Collecte directe par URL (rattrapage des posts ratés par la discovery) ──────
+
+/**
+ * Mappe une ligne Bright Data collectée PAR URL (mode `collect`) → row d'upsert.
+ * Contrairement à la discovery, PAS de filtre auteur : la collecte est explicite
+ * (l'utilisateur fournit l'URL d'un de ses posts). La source pro/perso vient d'abord
+ * d'une source configurée matchant l'auteur, sinon de `account_type` Bright Data.
+ */
+function mapCollectedRow(raw: Record<string, unknown>, configured: PostSource[]): PostRow | null {
+  const post_url = canonicalPostUrl(str(raw.url));
+  if (!post_url) return null; // pas d'URL = pas de clé d'upsert
+  const slug = normalizeSlug(str(raw.user_id));
+  const matched = configured.find((s) => s.slug === slug);
+  const isCompany = /company|organization/i.test(str(raw.account_type));
+  const source: LinkedInPostSource = matched?.source ?? (isCompany ? "pro" : "perso");
+  const source_url =
+    matched?.url ??
+    (source === "pro"
+      ? `https://www.linkedin.com/company/${str(raw.user_id)}/`
+      : `https://www.linkedin.com/in/${str(raw.user_id)}/`);
+  return {
+    post_url,
+    source,
+    source_url,
+    author: str(raw.user_name || raw.user_title || raw.user_id),
+    content: str(raw.post_text || raw.title || raw.headline),
+    posted_at: parseDate(raw.date_posted),
+    likes: num0(raw.num_likes),
+    comments: num0(raw.num_comments),
+    raw,
+  };
+}
+
+export interface CollectResult {
+  ok: boolean;
+  requested: number;
+  upserted: number;
+  error?: string;
+}
+
+/**
+ * Collecte de posts PAR URL (mode `collect`), FIABLE — contrairement à la discovery
+ * par profil qui ne renvoie qu'une tranche récente et volatile du fil. Sert à
+ * rattraper un post précis (souvent ancien) absent de la liste : on scrape l'URL
+ * fournie et on upsert directement (clé post_url, dédup + marqueurs graphe inclus).
+ */
+export async function collectPostsByUrl(
+  urls: string[],
+  opts: { timeoutMs?: number; syncEvents?: boolean } = {},
+): Promise<CollectResult> {
+  const clean = [...new Set(urls.map((u) => str(u).trim()).filter(Boolean))];
+  const baseRes: CollectResult = { ok: true, requested: clean.length, upserted: 0 };
+  if (!process.env.BRIGHTDATA_API_KEY) return { ...baseRes, error: "brightdata_disabled" };
+  if (!clean.length) return baseRes;
+
+  const configured = getConfiguredSources();
+  try {
+    const snapshotId = await triggerDataset(DATASETS.posts, clean.map((url) => ({ url })));
+    const raw = await pollSnapshot<Record<string, unknown>>(snapshotId, {
+      timeoutMs: opts.timeoutMs ?? 6 * 60_000,
+      intervalMs: 5_000,
+    });
+    if (!raw) return { ...baseRes, ok: false, error: "scrape timeout/failed" };
+
+    const mapped = raw
+      .filter((r) => !r.error && !r.error_code)
+      .map((r) => mapCollectedRow(r, configured))
+      .filter((r): r is PostRow => r !== null);
+    const byUrl = new Map<string, PostRow>();
+    for (const r of mapped) byUrl.set(r.post_url, r);
+    const rows = [...byUrl.values()];
+    if (!rows.length) return { ...baseRes, ok: false, error: "no_posts_collected" };
+
+    const now = new Date().toISOString();
+    const { error } = await db
+      .from("marketing_linkedin_posts")
+      .upsert(rows.map((r) => ({ ...r, updated_at: now })), { onConflict: "post_url" });
+    if (error) return { ...baseRes, ok: false, error: error.message };
+
+    if (opts.syncEvents !== false) await syncEventsFromPosts(rows);
+    console.log(`[linkedin-posts] COLLECT done requested=${clean.length} upserted=${rows.length}`);
+    return { ...baseRes, ok: true, upserted: rows.length };
+  } catch (e) {
+    return { ...baseRes, ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }

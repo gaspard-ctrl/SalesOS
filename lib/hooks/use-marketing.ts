@@ -120,7 +120,7 @@ export function useMarketingEvents() {
   };
 }
 
-// ─── Own LinkedIn posts (scraped) + impressions ─────────────────────────────
+// ─── Own LinkedIn posts (scraped) ────────────────────────────────────────────
 
 interface PostsResponse {
   posts: MarketingLinkedInPost[];
@@ -133,19 +133,6 @@ export function useMarketingPosts() {
     SWR_OPTS,
   );
 
-  async function updateImpressions(id: string, impressions: number) {
-    const res = await fetch("/api/marketing/posts", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, impressions }),
-    });
-    if (!res.ok) {
-      const { error: err } = await res.json().catch(() => ({ error: "Unknown error" }));
-      throw new Error(err || "Failed to update impressions");
-    }
-    await mutate();
-  }
-
   async function refreshNow() {
     const res = await fetch("/api/marketing/posts/refresh", { method: "POST" });
     if (!res.ok) {
@@ -155,12 +142,17 @@ export function useMarketingPosts() {
     await mutate();
   }
 
-  // Déclenche le rappel Slack des impressions (test répétable, vers Arthur en mode test).
-  async function sendTestDigest(): Promise<{ posts: number; sent: 0 | 1; reason?: string }> {
-    const res = await fetch("/api/marketing/posts/send-digest", { method: "POST" });
+  // Rattrapage d'un post raté par la discovery hebdo : collecte directe par URL.
+  // Asynchrone (Background Function) → le post apparaît au prochain reload (~1-2 min).
+  async function collectByUrl(url: string): Promise<{ ok: boolean; queued?: boolean; count?: number }> {
+    const res = await fetch("/api/marketing/posts/collect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.error || "Failed to send Slack reminder");
-    return json as { posts: number; sent: 0 | 1; reason?: string };
+    if (!res.ok) throw new Error(json.error || "Failed to collect post");
+    return json as { ok: boolean; queued?: boolean; count?: number };
   }
 
   return {
@@ -168,9 +160,8 @@ export function useMarketingPosts() {
     postsError: data?.error ?? null,
     isLoading,
     error: error ? "Loading error" : "",
-    updateImpressions,
     refreshNow,
-    sendTestDigest,
+    collectByUrl,
     reload: () => mutate(),
   };
 }

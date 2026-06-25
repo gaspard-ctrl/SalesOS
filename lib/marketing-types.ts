@@ -91,8 +91,7 @@ export interface MarketingEvent {
 }
 
 // Own LinkedIn posts (company "pro" page + personal "perso" profile), scraped
-// weekly via Bright Data. Impressions/reach are private analytics (not scrapable)
-// → filled in manually via the dashboard modal.
+// weekly via Bright Data, with their reactions (likes) and comments counts.
 export type LinkedInPostSource = "pro" | "perso";
 
 export interface MarketingLinkedInPost {
@@ -104,8 +103,6 @@ export interface MarketingLinkedInPost {
   posted_at: string | null;       // ISO timestamp
   likes: number;
   comments: number;
-  impressions: number | null;      // manual entry
-  impressions_updated_at: string | null;
   created_at: string;
   updated_at: string;
 }
