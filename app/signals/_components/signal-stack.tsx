@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ExternalLink, Check, X, Building2, Sparkles, Eye } from "lucide-react";
+import { ExternalLink, Check, X, Building2, Sparkles, Eye, Linkedin, Newspaper } from "lucide-react";
 import { COLORS, RADIUS, SHADOWS, companyAvatarGradient } from "@/lib/design/tokens";
 import type { SignalRow } from "@/lib/signals/types";
 import type { SignalAction } from "@/lib/hooks/use-signals";
@@ -23,6 +23,24 @@ const CATEGORY_META: Record<string, { label: string; fg: string; bg: string }> =
 
 function metaFor(s: SignalRow) {
   return CATEGORY_META[s.category ?? ""] ?? CATEGORY_META[s.signal_type] ?? { label: s.signal_type, fg: COLORS.ink2, bg: COLORS.bgSoft };
+}
+
+// Libellé + icône lisibles pour la source brute stockée en base.
+const SOURCE_META: Record<string, { label: string; Icon: typeof Building2 }> = {
+  brightdata_linkedin: { label: "LinkedIn", Icon: Linkedin },
+  brightdata_serp: { label: "News", Icon: Newspaper },
+  apollo: { label: "Apollo", Icon: Building2 },
+};
+
+function sourceMetaFor(s: SignalRow) {
+  return SOURCE_META[s.source] ?? { label: s.source.replace(/_/g, " "), Icon: Building2 };
+}
+
+/** Auteur d'un post LinkedIn discovery (stocké dans payload). */
+function authorOf(s: SignalRow): string | null {
+  if (s.signal_type !== "linkedin_post") return null;
+  const a = (s.payload as { author?: { name?: string } } | null)?.author;
+  return a?.name?.trim() || null;
 }
 
 function fmtDate(iso: string | null): string {
@@ -268,6 +286,14 @@ function SignalCard({ signal, drag = 0, muted = false }: { signal: SignalRow; dr
       {/* Titre du signal. */}
       <div style={{ fontSize: 16, fontWeight: 600, color: COLORS.ink0, lineHeight: 1.35 }}>{signal.title}</div>
 
+      {/* Auteur du post LinkedIn (discovery) : acter l'ajoute à la watchlist + HubSpot. */}
+      {authorOf(signal) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: COLORS.ink2, marginTop: -6 }}>
+          <Linkedin size={12} style={{ color: "#0A66C2" }} />
+          Post by {authorOf(signal)}
+        </div>
+      )}
+
       {/* Résumé / pourquoi. */}
       <div style={{ fontSize: 13, color: COLORS.ink1, lineHeight: 1.5, overflow: "hidden", flex: 1 }}>
         {signal.summary}
@@ -280,8 +306,15 @@ function SignalCard({ signal, drag = 0, muted = false }: { signal: SignalRow; dr
 
       {/* Pied : source. */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: COLORS.ink3 }}>
-        <Building2 size={13} />
-        <span style={{ textTransform: "capitalize" }}>{signal.source.replace(/_/g, " ")}</span>
+        {(() => {
+          const sm = sourceMetaFor(signal);
+          return (
+            <>
+              <sm.Icon size={13} style={signal.source === "brightdata_linkedin" ? { color: "#0A66C2" } : undefined} />
+              <span>{sm.label}</span>
+            </>
+          );
+        })()}
         {signal.url && (
           <a
             href={signal.url}

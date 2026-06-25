@@ -1,7 +1,7 @@
 // Types partagés du pipeline Signals (page /signals + fiche Watch List).
 
 export type SignalFeed = "watchlist" | "discovery";
-export type SignalStatus = "new" | "actioned" | "dismissed" | "snoozed" | "expired";
+export type SignalStatus = "new" | "actioned" | "dismissed" | "snoozed" | "expired" | "deleted";
 
 /** Taxonomie alignée sur lib/signal-scoring.ts (signalScoringTool). */
 export type SignalType =
@@ -34,6 +34,15 @@ export interface RawItem {
   /** Compte connu (flux watchlist uniquement). */
   knownCompanyName?: string | null;
   knownCompanyId?: string | null;
+  /** Auteur d'un post LinkedIn discovery (résolu en société/contact au "act"). */
+  author?: SignalAuthor | null;
+}
+
+/** Auteur d'un post LinkedIn discovery (stocké dans prospect_signals.payload). */
+export interface SignalAuthor {
+  name: string;
+  /** URL du profil LinkedIn (déduite du slug du post). */
+  linkedin: string;
 }
 
 /** Signal scoré par Claude, prêt à être normalisé en row DB. */
@@ -53,6 +62,8 @@ export interface ScoredSignal {
   score: number;
   /** ISO ou null. */
   signal_date: string | null;
+  /** Auteur d'un post LinkedIn discovery (persisté en payload). */
+  author?: SignalAuthor | null;
 }
 
 /** Destinataire candidat proposé dans le pop-up d'action (CRM, Apollo ou nominé). */

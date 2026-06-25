@@ -4,8 +4,10 @@ import { logUsage } from "@/lib/log-usage";
 import { fetchCompanyContacts } from "@/lib/watchlist/fetch-company-contacts";
 import { draftProspectionEmail, type DraftRecipient } from "@/lib/watchlist/draft-email";
 import { searchPeople as apolloSearchPeople, revealPerson, isApolloConfigured } from "@/lib/apollo/client";
-import { hubspotFetch, hubspotAssociate } from "@/lib/hubspot";
-import type { SignalRow, SignalCandidate } from "./types";
+import { searchPeople as searchLinkedinPeople } from "@/lib/brightdata/linkedin";
+import { hubspotFetch, hubspotAssociate, createCompany } from "@/lib/hubspot";
+import { resolveHubspotCompanyId } from "@/lib/watchlist/resolve-hubspot-company";
+import type { SignalRow, SignalCandidate, SignalAuthor } from "./types";
 
 // Mots-clés ICP pour reconnaître un bon contact (buyer RH / People / L&D).
 const ICP_KEYWORDS = ["chro", "drh", "ressources humaines", "human resources", "people", "talent", "l&d", "learning", "hrbp", "rh", "formation"];
@@ -33,6 +35,24 @@ export interface CandidatesResult {
 export async function getSignalCandidates(signalId: string): Promise<CandidatesResult> {
   const { data: sig } = await db.from("prospect_signals").select("*").eq("id", signalId).maybeSingle<SignalRow>();
   if (!sig) return { signal: null, scopeCompanyId: null, candidates: [], apolloConfigured: isApolloConfigured() };
+
+  // Post LinkedIn discovery : l'auteur EST la cible. On résout d'abord sa vraie
+  // société (la company_name stockée n'est qu'un fallback = nom de l'auteur) pour
+  // que la recherche de collègues ICP + l'ajout watchlist portent sur le bon compte.
+  let authorFocus: { firstName: string; lastName: string; title: string | null } | null = null;
+  if (sig.signal_type === "linkedin_post") {
+    const resolved = await resolvePostAuthor(sig).catch(() => null);
+    if (resolved) {
+      authorFocus = { firstName: resolved.firstName ?? "", lastName: resolved.lastName ?? "", title: resolved.title };
+      if (resolved.companyName && resolved.companyName.toLowerCase() !== sig.company_name.toLowerCase()) {
+        sig.company_name = resolved.companyName;
+        await db
+          .from("prospect_signals")
+          .update({ company_name: resolved.companyName, updated_at: new Date().toISOString() })
+          .eq("id", sig.id);
+      }
+    }
+  }
 
   const out: SignalCandidate[] = [];
   const seenNames = new Set<string>();
@@ -104,12 +124,17 @@ export async function getSignalCandidates(signalId: string): Promise<CandidatesR
   };
   out.sort((a, b) => rank(b) - rank(a));
 
-  // FOCUS sur la personne nommée (nomination / job_change) : on l'extrait du
-  // signal et on la met en tête. Email résolu au draft (reveal Apollo par nom),
-  // avec un email DEVINÉ en secours d'après le pattern emails de la société.
+  // FOCUS sur la personne clé : l'auteur du post (linkedin_post) ou la personne
+  // nommée (nomination / job_change). On la met en tête. Email résolu au draft
+  // (reveal Apollo par nom), avec un email DEVINÉ en secours via le pattern société.
   let candidates = out;
-  if (sig.signal_type === "nomination" || sig.signal_type === "job_change") {
-    const nominee = await extractNominee(sig).catch(() => null);
+  const focus =
+    authorFocus ??
+    (sig.signal_type === "nomination" || sig.signal_type === "job_change"
+      ? await extractNominee(sig).catch(() => null)
+      : null);
+  {
+    const nominee = focus;
     if (nominee && (nominee.firstName || nominee.lastName)) {
       const full = `${nominee.firstName ?? ""} ${nominee.lastName ?? ""}`.trim();
       // Pas de contact CRM pour apprendre le pattern d'emails ? On révèle UN
@@ -192,6 +217,92 @@ async function extractNominee(
   const lastName = (out.last_name ?? "").trim();
   if (!firstName && !lastName) return null;
   return { firstName, lastName, title: (out.title ?? "").trim() || null };
+}
+
+// ── Posts LinkedIn discovery : résolution de l'auteur -> société + contact ───
+
+interface ResolvedAuthor {
+  name: string;
+  firstName: string | null;
+  lastName: string | null;
+  title: string | null;
+  /** Société actuelle de l'auteur (résolue via son profil), ou null. */
+  companyName: string | null;
+}
+
+const AUTHOR_TOOL: Anthropic.Tool = {
+  name: "emit_author_company",
+  description: "Renvoie la société actuelle et le poste de l'auteur d'un post LinkedIn, déduits de son intitulé de profil (headline) et du post.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      company: { type: "string", description: "Nom de la société actuelle (employeur) de l'auteur, ou vide si indéterminable." },
+      title: { type: "string", description: "Poste actuel de l'auteur, ou vide." },
+    },
+    required: ["company"],
+  },
+};
+
+/**
+ * Extrait la société (employeur) + le poste d'un auteur de post LinkedIn à partir
+ * de son headline de profil (récupéré en SERP) et du texte du post. Haiku, robuste
+ * aux formats variés ("Title at Company", "Poste, Société", "X | Y"). null si rien.
+ */
+async function extractAuthorCompany(
+  authorName: string,
+  headline: string,
+  postSummary: string,
+): Promise<{ company: string | null; title: string | null } | null> {
+  if (!process.env.ANTHROPIC_API_KEY || (!headline && !postSummary)) return null;
+  const client = new Anthropic({ timeout: 20_000, maxRetries: 1 });
+  const msg = await client.messages.create({
+    model: NOMINEE_MODEL,
+    max_tokens: 150,
+    system: "Tu déduis l'employeur ACTUEL et le poste d'une personne à partir de son intitulé de profil LinkedIn et d'un extrait de son post. Si la société n'est pas clairement identifiable, renvoie company vide. Pas d'invention. Réponds uniquement via emit_author_company.",
+    messages: [{ role: "user", content: `Auteur: ${authorName}\nHeadline LinkedIn: ${headline || "(inconnu)"}\nExtrait du post: ${postSummary || "(aucun)"}` }],
+    tools: [AUTHOR_TOOL],
+    tool_choice: { type: "tool" as const, name: "emit_author_company" },
+  });
+  logUsage(null, NOMINEE_MODEL, msg.usage.input_tokens, msg.usage.output_tokens, "signals_author");
+  const block = msg.content.find((b) => b.type === "tool_use");
+  if (!block || !("input" in block)) return null;
+  const out = block.input as { company?: string; title?: string };
+  const company = (out.company ?? "").trim();
+  const title = (out.title ?? "").trim();
+  return { company: company || null, title: title || null };
+}
+
+/**
+ * Résout l'auteur d'un post LinkedIn discovery : son nom est connu (payload), on
+ * récupère son headline de profil via SERP (rapide), puis on en déduit sa société
+ * + poste via Haiku. Best-effort : society null si indéterminable (le draft reste
+ * possible, mais sans ajout watchlist fiable).
+ */
+async function resolvePostAuthor(sig: SignalRow): Promise<ResolvedAuthor | null> {
+  const payload = sig.payload as { author?: SignalAuthor } | null;
+  const author = payload?.author;
+  if (!author?.name) return null;
+
+  const parts = author.name.trim().split(/\s+/);
+  const firstName = parts[0] ?? "";
+  const lastName = parts.slice(1).join(" ");
+  const slug = author.linkedin.match(/\/in\/([^/?#]+)/i)?.[1]?.toLowerCase() ?? "";
+
+  // Headline via SERP (site:linkedin.com/in) : on privilégie le profil dont le
+  // slug correspond à celui du post, sinon le premier résultat.
+  const search = await searchLinkedinPeople({ firstName, lastName }).catch(() => null);
+  const items = search?.data.items ?? [];
+  const match = items.find((i) => i.username === slug) ?? items[0];
+  const headline = match?.headline ?? "";
+
+  const extracted = await extractAuthorCompany(author.name, headline, sig.summary ?? "").catch(() => null);
+  return {
+    name: author.name,
+    firstName: firstName || null,
+    lastName: lastName || null,
+    title: extracted?.title ?? (headline || null),
+    companyName: extracted?.company ?? null,
+  };
 }
 
 /**
@@ -300,10 +411,12 @@ export async function draftForSignal(params: {
   const { data: sig } = await db.from("prospect_signals").select("*").eq("id", params.signalId).maybeSingle<SignalRow>();
   if (!sig) return { ok: false, recipient: null, draft: null, scopeCompanyId: null, apolloUsed: false, error: "Signal not found" };
 
-  // Assurer un compte watchlist (discovery -> ajout).
+  // Assurer un compte watchlist (discovery -> ajout) + société HubSpot. Pour un
+  // post LinkedIn, résout d'abord la vraie société de l'auteur (sig.company_name
+  // peut encore être un fallback si l'utilisateur n'est pas passé par /candidates).
   let scopeCompanyId = sig.scope_company_id;
   if (!scopeCompanyId) {
-    scopeCompanyId = await ensureScopeCompany(sig, params.userId);
+    scopeCompanyId = await ensureScopeCompanyForSignal(sig, params.userId);
   }
 
   // Résoudre l'email du destinataire choisi.
@@ -346,9 +459,17 @@ export async function draftForSignal(params: {
   // s'adresse directement à elle (félicitations + accompagnement de sa prise de
   // poste). Sinon, on écrit à un buyer RH à propos du changement dans la société.
   const recipientIsNominee = !!(c.firstName && c.lastName);
-  const signalLine = recipientIsNominee
-    ? `Signal déclencheur (${sig.signal_type}) : ${sig.title}${sig.summary ? ` - ${sig.summary}` : ""}. Le destinataire EST la personne concernée par ce signal (${recipient?.name ?? `${c.firstName} ${c.lastName}`}). Adresse-toi directement à elle : félicite-la brièvement pour sa prise de poste, puis propose un accompagnement coaching/leadership pour réussir ses premiers mois et embarquer ses équipes. Pas de flagornerie.`
-    : `Signal déclencheur (${sig.signal_type}) : ${sig.title}${sig.summary ? ` - ${sig.summary}` : ""}. Ancre l'accroche du mail sur ce signal précis et l'angle coaching/leadership pertinent pour le destinataire.`;
+  const signalBase = `Signal déclencheur (${sig.signal_type}) : ${sig.title}${sig.summary ? ` - ${sig.summary}` : ""}.`;
+  let signalLine: string;
+  if (sig.signal_type === "linkedin_post" && recipientIsNominee) {
+    // L'auteur du post : on rebondit sur SON post (pas de félicitations de prise
+    // de poste). Accroche sur le sujet qu'il a partagé + angle coaching/leadership.
+    signalLine = `${signalBase} Le destinataire EST l'auteur de ce post LinkedIn (${recipient?.name ?? `${c.firstName} ${c.lastName}`}). Rebondis directement et sincèrement sur le sujet de son post, montre que tu l'as lu, puis fais le lien avec un accompagnement coaching/leadership pertinent. Pas de flagornerie, pas de félicitations hors sujet.`;
+  } else if (recipientIsNominee) {
+    signalLine = `${signalBase} Le destinataire EST la personne concernée par ce signal (${recipient?.name ?? `${c.firstName} ${c.lastName}`}). Adresse-toi directement à elle : félicite-la brièvement pour sa prise de poste, puis propose un accompagnement coaching/leadership pour réussir ses premiers mois et embarquer ses équipes. Pas de flagornerie.`;
+  } else {
+    signalLine = `${signalBase} Ancre l'accroche du mail sur ce signal précis et l'angle coaching/leadership pertinent pour le destinataire.`;
+  }
   const draft = await draftProspectionEmail({
     scopeCompanyId,
     userId: params.userId,
@@ -404,7 +525,7 @@ export async function saveSignalToWatchlist(params: {
   if (!sig) return { ok: false, scopeCompanyId: null, error: "Signal not found" };
 
   let scopeCompanyId = sig.scope_company_id;
-  if (!scopeCompanyId) scopeCompanyId = await ensureScopeCompany(sig, params.userId);
+  if (!scopeCompanyId) scopeCompanyId = await ensureScopeCompanyForSignal(sig, params.userId);
 
   const now = new Date().toISOString();
   const { error: updateError } = await db
@@ -425,17 +546,74 @@ export async function saveSignalToWatchlist(params: {
   return { ok: true, scopeCompanyId };
 }
 
-async function ensureScopeCompany(sig: SignalRow, userId: string): Promise<string> {
-  const { data: existing } = await db.from("scope_companies").select("id").ilike("name", sig.company_name).maybeSingle();
-  if (existing?.id) return existing.id as string;
-  const { data: ownerRow } = await db.from("users").select("name").eq("id", userId).maybeSingle();
-  const { data: created, error } = await db
-    .from("scope_companies")
-    .insert({ name: sig.company_name, owner: (ownerRow?.name as string | null) ?? null, notes: `Added from signal: ${sig.title}` })
-    .select("id")
-    .single();
-  if (error || !created) throw new Error(`Failed to add company to watchlist: ${error?.message ?? "unknown"}`);
-  return created.id as string;
+/**
+ * Garantit un compte watchlist pour un signal (discovery -> ajout). Pour un post
+ * LinkedIn, la société stockée n'est qu'un fallback (nom de l'auteur) : on résout
+ * d'abord la vraie société de l'auteur, on la persiste, puis on l'ajoute.
+ */
+async function ensureScopeCompanyForSignal(sig: SignalRow, userId: string): Promise<string> {
+  let companyName = sig.company_name;
+  const payload = sig.payload as { author?: SignalAuthor } | null;
+  const author = payload?.author;
+  const unresolvedPost =
+    sig.signal_type === "linkedin_post" &&
+    !!author?.name &&
+    companyName.trim().toLowerCase() === author.name.trim().toLowerCase();
+  if (unresolvedPost) {
+    const resolved = await resolvePostAuthor(sig).catch(() => null);
+    if (resolved?.companyName) {
+      companyName = resolved.companyName;
+      await db
+        .from("prospect_signals")
+        .update({ company_name: companyName, updated_at: new Date().toISOString() })
+        .eq("id", sig.id);
+      sig.company_name = companyName;
+    }
+  }
+  return ensureScopeCompany(companyName, sig.title, userId);
+}
+
+/**
+ * Garantit la row scope_companies (par nom) ET la société HubSpot correspondante
+ * (lien existant via fuzzy match, sinon création). Retourne l'id scope_companies.
+ */
+async function ensureScopeCompany(companyName: string, noteTitle: string, userId: string): Promise<string> {
+  const name = companyName.trim();
+  const { data: existing } = await db.from("scope_companies").select("id").ilike("name", name).maybeSingle();
+  let scopeCompanyId = existing?.id as string | undefined;
+  if (!scopeCompanyId) {
+    const { data: ownerRow } = await db.from("users").select("name").eq("id", userId).maybeSingle();
+    const { data: created, error } = await db
+      .from("scope_companies")
+      .insert({ name, owner: (ownerRow?.name as string | null) ?? null, notes: `Added from signal: ${noteTitle}` })
+      .select("id")
+      .single();
+    if (error || !created) throw new Error(`Failed to add company to watchlist: ${error?.message ?? "unknown"}`);
+    scopeCompanyId = created.id as string;
+  }
+  // Société HubSpot : lie l'existante (fuzzy) ou la crée si absente. Best-effort :
+  // un échec HubSpot ne doit pas bloquer l'ajout watchlist.
+  await ensureHubspotCompany(scopeCompanyId, name).catch((e) =>
+    console.warn("[signals/act] HubSpot company ensure skipped:", e instanceof Error ? e.message : e),
+  );
+  return scopeCompanyId;
+}
+
+/**
+ * Lie la scope_company à une société HubSpot : cache/fuzzy match d'abord
+ * (resolveHubspotCompanyId persiste le lien), sinon CRÉE la société sur HubSpot
+ * et mémorise son id. Best-effort.
+ */
+async function ensureHubspotCompany(scopeCompanyId: string, name: string): Promise<void> {
+  const resolved = await resolveHubspotCompanyId(scopeCompanyId).catch(() => null);
+  if (resolved?.hubspot_company_id) return; // déjà sur HubSpot
+  const id = await createCompany(name).catch(() => null);
+  if (id) {
+    await db
+      .from("scope_companies")
+      .update({ hubspot_company_id: id, hubspot_resolved_at: new Date().toISOString() })
+      .eq("id", scopeCompanyId);
+  }
 }
 
 async function pushContactToHubspot(params: {

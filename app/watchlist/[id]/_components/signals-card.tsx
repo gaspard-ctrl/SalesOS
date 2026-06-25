@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Radar, ExternalLink, PenLine, Sparkles, X, Loader2 } from "lucide-react";
+import { Radar, ExternalLink, PenLine, Sparkles, X, Trash2, Loader2 } from "lucide-react";
 import { COLORS, RADIUS } from "@/lib/design/tokens";
 import { useCompanySignals } from "@/lib/hooks/use-signals";
 import type { SignalRow } from "@/lib/signals/types";
@@ -35,6 +35,7 @@ export function SignalsCard({
   const [actSignal, setActSignal] = React.useState<SignalRow | null>(null);
   const [dismissingId, setDismissingId] = React.useState<string | null>(null);
   const [dismissError, setDismissError] = React.useState<string | null>(null);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
 
   async function dismiss(id: string) {
     setDismissingId(id);
@@ -53,6 +54,29 @@ export function SignalsCard({
       await mutate(); // resynchronise l'état réel (la carte reste visible)
     } finally {
       setDismissingId(null);
+    }
+  }
+
+  // Suppression définitive : retire le signal pour de bon (status 'deleted'),
+  // il ne réapparaîtra pas au prochain scan. Confirmation car irréversible.
+  async function del(id: string) {
+    if (!window.confirm("Delete this signal permanently? It won't come back on the next scan.")) return;
+    setDeletingId(id);
+    setDismissError(null);
+    try {
+      const res = await fetch(`/api/signals/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "delete" }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+      await mutate();
+    } catch (e) {
+      setDismissError(e instanceof Error ? e.message : "Could not delete the signal.");
+      await mutate(); // resynchronise l'état réel (la carte reste visible)
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -95,6 +119,8 @@ export function SignalsCard({
             const recipient = s.draft_recipient;
             const canDraft = !!recipient?.email;
             const isDismissing = dismissingId === s.id;
+            const isDeleting = deletingId === s.id;
+            const isBusy = isDismissing || isDeleting;
             return (
               <div
                 key={s.id}
@@ -106,7 +132,7 @@ export function SignalsCard({
                   flexDirection: "column",
                   gap: 6,
                   background: s.status === "actioned" ? COLORS.brandTintSoft : COLORS.bgCard,
-                  opacity: isDismissing ? 0.5 : 1,
+                  opacity: isBusy ? 0.5 : 1,
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -133,7 +159,7 @@ export function SignalsCard({
                     <button
                       type="button"
                       onClick={() => dismiss(s.id)}
-                      disabled={isDismissing}
+                      disabled={isBusy}
                       title="Dismiss this signal"
                       style={{
                         display: "inline-flex",
@@ -143,10 +169,28 @@ export function SignalsCard({
                         color: COLORS.ink3,
                         background: "none",
                         border: "none",
-                        cursor: isDismissing ? "default" : "pointer",
+                        cursor: isBusy ? "default" : "pointer",
                       }}
                     >
                       {isDismissing ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />} Dismiss
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => del(s.id)}
+                      disabled={isBusy}
+                      title="Delete this signal permanently"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        fontSize: 12,
+                        color: COLORS.err,
+                        background: "none",
+                        border: "none",
+                        cursor: isBusy ? "default" : "pointer",
+                      }}
+                    >
+                      {isDeleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} Delete
                     </button>
                     {canDraft && (
                       <button

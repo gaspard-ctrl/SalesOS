@@ -17,6 +17,8 @@
 --   dismissed -> swipe gauche : retiré du feed pour toujours
 --   snoozed   -> repoussé, revient quand snooze_until < now()
 --   expired   -> jamais traité et trop vieux (purge par le sweep)
+--   deleted   -> masqué définitivement par l'utilisateur (fiche compte). On garde
+--                la row pour conserver la dedupe_key : le sweep ne le réinsère jamais.
 --
 -- dedupe_key UNIQUE : inclut l'identité société + le contenu, pour un upsert
 -- "insert only new" (ON CONFLICT (dedupe_key) DO NOTHING) uniforme sur les deux flux.
@@ -40,7 +42,7 @@ CREATE TABLE IF NOT EXISTS prospect_signals (
   score            INTEGER NOT NULL DEFAULT 0,
   dedupe_key       TEXT NOT NULL UNIQUE,
   status           TEXT NOT NULL DEFAULT 'new'
-                     CHECK (status IN ('new', 'actioned', 'dismissed', 'snoozed', 'expired')),
+                     CHECK (status IN ('new', 'actioned', 'dismissed', 'snoozed', 'expired', 'deleted')),
   snooze_until     TIMESTAMPTZ,
   actioned_at      TIMESTAMPTZ,
   dismissed_at     TIMESTAMPTZ,
