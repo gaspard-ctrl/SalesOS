@@ -9,6 +9,7 @@ import { useSignals, type SignalAction } from "@/lib/hooks/use-signals";
 import type { SignalRow } from "@/lib/signals/types";
 import { SignalStack } from "./_components/signal-stack";
 import { SignalActModal } from "./_components/signal-act-modal";
+import { SignalStatus } from "./_components/signal-status";
 
 type Filter = "all" | "watchlist" | "discovery";
 type Banner = { kind: "ok" | "warn"; node: React.ReactNode; sticky?: boolean };
@@ -125,27 +126,30 @@ export default function SignalsPage() {
         title="Signals"
         subtitle="Swipe right to act (draft + contact), left to dismiss."
         actions={
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={refreshing}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 14px",
-              borderRadius: RADIUS.md,
-              border: `1px solid ${COLORS.line}`,
-              background: COLORS.bgCard,
-              color: COLORS.ink1,
-              fontSize: 13,
-              cursor: refreshing ? "default" : "pointer",
-              opacity: refreshing ? 0.6 : 1,
-            }}
-          >
-            {refreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-            Refresh
-          </button>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <SignalStatus />
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={refreshing}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "8px 14px",
+                borderRadius: RADIUS.md,
+                border: `1px solid ${COLORS.line}`,
+                background: COLORS.bgCard,
+                color: COLORS.ink1,
+                fontSize: 13,
+                cursor: refreshing ? "default" : "pointer",
+                opacity: refreshing ? 0.6 : 1,
+              }}
+            >
+              {refreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              Refresh
+            </button>
+          </div>
         }
         tabs={
           <TabBar

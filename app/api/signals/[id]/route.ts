@@ -13,7 +13,7 @@ export interface SignalActionResponse {
   error?: string;
 }
 
-// dismiss / snooze / save. L'action "accept" passe par /candidates puis /draft (popup).
+// dismiss / delete / snooze / save. L'action "accept" passe par /candidates puis /draft (popup).
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
@@ -27,6 +27,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { error } = await db
       .from("prospect_signals")
       .update({ status: "dismissed", dismissed_at: now, updated_at: now })
+      .eq("id", id);
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  // Masquage définitif (fiche compte). On garde la ligne (et donc la dedupe_key)
+  // pour que le sweep ne réinsère JAMAIS ce signal : status='deleted' est exclu
+  // de toutes les lectures du feed et de la fiche.
+  if (action === "delete") {
+    const now = new Date().toISOString();
+    const { error } = await db
+      .from("prospect_signals")
+      .update({ status: "deleted", updated_at: now })
       .eq("id", id);
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });

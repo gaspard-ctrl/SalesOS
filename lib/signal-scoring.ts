@@ -86,6 +86,16 @@ Tout changement structurel, de croissance ou d'organisation qui crée un besoin 
 - À GARDER : nomination ou arrivée d'un(e) DRH, CHRO, Chief People Officer, VP People, VP Talent, Head of L&D, directeur(rice) formation, CLO, HRBP senior.
 - À EXCLURE ABSOLUMENT : toute nomination d'un dirigeant HORS RH/People/L&D, par exemple CRO (Chief Revenue Officer), CEO, CFO, CMO, CTO, CIO, COO, VP Sales, VP Marketing, directeur commercial, directeur produit. Ce ne sont PAS des acheteurs Coachello. Si le poste nommé n'est pas clairement RH/People/L&D/Talent, NE PAS émettre.
 
+### Famille 3 - Posts LinkedIn intéressants (items tagués [LinkedIn post], signal_type: "linkedin_post")
+Certains items sont des posts LinkedIn découverts par mots-clés (l'auteur n'est PAS forcément dans nos comptes : c'est de la découverte). L'auteur du post est la personne à contacter. À GARDER quand le post RÉVÈLE un besoin ou un contexte favorable au coaching / développement du leadership, même sans événement formel daté :
+- scaling / croissance d'équipe, arrivée de nouveaux managers, structuration du management
+- lancement d'un programme leadership / L&D / formation / mentoring / coaching interne
+- transformation, réorganisation, conduite du changement
+- culture, engagement, QVT, bien-être au travail, onboarding / intégration
+- réflexion d'un décideur ou manager (RH, People, L&D, dirigeant) sur le management, le leadership ou le développement des équipes
+À EXCLURE : post purement promotionnel / produit, repartage sans propos, offre d'emploi brute, citation inspirante creuse, contenu générique sans angle management / leadership / RH.
+Scoring spécifique aux posts : company_name = l'employeur de l'auteur s'il est identifiable dans le post, sinon laisse le nom de l'auteur. signal_strength jusqu'à 12 si le besoin est explicite (programme annoncé, scaling, transformation), 6-8 si l'intention reste implicite. actionnabilité élevée (on connaît l'auteur et on peut le contacter).
+
 ### À exclure dans tous les cas (hors sujet, jamais un signal)
 - lancement de produit / fonctionnalité, annonce technologique ou IA produit
 - résultats financiers trimestriels, chiffre d'affaires, cours de bourse (à ne pas confondre avec une levée de fonds, qui elle est voulue)

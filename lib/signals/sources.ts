@@ -1,7 +1,7 @@
 import { fetchSerp, parseGoogleDate, BRIGHTDATA_API_KEY } from "@/lib/brightdata/serp";
 import { getCompanyJobs, getCompanyPosts } from "@/lib/brightdata/linkedin";
 import { slugifyCompany } from "@/lib/slugify-company";
-import { searchPeople as apolloSearchPeople, isApolloConfigured } from "@/lib/apollo/client";
+import { searchPeople as apolloSearchPeople, isApolloConfigured, type ApolloPerson } from "@/lib/apollo/client";
 import { GLOBAL_SCAN_QUERIES } from "@/lib/signal-scoring";
 import type { RawItem, ScoredSignal, SignalType } from "./types";
 
@@ -11,6 +11,24 @@ const SINCE_DAYS = 21;
 // Presets ICP Coachello (buyers RH / People / L&D).
 const ICP_TITLES = ["CHRO", "DRH", "VP People", "Head of L&D", "People", "Talent", "HRBP", "Learning"];
 const ICP_SENIORITIES = ["c_suite", "vp", "head", "director"];
+
+// Découverte de posts LinkedIn : nb de posts gardés par requête mot-clé.
+const MAX_POSTS_PER_QUERY = 12;
+
+// Thèmes "post intéressant" pour la découverte LinkedIn : intentions / contextes
+// favorables au coaching (leadership, L&D, scaling, transfo, prise de poste...).
+// Chaque thème est croisé avec `site:linkedin.com/posts` via la SERP. FR + EN.
+// On récolte large ; Claude tranche ensuite sur l'intention réelle (Famille 3).
+const POST_DISCOVERY_THEMES = [
+  { q: `("nouveaux managers" OR "prise de poste" OR "devenir manager" OR "first-time manager")`, lang: "fr" },
+  { q: `("programme de leadership" OR "développement du leadership" OR "leadership development" OR "leadership program")`, lang: "fr" },
+  { q: `("programme de coaching" OR "coaching des managers" OR "accompagnement des managers" OR "manager coaching")`, lang: "fr" },
+  { q: `("learning and development" OR "L&D" OR "montée en compétences" OR "upskilling" OR "reskilling")`, lang: "en" },
+  { q: `("transformation managériale" OR "conduite du changement" OR "change management" OR réorganisation)`, lang: "fr" },
+  { q: `("we are scaling" OR "growing our team" OR "scaling our team" OR "doubling our team")`, lang: "en" },
+  { q: `("culture d'entreprise" OR "engagement collaborateurs" OR "qualité de vie au travail" OR "employee engagement")`, lang: "fr" },
+  { q: `("séminaire managers" OR "offsite leadership" OR "leadership offsite" OR "manager onboarding")`, lang: "en" },
+];
 
 function sinceDate(days = SINCE_DAYS): string {
   const d = new Date();
@@ -219,16 +237,13 @@ const SENIORITY_SCORE: Record<string, number> = {
 
 /**
  * Cherche les décideurs ICP d'un compte via Apollo (searchPeople = gratuit, pas
- * de reveal) et émet un signal "nouveau décideur" pour ceux ABSENTS du CRM.
- * Le reveal d'email (1 crédit) n'a lieu qu'au "act". Best-effort.
+ * de reveal). Réutilisé pour les signaux "nouveau décideur" ET le scrape de
+ * leurs posts LinkedIn. Best-effort : [] si Apollo absent / échec.
  */
-export async function collectApolloPeopleMoves(params: {
+export async function searchIcpDecisionMakers(params: {
   companyName: string;
-  scopeCompanyId: string;
   domain?: string | null;
-  existingEmails: Set<string>;
-  existingNames: Set<string>;
-}): Promise<ScoredSignal[]> {
+}): Promise<ApolloPerson[]> {
   if (!isApolloConfigured() || !params.companyName.trim()) return [];
   const res = await apolloSearchPeople({
     domain: params.domain ?? undefined,
@@ -237,10 +252,26 @@ export async function collectApolloPeopleMoves(params: {
     seniorities: ICP_SENIORITIES,
     perPage: 10,
   }).catch(() => null);
-  if (!res) return [];
+  return res?.people ?? [];
+}
 
+/**
+ * À partir des décideurs ICP (cf searchIcpDecisionMakers), émet un signal
+ * "nouveau décideur" pour ceux ABSENTS du CRM. Le reveal d'email (1 crédit)
+ * n'a lieu qu'au "act". Pur (pas d'appel réseau).
+ */
+export function peopleMovesFromApollo(
+  people: ApolloPerson[],
+  params: {
+    companyName: string;
+    scopeCompanyId: string;
+    domain?: string | null;
+    existingEmails: Set<string>;
+    existingNames: Set<string>;
+  },
+): ScoredSignal[] {
   const out: ScoredSignal[] = [];
-  for (const p of res.people) {
+  for (const p of people) {
     const name = (p.name || `${p.first_name ?? ""} ${p.last_name ?? ""}`).trim();
     if (!name) continue;
     const nameKey = name.toLowerCase();
@@ -268,6 +299,107 @@ export async function collectApolloPeopleMoves(params: {
     });
   }
   return out;
+}
+
+// ── Discovery : posts LinkedIn par mots-clés (SERP, pas de scrape de records) ──
+
+interface SerpOrganic {
+  link?: string;
+  url?: string;
+  title?: string;
+  description?: string;
+  snippet?: string;
+}
+
+/** Lance une requête Google "organique" (web) via la SERP API. Best-effort. */
+async function fetchSerpOrganic(query: string, lang: string, num: number): Promise<SerpOrganic[]> {
+  if (!BRIGHTDATA_API_KEY || !query.trim()) return [];
+  const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&brd_json=1&num=${num}&hl=${lang.toLowerCase()}`;
+  const r = await fetchSerp(url).catch(() => null);
+  if (!r || !r.isJson || !r.ok) return [];
+  const data = r.data as { organic?: SerpOrganic[] } | null;
+  return Array.isArray(data?.organic) ? data!.organic : [];
+}
+
+/**
+ * Extrait l'auteur (nom + URL profil) d'un post LinkedIn depuis son URL et son
+ * titre SERP. L'URL `/posts/<slug>_...` porte le slug profil ; le titre porte
+ * souvent le nom ("Post de X", "X's Post"). Renvoie null si ça ressemble à une
+ * page entreprise plutôt qu'à une personne.
+ */
+function parsePostAuthor(postUrl: string, title: string): { name: string; linkedin: string } | null {
+  const m = postUrl.match(/linkedin\.com\/posts\/([^_/?#]+)/i);
+  if (!m) return null;
+  const slug = decodeURIComponent(m[1]).toLowerCase();
+  if (!slug) return null;
+  const linkedin = `https://www.linkedin.com/in/${slug}/`;
+
+  const clean = title.replace(/\s*\|\s*LinkedIn\s*$/i, "").trim();
+  // "Post de Nicolas DUGAY" / "Publication de X"
+  let name = clean.match(/^(?:post|publication)\s+de\s+(.+)$/i)?.[1]?.trim() ?? "";
+  // "Chris Jensen's Post" / "Erik Cardenas' Post"
+  if (!name) name = clean.match(/^(.+?)['']s?\s+post$/i)?.[1]?.trim() ?? "";
+  // "Name - headline" : on garde la partie avant le tiret si ça ressemble à un nom.
+  if (!name) {
+    const head = clean.split(" - ")[0]?.trim() ?? "";
+    if (/^[A-ZÀ-Ÿ][\p{L}.'-]+(?:\s+[A-ZÀ-Ÿ][\p{L}.'-]+){1,2}$/u.test(head)) name = head;
+  }
+  // Fallback : on humanise le slug s'il contient des tirets (prenom-nom-xxxx).
+  if (!name && slug.includes("-")) {
+    name = slug
+      .replace(/-[0-9a-f]{6,}$/i, "") // enlève le suffixe d'unicité LinkedIn
+      .split("-")
+      .filter((t) => !/^\d+$/.test(t))
+      .map((t) => t.charAt(0).toUpperCase() + t.slice(1))
+      .join(" ")
+      .trim();
+  }
+  if (!name) return null;
+  return { name, linkedin };
+}
+
+/**
+ * Découvre des posts LinkedIn "intéressants" par mots-clés (thèmes coaching /
+ * leadership / L&D / scaling...) via la SERP Google `site:linkedin.com/posts`.
+ * Feed discovery, pas lié à un compte : la société de l'auteur est résolue plus
+ * tard, au "act". Pas cher (SERP, aucun record de dataset). Best-effort.
+ */
+export async function collectLinkedInPostDiscovery(): Promise<RawItem[]> {
+  const batches = await Promise.allSettled(
+    POST_DISCOVERY_THEMES.map((t) =>
+      fetchSerpOrganic(`${t.q} site:linkedin.com/posts`, t.lang, 15),
+    ),
+  );
+
+  const items: RawItem[] = [];
+  for (const b of batches) {
+    if (b.status !== "fulfilled") continue;
+    let kept = 0;
+    for (const o of b.value) {
+      if (kept >= MAX_POSTS_PER_QUERY) break;
+      const url = o.link || o.url || "";
+      if (!/linkedin\.com\/posts\//i.test(url)) continue;
+      const title = (o.title || "").trim();
+      const snippet = (o.description || o.snippet || "").trim();
+      if (!snippet) continue;
+      const author = parsePostAuthor(url, title);
+      if (!author) continue; // pas de personne identifiable (page entreprise, etc.)
+      items.push({
+        feed: "discovery",
+        source: "brightdata_linkedin",
+        kindHint: "linkedin_post",
+        title: `${author.name} on LinkedIn: ${snippet.slice(0, 80)}${snippet.length > 80 ? "…" : ""}`,
+        url,
+        snippet: snippet.slice(0, 400),
+        date: null,
+        // Fallback d'affichage tant que la société réelle n'est pas résolue (act).
+        knownCompanyName: author.name,
+        author,
+      });
+      kept++;
+    }
+  }
+  return dedupeByUrl(items);
 }
 
 // ── Utilitaire ───────────────────────────────────────────────────────────────

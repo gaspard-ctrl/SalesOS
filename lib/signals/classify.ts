@@ -102,6 +102,7 @@ export async function classifyItems(
         suggested_action: typeof s.suggested_action === "string" ? s.suggested_action.trim() : null,
         score: clampScore(s.score),
         signal_date: monthToIso(s.signal_date) ?? rawDateToIso(raw?.date ?? null),
+        author: raw?.author ?? null,
       });
     }
   }
@@ -113,7 +114,8 @@ async function scoreBatch(items: RawItem[], userId: string | null): Promise<Scor
     .map((it, idx) => {
       const co = it.knownCompanyName ? ` [company: ${it.knownCompanyName}]` : "";
       const date = it.date ? ` (${it.date})` : "";
-      return `[${idx}]${co}${date} ${it.title}\nURL: ${it.url ?? "n/a"}\n${it.snippet.slice(0, 240)}`;
+      const kind = it.source === "brightdata_linkedin" && it.kindHint === "linkedin_post" ? " [LinkedIn post]" : "";
+      return `[${idx}]${co}${kind}${date} ${it.title}\nURL: ${it.url ?? "n/a"}\n${it.snippet.slice(0, 240)}`;
     })
     .join("\n\n");
 
