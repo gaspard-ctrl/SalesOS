@@ -1,9 +1,8 @@
 import { db } from "@/lib/db";
-import { fetchCompanyContacts } from "@/lib/watchlist/fetch-company-contacts";
 import {
   collectWatchlistRawItems,
   collectDiscoveryRawItems,
-  collectApolloPeopleMoves,
+  collectLinkedInPostDiscovery,
 } from "./sources";
 import { classifyItems } from "./classify";
 import { linkExistingCompanies } from "./resolve-company";
@@ -17,7 +16,12 @@ import type { ScoredSignal, SignalFeed } from "./types";
 // marché (levées, M&A, expansion) qui scorent moyennement faute de décideur nommé.
 const MIN_SCORE_WATCHLIST = 45;
 const MIN_SCORE_DISCOVERY = 62; // barre plus haute pour le discovery
+const MIN_SCORE_POST_DISCOVERY = 55; // posts LinkedIn : scorés sur l'intent, barre intermédiaire
 const FRESHNESS_DAYS = 14; // fenêtre de visibilité du feed
+// Cap quotidien : on n'insère QUE les N meilleurs signaux net-nouveaux par run,
+// tous feeds confondus (watchlist + discovery). Empêche le feed de se noyer ;
+// les signaux s'accumulent ensuite jusqu'à 14 j (FRESHNESS_DAYS) puis expirent.
+const DAILY_CAP = 10;
 const CAP_PER_COMPANY = 5; // max signaux 'new' par compte watchlist
 const CAP_DISCOVERY = 50; // max signaux 'new' discovery globaux
 const COMPANY_CONCURRENCY = 4;
@@ -26,8 +30,6 @@ export interface SweepOptions {
   feed?: SignalFeed | "both";
   /** Restreindre à certains comptes (refresh ciblé). Sinon tous. */
   companyIds?: string[];
-  /** Inclure Apollo (nouveaux décideurs ICP). Daily only. */
-  includeApollo?: boolean;
   /** Inclure les datasets LinkedIn lents (jobs/posts). Daily only. */
   includeSlowSources?: boolean;
   userId?: string | null;
@@ -44,8 +46,8 @@ export interface SweepResult {
 
 /**
  * Orchestrateur unique du pipeline Signals, réutilisé par le cron quotidien et
- * le refresh manuel. Récolte -> classify Claude -> dedupe -> upsert (insert only
- * new) -> rétention (expiration + plafonds).
+ * le refresh manuel. Récolte -> classify Claude -> dedupe -> insert des N meilleurs
+ * net-nouveaux (cap quotidien) -> rétention (expiration + plafonds).
  */
 export async function runSignalsSweep(opts: SweepOptions = {}): Promise<SweepResult> {
   const feed = opts.feed ?? "both";
@@ -60,39 +62,32 @@ export async function runSignalsSweep(opts: SweepOptions = {}): Promise<SweepRes
       const { data: companiesRaw } = await q;
       const companies = (companiesRaw ?? []) as { id: string; name: string }[];
 
+      // Vrais événements uniquement (news SERP + posts/jobs LinkedIn). La source
+      // Apollo "nouveaux décideurs ICP" a été retirée du feed : ce ne sont pas des
+      // événements temps-réel mais un annuaire de personnes, qui noyait le feed.
       const watchlistSignals = await mapLimit(companies, COMPANY_CONCURRENCY, async (c) => {
         const raw = await collectWatchlistRawItems(c, { includeSlowSources: opts.includeSlowSources });
         const scored = await classifyItems(raw, { userId });
-        const out = scored.filter((s) => s.score >= MIN_SCORE_WATCHLIST);
-
-        if (opts.includeApollo) {
-          const { contacts } = await fetchCompanyContacts(c.id).catch(() => ({ contacts: [] }));
-          const existingEmails = new Set(
-            contacts.map((ct) => (ct.email ?? "").toLowerCase()).filter(Boolean),
-          );
-          const existingNames = new Set(
-            contacts
-              .map((ct) => `${ct.firstname ?? ""} ${ct.lastname ?? ""}`.trim().toLowerCase())
-              .filter(Boolean),
-          );
-          const apollo = await collectApolloPeopleMoves({
-            companyName: c.name,
-            scopeCompanyId: c.id,
-            existingEmails,
-            existingNames,
-          });
-          out.push(...apollo.filter((s) => s.score >= MIN_SCORE_WATCHLIST));
-        }
-        return out;
+        return scored.filter((s) => s.score >= MIN_SCORE_WATCHLIST);
       });
       for (const arr of watchlistSignals) all.push(...arr);
     }
 
     // ── Discovery ──
     if (feed === "discovery" || feed === "both") {
-      const raw = await collectDiscoveryRawItems();
-      const scored = await classifyItems(raw, { userId });
-      const kept = scored.filter((s) => s.score >= MIN_SCORE_DISCOVERY);
+      // News thématique (SERP) + posts LinkedIn par mots-clés (SERP). Les deux
+      // sont bon marché (aucun record de dataset).
+      const [news, posts] = await Promise.all([
+        collectDiscoveryRawItems(),
+        collectLinkedInPostDiscovery(),
+      ]);
+      const scored = await classifyItems([...news, ...posts], { userId });
+      // Barre plus basse pour les posts (scorés sur l'intent, pas un évènement dur).
+      const kept = scored.filter((s) =>
+        s.signal_type === "linkedin_post"
+          ? s.score >= MIN_SCORE_POST_DISCOVERY
+          : s.score >= MIN_SCORE_DISCOVERY,
+      );
       // Relie au watchlist si le compte y est déjà (bascule en feed watchlist).
       const { data: companiesRaw } = await db.from("scope_companies").select("id, name");
       const linked = linkExistingCompanies(kept, (companiesRaw ?? []) as { id: string; name: string }[]);
@@ -123,15 +118,34 @@ export async function runSignalsSweep(opts: SweepOptions = {}): Promise<SweepRes
 async function persistSignals(signals: ScoredSignal[], userId: string | null): Promise<number> {
   if (signals.length === 0) return 0;
 
-  // Dédup en mémoire sur dedupe_key avant l'upsert (garde le meilleur score).
+  // Dédup en mémoire sur dedupe_key (garde le meilleur score).
   const byKey = new Map<string, { s: ScoredSignal; key: string }>();
   for (const s of signals) {
     const key = dedupeKey(s);
     const prev = byKey.get(key);
     if (!prev || s.score > prev.s.score) byKey.set(key, { s, key });
   }
+  const candidates = [...byKey.values()];
 
-  const rows = [...byKey.values()].map(({ s, key }) => ({
+  // Écarte les signaux DÉJÀ en base (tous statuts : new/dismissed/expired/...). On
+  // ne veut compter que les NET-NOUVEAUX dans le cap quotidien, pour ne pas qu'un
+  // signal déjà vu mange une place ni ne réapparaisse.
+  const seen = new Set<string>();
+  const keys = candidates.map((c) => c.key);
+  for (let i = 0; i < keys.length; i += 200) {
+    const chunk = keys.slice(i, i + 200);
+    const { data } = await db.from("prospect_signals").select("dedupe_key").in("dedupe_key", chunk);
+    for (const r of (data ?? []) as { dedupe_key: string }[]) seen.add(r.dedupe_key);
+  }
+
+  // Cap quotidien : les DAILY_CAP meilleurs net-nouveaux au score, tous feeds confondus.
+  const fresh = candidates
+    .filter((c) => !seen.has(c.key))
+    .sort((a, b) => b.s.score - a.s.score)
+    .slice(0, DAILY_CAP);
+  if (fresh.length === 0) return 0;
+
+  const rows = fresh.map(({ s, key }) => ({
     scope_company_id: s.scope_company_id,
     feed: s.feed,
     company_name: s.company_name,
@@ -145,6 +159,7 @@ async function persistSignals(signals: ScoredSignal[], userId: string | null): P
     summary: s.summary,
     why_relevant: s.why_relevant,
     suggested_action: s.suggested_action,
+    payload: s.author ? { author: s.author } : null,
     score: s.score,
     dedupe_key: key,
     signal_date: s.signal_date,

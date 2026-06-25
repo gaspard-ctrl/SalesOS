@@ -18,12 +18,11 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => ({}))) as { feed?: SweepOptions["feed"]; companyIds?: string[] };
 
-  // Refresh manuel : pas d'Apollo ni de datasets lents (économie crédits + latence),
-  // news SERP uniquement. Le cron quotidien fait le sweep complet.
+  // Refresh manuel : pas de datasets lents (latence), news SERP uniquement.
+  // Le cron quotidien fait le sweep complet.
   const opts: SweepOptions = {
     feed: body.feed ?? "both",
     companyIds: Array.isArray(body.companyIds) ? body.companyIds : undefined,
-    includeApollo: false,
     includeSlowSources: false,
     userId: user.id,
   };
