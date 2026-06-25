@@ -1,12 +1,8 @@
 -- Posts LinkedIn PROPRES (page entreprise "pro" + profil perso) scrapés
--- hebdomadairement via Bright Data, en remplacement de la saisie manuelle.
---
--- Les impressions / le reach LinkedIn sont des analytics PRIVÉES (visibles
--- uniquement par le propriétaire du compte) → NON scrapables : saisie manuelle
--- via la modale du dashboard, avec rappel Slack hebdo (posts de +7j sans impressions).
+-- hebdomadairement via Bright Data, avec leurs réactions (likes) et commentaires.
 --
 -- post_url UNIQUE = clé d'upsert : un re-scrape met à jour likes/comments/texte
--- mais ne dédouble jamais et NE TOUCHE PAS aux impressions (saisie manuelle préservée).
+-- mais ne dédouble jamais.
 -- ────────────────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS marketing_linkedin_posts (
@@ -19,15 +15,11 @@ CREATE TABLE IF NOT EXISTS marketing_linkedin_posts (
   posted_at              TIMESTAMPTZ,
   likes                  INTEGER NOT NULL DEFAULT 0,
   comments               INTEGER NOT NULL DEFAULT 0,
-  impressions            INTEGER,                                 -- NULLABLE : saisie manuelle
-  impressions_updated_at TIMESTAMPTZ,
-  impressions_updated_by TEXT,
-  notified_at            TIMESTAMPTZ,                             -- idempotence du digest Slack
   raw                    JSONB,                                   -- ligne brute Bright Data (debug)
   created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Lecture de l'onglet (plus récents d'abord) + requête "posts +7j sans impressions".
+-- Lecture de l'onglet (plus récents d'abord).
 CREATE INDEX IF NOT EXISTS marketing_linkedin_posts_posted_at_idx
   ON marketing_linkedin_posts (posted_at DESC);

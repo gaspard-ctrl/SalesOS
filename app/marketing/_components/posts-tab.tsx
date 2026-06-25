@@ -1,13 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ExternalLink, RefreshCw, BarChart3, Send } from "lucide-react";
+import { ExternalLink, RefreshCw, Plus } from "lucide-react";
 import { useMarketingPosts } from "@/lib/hooks/use-marketing";
 import { COLORS } from "@/lib/design/tokens";
 import type { MarketingLinkedInPost } from "@/lib/marketing-types";
-import { ImpressionsModal } from "./impressions-modal";
-
-const SEVEN_DAYS_MS = 7 * 864e5;
 
 const SOURCE_META: Record<MarketingLinkedInPost["source"], { label: string; color: string; background: string }> = {
   pro:   { label: "Company",  color: "#3b82f6", background: "#eff6ff" },
@@ -19,30 +16,19 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-/** Post older than 7 days = its impressions are stable enough to be reported. */
-function isOlderThan7Days(iso: string | null): boolean {
-  if (!iso) return false;
-  return Date.parse(iso) <= Date.now() - SEVEN_DAYS_MS;
-}
-
 export default function PostsTab() {
-  const { posts, isLoading, error, updateImpressions, refreshNow, sendTestDigest } = useMarketingPosts();
-  const [modalOpen, setModalOpen] = useState(false);
+  const { posts, isLoading, error, refreshNow, collectByUrl, reload } = useMarketingPosts();
   const [refreshing, setRefreshing] = useState(false);
-  const [digestMsg, setDigestMsg] = useState<string | null>(null);
-  const [sendingDigest, setSendingDigest] = useState(false);
   const [filter, setFilter] = useState<"all" | "pro" | "perso">("all");
+  const [addUrl, setAddUrl] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
   const proCount = useMemo(() => posts.filter((p) => p.source === "pro").length, [posts]);
   const persoCount = useMemo(() => posts.filter((p) => p.source === "perso").length, [posts]);
   const displayed = useMemo(
     () => (filter === "all" ? posts : posts.filter((p) => p.source === filter)),
     [posts, filter],
-  );
-
-  const needsImpressions = useMemo(
-    () => posts.filter((p) => p.impressions == null && isOlderThan7Days(p.posted_at)),
-    [posts],
   );
 
   async function handleRefresh() {
@@ -56,19 +42,22 @@ export default function PostsTab() {
     }
   }
 
-  async function handleTestDigest() {
-    setSendingDigest(true);
-    setDigestMsg(null);
+  // Rattrapage d'un post raté par la discovery hebdo (collecte directe par URL).
+  // Asynchrone (Background Function) → on prévient et on recharge la liste après ~90 s.
+  async function handleAddPost() {
+    const url = addUrl.trim();
+    if (!url) return;
+    setAdding(true);
+    setMsg(null);
     try {
-      const r = await sendTestDigest();
-      if (r.reason === "slack_disabled") setDigestMsg("Slack is not configured (SLACK_BOT_TOKEN missing).");
-      else if (r.posts === 0) setDigestMsg("No posts older than 7 days awaiting impressions - nothing to send.");
-      else if (r.sent === 1) setDigestMsg(`Reminder sent to Arthur (test mode) with ${r.posts} post${r.posts > 1 ? "s" : ""}.`);
-      else setDigestMsg(`Not sent (${r.reason ?? "unknown"}).`);
+      await collectByUrl(url);
+      setAddUrl("");
+      setMsg("Post queued - it will appear in the list within ~1-2 minutes (auto-refreshing).");
+      setTimeout(() => reload(), 90_000);
     } catch (e) {
-      setDigestMsg((e as Error).message);
+      setMsg((e as Error).message);
     } finally {
-      setSendingDigest(false);
+      setAdding(false);
     }
   }
 
@@ -81,19 +70,29 @@ export default function PostsTab() {
             LinkedIn Posts
           </h2>
           <p className="text-[12px]" style={{ color: COLORS.ink2 }}>
-            Last 12 months, auto-collected weekly. Impressions are filled in manually for posts older than 7 days.
+            Last 12 months, auto-collected weekly with their reactions and comments.
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <input
+            type="url"
+            value={addUrl}
+            onChange={(e) => setAddUrl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleAddPost(); }}
+            placeholder="Paste a post URL to add a missing one"
+            disabled={adding}
+            className="text-xs px-3 py-1.5 rounded-lg outline-none w-64 disabled:opacity-50"
+            style={{ border: `1px solid ${COLORS.lineStrong}`, background: COLORS.bgCard, color: COLORS.ink0 }}
+          />
           <button
-            onClick={handleTestDigest}
-            disabled={sendingDigest}
+            onClick={handleAddPost}
+            disabled={adding || !addUrl.trim()}
             className="text-xs font-medium px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 disabled:opacity-50"
             style={{ background: COLORS.bgSoft, color: COLORS.ink1, border: `1px solid ${COLORS.lineStrong}` }}
-            title="Send the impressions reminder now (test mode → DM to Arthur)"
+            title="Fetch a specific post by URL (to recover one the weekly scrape missed)"
           >
-            <Send size={13} />
-            {sendingDigest ? "Sending…" : "Test reminder"}
+            <Plus size={13} />
+            {adding ? "Adding…" : "Add post"}
           </button>
           <button
             onClick={handleRefresh}
@@ -104,31 +103,15 @@ export default function PostsTab() {
             <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
             {refreshing ? "Refreshing…" : "Refresh"}
           </button>
-          <button
-            onClick={() => setModalOpen(true)}
-            className="text-xs font-medium px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5"
-            style={{ background: COLORS.brand, color: "#fff" }}
-          >
-            <BarChart3 size={13} />
-            Add impressions
-            {needsImpressions.length > 0 && (
-              <span
-                className="text-[10px] font-semibold rounded-full px-1.5"
-                style={{ background: "rgba(255,255,255,0.25)", lineHeight: "16px", minWidth: 16, textAlign: "center" }}
-              >
-                {needsImpressions.length}
-              </span>
-            )}
-          </button>
         </div>
       </div>
 
-      {digestMsg && (
+      {msg && (
         <div
           className="mb-4 px-3 py-2 rounded-lg text-[12px]"
           style={{ background: COLORS.bgSoft, border: `1px solid ${COLORS.lineStrong}`, color: COLORS.ink1 }}
         >
-          {digestMsg}
+          {msg}
         </div>
       )}
 
@@ -177,9 +160,8 @@ export default function PostsTab() {
                 <th className="px-4 py-2.5 text-left text-[11px] font-semibold" style={{ color: COLORS.ink2 }}>Date</th>
                 <th className="px-2 py-2.5 text-left text-[11px] font-semibold" style={{ color: COLORS.ink2 }}>Source</th>
                 <th className="px-2 py-2.5 text-left text-[11px] font-semibold" style={{ color: COLORS.ink2 }}>Post</th>
-                <th className="px-2 py-2.5 text-right text-[11px] font-semibold" style={{ color: COLORS.ink2 }}>Likes</th>
-                <th className="px-2 py-2.5 text-right text-[11px] font-semibold" style={{ color: COLORS.ink2 }}>Comments</th>
-                <th className="px-4 py-2.5 text-right text-[11px] font-semibold" style={{ color: COLORS.ink2 }}>Impressions</th>
+                <th className="px-2 py-2.5 text-right text-[11px] font-semibold" style={{ color: COLORS.ink2 }}>Reactions</th>
+                <th className="px-4 py-2.5 text-right text-[11px] font-semibold" style={{ color: COLORS.ink2 }}>Comments</th>
               </tr>
             </thead>
             <tbody>
@@ -190,24 +172,15 @@ export default function PostsTab() {
           </table>
         )}
       </div>
-
-      {modalOpen && (
-        <ImpressionsModal
-          posts={needsImpressions}
-          onClose={() => setModalOpen(false)}
-          updateImpressions={updateImpressions}
-        />
-      )}
     </div>
   );
 }
 
 function PostRow({ post }: { post: MarketingLinkedInPost }) {
   const meta = SOURCE_META[post.source];
-  const needs = post.impressions == null && isOlderThan7Days(post.posted_at);
 
   return (
-    <tr style={{ borderBottom: `1px solid ${COLORS.bgSoft}`, background: needs ? COLORS.brandTintSoft : undefined }}>
+    <tr style={{ borderBottom: `1px solid ${COLORS.bgSoft}` }}>
       <td className="px-4 py-2.5 whitespace-nowrap" style={{ color: COLORS.ink2, fontSize: 12, width: 130 }}>
         {formatDate(post.posted_at)}
       </td>
@@ -241,23 +214,7 @@ function PostRow({ post }: { post: MarketingLinkedInPost }) {
         </div>
       </td>
       <td className="px-2 py-2.5 text-right" style={{ color: COLORS.ink1, fontSize: 12 }}>{post.likes}</td>
-      <td className="px-2 py-2.5 text-right" style={{ color: COLORS.ink1, fontSize: 12 }}>{post.comments}</td>
-      <td className="px-4 py-2.5 text-right" style={{ width: 130 }}>
-        {post.impressions != null ? (
-          <span className="text-[13px] font-medium" style={{ color: COLORS.ink0 }}>
-            {post.impressions.toLocaleString("en-US")}
-          </span>
-        ) : needs ? (
-          <span
-            className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-            style={{ background: COLORS.brandTint, color: COLORS.brand }}
-          >
-            Needs impressions
-          </span>
-        ) : (
-          <span style={{ color: COLORS.ink4 }}>—</span>
-        )}
-      </td>
+      <td className="px-4 py-2.5 text-right" style={{ color: COLORS.ink1, fontSize: 12 }}>{post.comments}</td>
     </tr>
   );
 }

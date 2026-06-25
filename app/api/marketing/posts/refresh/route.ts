@@ -13,8 +13,7 @@ export interface RefreshPostsResponse {
 }
 
 // Refresh manuel : scrape la dernière année + met à jour les marqueurs du graphe
-// (comme le cron hebdo), mais sans déclencher le digest Slack (triggerDigest:false,
-// réservé au cron). Mêmes options par défaut que le cron (syncEvents + sinceDays=365).
+// (comme le cron hebdo). Mêmes options par défaut que le cron (syncEvents + sinceDays=365).
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
@@ -34,7 +33,7 @@ export async function POST(req: NextRequest) {
     fetch(`${siteUrl}/.netlify/functions/${BG_FN}`, {
       method: "POST",
       headers: { authorization: `Bearer ${cronSecret}`, "content-type": "application/json" },
-      body: JSON.stringify({ triggerDigest: false }),
+      body: JSON.stringify({}),
     }).catch((e) => console.error("[marketing/posts/refresh] background invoke failed:", e));
     return NextResponse.json({ ok: true, queued: true }, { status: 202 });
   }
