@@ -213,12 +213,13 @@ export function ContactsCard({
                   style={{
                     display: "flex",
                     flexDirection: "column",
-                    gap: 4,
+                    gap: 6,
                     padding: "8px 8px",
                     borderRadius: 8,
                   }}
                 >
-                  {/* Ligne du nom : nom + badge à gauche, actions à droite (ne mordent pas sur le titre). */}
+                  {/* Ligne du nom : checkbox + nom + badge. Le nom reste toujours lisible,
+                      les actions sont sur leur propre ligne plus bas (cf. zone Actions). */}
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   {onProspect && c.email && (
                     <input
@@ -280,6 +281,34 @@ export function ContactsCard({
                         </span>
                       )}
                     </div>
+                  </div>
+                  {/* Titre / email / date sur toute la largeur, alignés sous le nom. */}
+                  <div style={{ paddingLeft: onProspect && c.email ? 25 : 0 }}>
+                    <div style={{ fontSize: 11, color: COLORS.ink2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {c.jobtitle ? c.jobtitle : "—"}
+                    </div>
+                    {c.email && (
+                      <div style={{ fontSize: 11, color: COLORS.ink3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {c.email}
+                      </div>
+                    )}
+                    {formatAddedDate(c.created_at) && (
+                      <div style={{ fontSize: 10, color: COLORS.ink3, whiteSpace: "nowrap" }}>
+                        Added to HubSpot · {formatAddedDate(c.created_at)}
+                      </div>
+                    )}
+                  </div>
+                  {/* Actions : ligne dédiée qui passe à la ligne (flexWrap) sur écran étroit
+                      pour ne jamais écraser le nom du contact (bug d'affichage sur laptop). */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      gap: 6,
+                      paddingLeft: onProspect && c.email ? 25 : 0,
+                    }}
+                  >
                   {!c.phone &&
                     (phoneState[c.id] === "revealing" ? (
                       <span
@@ -436,22 +465,6 @@ export function ContactsCard({
                   >
                     <ExternalLink size={13} />
                   </a>
-                  </div>
-                  {/* Titre / email / date sur toute la largeur, alignés sous le nom. */}
-                  <div style={{ paddingLeft: onProspect && c.email ? 25 : 0 }}>
-                    <div style={{ fontSize: 11, color: COLORS.ink2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {c.jobtitle ? c.jobtitle : "—"}
-                    </div>
-                    {c.email && (
-                      <div style={{ fontSize: 11, color: COLORS.ink3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {c.email}
-                      </div>
-                    )}
-                    {formatAddedDate(c.created_at) && (
-                      <div style={{ fontSize: 10, color: COLORS.ink3, whiteSpace: "nowrap" }}>
-                        Added to HubSpot · {formatAddedDate(c.created_at)}
-                      </div>
-                    )}
                   </div>
                 </li>
               );
