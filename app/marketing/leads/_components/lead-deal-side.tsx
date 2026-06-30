@@ -2,6 +2,7 @@
 
 import { ExternalLink, Trophy, XCircle } from "lucide-react";
 import type { LeadAnalysis } from "@/lib/marketing-types";
+import { isWonDeal } from "@/lib/deals/stages";
 import { scoreBadge, reliabilityLabel, reliabilityColor } from "@/lib/deal-scoring";
 
 const HUBSPOT_PORTAL_ID = process.env.NEXT_PUBLIC_HUBSPOT_PORTAL_ID;
@@ -29,8 +30,12 @@ function formatDate(iso: string | null): string {
 export default function LeadDealSide({ analysis }: { analysis: LeadAnalysis }) {
   if (!analysis.hubspot_deal_id) return null;
 
-  const isWon = analysis.deal_is_closed_won === true;
-  const isLost = analysis.deal_is_closed === true && analysis.deal_is_closed_won === false;
+  const isWon = isWonDeal({
+    is_closed_won: analysis.deal_is_closed_won,
+    pipeline_label: analysis.deal_pipeline_label,
+    stage_label: analysis.deal_stage_label,
+  });
+  const isLost = !isWon && analysis.deal_is_closed === true && analysis.deal_is_closed_won === false;
   const stage = analysis.deal_stage_label ?? analysis.deal_stage ?? "—";
   const url = dealUrl(analysis.hubspot_deal_id);
   const score = analysis.deal_score ?? null;

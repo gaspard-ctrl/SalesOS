@@ -7,6 +7,39 @@ export function isNurtureLabel(label: string | null | undefined): boolean {
   return !!label && label.toLowerCase().includes("nurture");
 }
 
+// Mots-clés (sous-chaîne, insensible à la casse) qui marquent un deal comme
+// "gagné". Le booléen HubSpot `hs_is_closed_won` est la source de vérité, MAIS
+// quand un deal gagné bascule dans le pipeline Customer Success / Passation,
+// HubSpot remet `hs_is_closed_won` à false (la nouvelle étape n'est pas
+// configurée "closed won" sur ce pipeline). On considère donc aussi gagné tout
+// deal dont le label de pipeline OU d'étape correspond. Même convention que
+// resolveAudience dans lib/sales-coach/meeting-recap.ts.
+const WON_KEYWORDS = [
+  "closed won",
+  "closedwon",
+  "gagné",
+  "gagne",
+  "won",
+  "passation",
+  "customer success",
+];
+
+// Vrai si le deal est gagné : soit hs_is_closed_won === true, soit son pipeline
+// / étape est un état "gagné" (Customer Success, Passation...). Pure : utilisable
+// côté serveur (funnel) comme côté client (badges).
+export function isWonDeal(deal: {
+  is_closed_won?: boolean | null;
+  pipeline_label?: string | null;
+  stage_label?: string | null;
+}): boolean {
+  if (deal.is_closed_won === true) return true;
+  for (const text of [deal.pipeline_label, deal.stage_label]) {
+    const t = (text ?? "").toLowerCase();
+    if (t && WON_KEYWORDS.some((kw) => t.includes(kw))) return true;
+  }
+  return false;
+}
+
 // Résout les IDs de stages "nurture" sur tous les pipelines de deals. Utilisé
 // par les chemins de scoring (qui ne fetchent pas les labels de stage par
 // ailleurs) pour ajouter un filtre `dealstage NOT_IN` à la recherche HubSpot.
