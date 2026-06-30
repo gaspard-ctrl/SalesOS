@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { isWonDeal } from "@/lib/deals/stages";
 import type {
   LeadSourceBucket,
   SalesPerformanceRow,
@@ -24,10 +25,19 @@ interface AnalysisRow {
   extracted_source: string | null;
   deal_amount: number | null;
   deal_stage_label: string | null;
+  deal_pipeline_label: string | null;
   deal_is_closed: boolean | null;
   deal_is_closed_won: boolean | null;
   deal_owner_id: string | null;
   deal_owner_name: string | null;
+}
+
+function isWon(a: AnalysisRow): boolean {
+  return isWonDeal({
+    is_closed_won: a.deal_is_closed_won,
+    pipeline_label: a.deal_pipeline_label,
+    stage_label: a.deal_stage_label,
+  });
 }
 
 function isDiscoReached(a: AnalysisRow): boolean {
@@ -56,8 +66,9 @@ export async function GET(req: NextRequest) {
   const to = toParam ?? now.toISOString();
 
   const FULL_ANALYSES_SELECT =
-    "id, hubspot_deal_id, extracted_source, deal_amount, deal_stage_label, deal_is_closed, deal_is_closed_won, deal_owner_id, deal_owner_name";
-  // Fallback if the extracted_source migration hasn't been applied yet.
+    "id, hubspot_deal_id, extracted_source, deal_amount, deal_stage_label, deal_pipeline_label, deal_is_closed, deal_is_closed_won, deal_owner_id, deal_owner_name";
+  // Fallback if the extracted_source / deal_pipeline_label migrations haven't
+  // been applied yet.
   const LEGACY_ANALYSES_SELECT =
     "id, hubspot_deal_id, deal_amount, deal_stage_label, deal_is_closed, deal_is_closed_won, deal_owner_id, deal_owner_name";
 
@@ -79,8 +90,9 @@ export async function GET(req: NextRequest) {
       );
     }
     analyses = (fallback.data ?? []).map((row) => ({
-      ...(row as Omit<AnalysisRow, "extracted_source">),
+      ...(row as Omit<AnalysisRow, "extracted_source" | "deal_pipeline_label">),
       extracted_source: null,
+      deal_pipeline_label: null,
     }));
   } else {
     analyses = (analysesRes.data ?? []) as AnalysisRow[];
@@ -136,14 +148,15 @@ export async function GET(req: NextRequest) {
     if (l.validation_status !== "validated") continue;
     const a = l.last_analysis_id ? analysisById.get(l.last_analysis_id) : null;
     if (!a) continue;
+    const won = isWon(a);
     if (a.hubspot_deal_id) withDeal++;
     if (isDiscoReached(a)) disco++;
-    if (a.deal_is_closed_won) closedWon++;
-    if (a.deal_is_closed === true && a.deal_is_closed_won === false) {
+    if (won) closedWon++;
+    if (!won && a.deal_is_closed === true && a.deal_is_closed_won === false) {
       closedLost++;
       if (typeof a.deal_amount === "number") closedLostAmount += a.deal_amount;
     }
-    if (a.hubspot_deal_id && a.deal_is_closed === false && typeof a.deal_amount === "number") {
+    if (a.hubspot_deal_id && !won && a.deal_is_closed === false && typeof a.deal_amount === "number") {
       openPipelineAmount += a.deal_amount;
     }
 
@@ -179,7 +192,7 @@ export async function GET(req: NextRequest) {
       };
       acc.leadsCount++;
       acc.dealIds.add(a.hubspot_deal_id);
-      if (a.deal_is_closed_won) {
+      if (won) {
         acc.wonCount++;
         if (typeof a.deal_amount === "number") acc.wonAmount += a.deal_amount;
       } else if (a.deal_is_closed === true) {

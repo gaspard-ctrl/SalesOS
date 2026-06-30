@@ -360,6 +360,7 @@ export interface LeadAnalysis {
   deal_name: string | null;
   deal_stage: string | null;
   deal_stage_label: string | null;
+  deal_pipeline_label: string | null;
   deal_amount: number | null;
   deal_close_date: string | null;
   deal_owner_id: string | null;

@@ -2,6 +2,7 @@
 
 import { AlertTriangle, ExternalLink, Loader2, Trophy, User, XCircle } from "lucide-react";
 import type { LeadAnalysis } from "@/lib/marketing-types";
+import { isWonDeal } from "@/lib/deals/stages";
 
 const GREEN = "#10b981";
 const BLUE = "#3b82f6";
@@ -107,7 +108,11 @@ export default function LeadAnalysisBadge({
   }
 
   if (analysis?.status === "done" && analysis.hubspot_deal_id) {
-    const isWon = analysis.deal_is_closed_won === true;
+    const isWon = isWonDeal({
+      is_closed_won: analysis.deal_is_closed_won,
+      pipeline_label: analysis.deal_pipeline_label,
+      stage_label: analysis.deal_stage_label,
+    });
     const color = isWon ? GREEN : BLUE;
     const stage = analysis.deal_stage_label ?? analysis.deal_stage ?? "?";
     const amount = formatAmount(analysis.deal_amount);

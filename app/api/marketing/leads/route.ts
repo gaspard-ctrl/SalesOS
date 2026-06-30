@@ -44,7 +44,7 @@ const LEAD_SELECT = `
     hubspot_lead_id, hubspot_lead_name, hubspot_lead_pipeline_id,
     hubspot_lead_stage_id, hubspot_lead_stage_label,
     hubspot_lead_owner_id, hubspot_lead_owner_name,
-    deal_name, deal_stage, deal_stage_label, deal_amount, deal_close_date,
+    deal_name, deal_stage, deal_stage_label, deal_pipeline_label, deal_amount, deal_close_date,
     deal_owner_id, deal_owner_name, deal_is_closed, deal_is_closed_won,
     time_to_deal_seconds, time_to_close_seconds,
     error_message, created_at, updated_at
