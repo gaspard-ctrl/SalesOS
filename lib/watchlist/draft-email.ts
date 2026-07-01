@@ -216,6 +216,18 @@ function buildPrompt(input: {
         if (hook) lines.push(`  Message proposé : ${hook.replace(/\n/g, " / ")}`);
       }
     }
+    if (ae.linkedin?.length) {
+      lines.push("");
+      lines.push(
+        "LinkedIn des prospects (poste, posts perso récents) - sers-t'en pour personnaliser sur un fait réel du destinataire, sans jamais inventer :",
+      );
+      for (const p of ae.linkedin.slice(0, 5)) {
+        lines.push(`- ${p.name}${p.currentPosition ? ` (${p.currentPosition})` : ""}`);
+        for (const post of p.posts.slice(0, 2)) {
+          lines.push(`  Post : ${post.text.slice(0, 200).replace(/\n/g, " ")}`);
+        }
+      }
+    }
   }
 
   if (news && (news.intel_summary || news.signals.length > 0)) {

@@ -63,6 +63,31 @@ export interface AeTarget {
   hubspot_id: string | null;
 }
 
+/** Un post LinkedIn (perso) d'un prospect, affiché dans la card LinkedIn de l'analyse AE. */
+export interface AeLinkedInPost {
+  text: string;
+  postedAt: string | null;
+  url: string | null;
+}
+
+/**
+ * Contexte LinkedIn scrapé pour un prospect ciblé (profil + posts perso récents).
+ * Sert à personnaliser les opening messages et à alimenter la card LinkedIn.
+ */
+export interface AeLinkedInProfile {
+  name: string;
+  hubspot_id: string | null;
+  /** URL du profil LinkedIn résolu (https://linkedin.com/in/…). */
+  profileUrl: string | null;
+  headline: string | null;
+  /** Poste actuel formaté "Title @ Company". */
+  currentPosition: string | null;
+  location: string | null;
+  /** Début de la bio LinkedIn (tronquée). */
+  summary: string | null;
+  posts: AeLinkedInPost[];
+}
+
 /** Analyse AE : reco de prospection sur un compte (remplace l'ancienne synthèse IA). */
 export interface AeAnalysisContent {
   /** v2 : état de la relation. Absent sur les anciennes analyses. */
@@ -77,6 +102,12 @@ export interface AeAnalysisContent {
    */
   story_to_tell: string;
   priority_contacts: AeContact[]; // classés par priorité
+  /**
+   * v3 : contexte LinkedIn des prospects ciblés (profil + posts perso récents),
+   * scrapé en mode "Analysis + messages". Absent en analyse seule ou sur les
+   * analyses générées avant la v3.
+   */
+  linkedin?: AeLinkedInProfile[];
   next_actions: string[]; // legacy v1 (vide en v2, redondant avec les contacts)
   watch_outs: string[]; // risques / à éviter
   sources_used: {
