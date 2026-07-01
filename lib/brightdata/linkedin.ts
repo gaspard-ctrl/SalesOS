@@ -399,6 +399,33 @@ export async function getCompanyJobs(companyNameOrUrl: string, opts: { timeoutMs
   return { success: true, data };
 }
 
+/**
+ * Posts personnels récents d'un profil, avec leur texte (best-effort, async).
+ * Même dataset que getCompanyPosts mais découverte par profile_url, et on garde
+ * le texte du post (getPeopleActivity ne renvoie que le timestamp + l'URL).
+ */
+export async function getPeoplePosts(usernameOrUrl: string, opts: { timeoutMs?: number } = {}): Promise<{
+  success: boolean;
+  data: CompanyPost[];
+}> {
+  const url = usernameOrUrl.startsWith("http")
+    ? usernameOrUrl
+    : `https://www.linkedin.com/in/${usernameOrUrl}/`;
+  const rows = await collectAndWait<Record<string, unknown>>(
+    DATASETS.posts,
+    [{ url }],
+    { timeoutMs: opts.timeoutMs ?? 25_000, discover: { type: "discover_new", discoverBy: "profile_url" } },
+  );
+  const data: CompanyPost[] = rows.map((r) => ({
+    postUrl: str(r.url),
+    text: str(r.post_text || r.title || r.headline),
+    postedAt: str(r.date_posted),
+    likes: num0(r.num_likes),
+    comments: num0(r.num_comments),
+  }));
+  return { success: true, data };
+}
+
 /** Activité récente d'un profil = ses posts (best-effort, async). */
 export async function getPeopleActivity(username: string, opts: { timeoutMs?: number } = {}): Promise<{
   success: boolean;

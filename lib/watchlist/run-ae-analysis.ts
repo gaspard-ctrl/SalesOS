@@ -14,10 +14,12 @@ import {
   type AeAnalysisContent,
   type AeContact,
   type AeTarget,
+  type AeLinkedInProfile,
   type HubspotRecapContent,
   type NewsContent,
   type BriefRow,
 } from "@/lib/watchlist/briefs";
+import { fetchProspectsLinkedIn, type ProspectLinkedInInput } from "@/lib/watchlist/fetch-prospect-linkedin";
 import { fetchWatchlistNews } from "@/lib/watchlist/fetch-news";
 import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/guides/prospection";
 import { NO_EM_DASH_RULE, stripEmDashes } from "@/lib/no-em-dash";
@@ -58,6 +60,7 @@ LANGUE : écris dans la langue du PROSPECT, pas celle du contexte fourni. Détec
 Règles anti-générique :
 - Chaque rationale tient en 1 phrase et cite un fait précis du contexte (un email daté, un deal, un signal news, un post LinkedIn, le job title). Si la phrase pourrait s'appliquer telle quelle à un autre compte, réécris-la.
 - Pour rendre l'ouverture intéressante, complète le contexte fourni avec ce que tu sais réellement de cette entreprise (son marché, ses produits, son modèle, ses enjeux connus). Uniquement des faits dont tu es sûr, formulés prudemment, jamais de chiffres, de noms ou d'actualités inventés. Si tu utilises cette connaissance, mets sources_used.world_knowledge à true.
+- Si le contexte fournit le LinkedIn d'un prospect (poste actuel, bio, posts perso récents, cf. "## LinkedIn des prospects ciblés"), utilise-le en priorité pour personnaliser SON opening_message : accroche sur un de ses posts ou un fait réel de son profil quand c'est pertinent et naturel. N'invente jamais un post ou un fait LinkedIn.
 - Ne jamais inventer un fait, un nom, un chiffre, un email ou un client.
 - Interdits : "mettre en avant la valeur", "proposer un échange", "construire la relation", et toute action vague du même genre.
 
@@ -258,7 +261,31 @@ export async function runAeAnalysis(input: {
       sector: !!company.sector,
     };
 
-    const userPrompt = buildPrompt({ company, hubspot, news, clientsRoster, targets });
+    // Enrichissement LinkedIn des prospects ciblés (profil + posts perso), pour
+    // personnaliser les opening messages et alimenter la card LinkedIn. Uniquement
+    // en "Analysis + messages", best-effort (best-effort : dégrade sans LinkedIn).
+    // Cible : les contacts sélectionnés si présents, sinon les premiers contacts
+    // HubSpot du compte (plafonné, comme le "jusqu'à 10" côté IA).
+    let linkedin: AeLinkedInProfile[] = [];
+    if (withMessages) {
+      const prospects: ProspectLinkedInInput[] =
+        targets.length > 0
+          ? targets.map((t) => ({
+              name: t.name,
+              email: t.email,
+              hubspotId: t.hubspot_id,
+            }))
+          : hubspot.contacts.slice(0, 8).map((c) => ({
+              name: `${c.firstname ?? ""} ${c.lastname ?? ""}`.trim() || c.email || "",
+              firstName: c.firstname,
+              lastName: c.lastname,
+              email: c.email,
+              hubspotId: c.id,
+            }));
+      linkedin = await fetchProspectsLinkedIn(prospects, company.name);
+    }
+
+    const userPrompt = buildPrompt({ company, hubspot, news, clientsRoster, targets, linkedin });
 
     // Jusqu'à 10 opening messages de 100-200 mots : plafond et timeout relevés
     // en conséquence (la BG fn Netlify laisse largement le temps). En mode
@@ -292,6 +319,7 @@ export async function runAeAnalysis(input: {
             .filter((c): c is Record<string, unknown> => !!c && typeof c === "object")
             .map(normalizeContact)
         : [],
+      linkedin,
       next_actions: [], // legacy v1, redondant avec les contacts
       watch_outs: Array.isArray(parsed.watch_outs)
         ? parsed.watch_outs.filter((s): s is string => typeof s === "string").map(stripEmDashes)
@@ -357,8 +385,9 @@ function buildPrompt(input: {
   news: NewsContent | null;
   clientsRoster: ClientRosterEntry[];
   targets: AeTarget[];
+  linkedin: AeLinkedInProfile[];
 }): string {
-  const { company, hubspot, news, clientsRoster, targets } = input;
+  const { company, hubspot, news, clientsRoster, targets, linkedin } = input;
   const lines: string[] = [];
 
   lines.push(`# Compte cible : ${company.name}`);
@@ -476,6 +505,30 @@ function buildPrompt(input: {
   }
   if (!hasNews) {
     lines.push("Aucune news récente.");
+  }
+
+  // LinkedIn des prospects ciblés (profil + posts perso), pour personnaliser
+  // chaque opening_message sur un fait réel du prospect.
+  if (linkedin.length > 0) {
+    lines.push("");
+    lines.push("## LinkedIn des prospects ciblés");
+    lines.push(
+      "Sers-toi de ces infos (poste actuel, bio, posts perso récents) pour personnaliser l'opening_message : accroche sur un post ou un fait réel de leur profil quand c'est pertinent et naturel. N'invente jamais un post, un poste ou un fait.",
+    );
+    for (const p of linkedin) {
+      const title = [p.name, p.currentPosition || p.headline].filter(Boolean).join(" - ");
+      lines.push(`### ${title}`);
+      if (p.summary) lines.push(`Bio : ${p.summary.slice(0, 300)}`);
+      if (p.posts.length > 0) {
+        lines.push("Posts perso récents :");
+        for (const post of p.posts.slice(0, 3)) {
+          const date = post.postedAt ? new Date(post.postedAt).toLocaleDateString("fr-FR") : "?";
+          lines.push(`- [${date}] ${post.text.slice(0, 250)}`);
+        }
+      } else {
+        lines.push("Aucun post perso récent trouvé.");
+      }
+    }
   }
 
   // Nos clients actuels (référence sociale pour l'histoire à raconter).

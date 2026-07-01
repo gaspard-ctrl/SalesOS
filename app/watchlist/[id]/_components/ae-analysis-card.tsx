@@ -3,7 +3,7 @@
 import * as React from "react";
 import useSWR from "swr";
 import { useUser } from "@clerk/nextjs";
-import { Target, MailPlus, BookOpen, Copy, Check, Send, Loader2, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { Target, MailPlus, BookOpen, Copy, Check, Send, Loader2, ChevronDown, ChevronUp, RefreshCw, Linkedin, ExternalLink } from "lucide-react";
 import { COLORS } from "@/lib/design/tokens";
 import { BriefSection } from "./brief-section";
 import { NotesEditor } from "./notes-editor";
@@ -14,10 +14,12 @@ import type {
   BriefRow,
   AeAnalysisContent,
   AeContact,
+  AeLinkedInProfile,
   AeRelationshipState,
   AeTarget,
   NewsContent,
 } from "@/lib/watchlist/briefs";
+import type { CompanyPost } from "@/lib/brightdata/linkedin";
 
 const RELATIONSHIP_LABELS: Record<AeRelationshipState, string> = {
   never_contacted: "Never contacted",
@@ -256,6 +258,14 @@ export function AeAnalysisCard({
               </div>
               )}
             </div>
+          )}
+
+          {((content.linkedin && content.linkedin.length > 0) ||
+            (dependencies?.news?.content?.posts?.length ?? 0) > 0) && (
+            <LinkedInSection
+              profiles={content.linkedin ?? []}
+              companyPosts={dependencies?.news?.content?.posts ?? []}
+            />
           )}
 
           {/* Legacy v1 : la v2 ne génère plus de next_actions (redondant avec les contacts). */}
@@ -641,6 +651,126 @@ function OpeningMessage({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function formatPostDate(raw: string | null): string | null {
+  if (!raw) return null;
+  const t = new Date(raw).getTime();
+  if (Number.isNaN(t)) return null;
+  return new Date(t).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
+
+function PostLine({ text, postedAt, url }: { text: string; postedAt: string | null; url: string | null }) {
+  const date = formatPostDate(postedAt);
+  const body = (
+    <>
+      {date && (
+        <span style={{ color: COLORS.ink3, fontWeight: 600, marginRight: 6 }}>{date}</span>
+      )}
+      {text.length > 220 ? `${text.slice(0, 220)}…` : text}
+    </>
+  );
+  return (
+    <li style={{ marginBottom: 5, lineHeight: 1.5 }}>
+      {url ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: COLORS.ink1, textDecoration: "none" }}
+          title="Open on LinkedIn"
+        >
+          {body}
+        </a>
+      ) : (
+        <span style={{ color: COLORS.ink1 }}>{body}</span>
+      )}
+    </li>
+  );
+}
+
+function LinkedInSection({
+  profiles,
+  companyPosts,
+}: {
+  profiles: AeLinkedInProfile[];
+  companyPosts: CompanyPost[];
+}) {
+  const posts = companyPosts.filter((p) => p.text?.trim());
+  return (
+    <div style={{ marginTop: 14, marginBottom: 12 }}>
+      <SectionLabel>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+          <Linkedin size={12} style={{ color: "#0a66c2" }} /> LinkedIn
+        </span>
+      </SectionLabel>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {profiles.map((p, i) => (
+          <div
+            key={`${p.hubspot_id ?? p.name ?? i}`}
+            style={{
+              border: `1px solid ${COLORS.line}`,
+              borderRadius: 8,
+              padding: "9px 11px",
+              background: COLORS.bgSoft,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: COLORS.ink0 }}>{p.name}</span>
+              {p.profileUrl && (
+                <a
+                  href={p.profileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open LinkedIn profile"
+                  style={{ display: "inline-flex", color: "#0a66c2", marginLeft: 2 }}
+                >
+                  <ExternalLink size={12} />
+                </a>
+              )}
+            </div>
+            {(p.currentPosition || p.headline) && (
+              <p style={{ margin: "3px 0 0", fontSize: 11, color: COLORS.ink2, lineHeight: 1.4 }}>
+                {p.currentPosition || p.headline}
+              </p>
+            )}
+            {p.posts.length > 0 ? (
+              <ul style={{ margin: "7px 0 0", paddingLeft: 15, fontSize: 11, color: COLORS.ink1 }}>
+                {p.posts.map((post, j) => (
+                  <PostLine key={j} text={post.text} postedAt={post.postedAt} url={post.url} />
+                ))}
+              </ul>
+            ) : (
+              <p style={{ margin: "6px 0 0", fontSize: 10.5, color: COLORS.ink3, fontStyle: "italic" }}>
+                No recent personal posts.
+              </p>
+            )}
+          </div>
+        ))}
+
+        {posts.length > 0 && (
+          <div
+            style={{
+              border: `1px solid ${COLORS.line}`,
+              borderRadius: 8,
+              padding: "9px 11px",
+              background: COLORS.bgSoft,
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.ink0, marginBottom: 4 }}>
+              Company posts
+            </div>
+            <ul style={{ margin: 0, paddingLeft: 15, fontSize: 11, color: COLORS.ink1 }}>
+              {posts.slice(0, 4).map((post, j) => (
+                <PostLine key={j} text={post.text} postedAt={post.postedAt} url={post.postUrl} />
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
