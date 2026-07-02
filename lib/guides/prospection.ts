@@ -145,6 +145,42 @@ Cela vaut il le coup d'échanger 20mn sur ces sujets?
 
 [Prénom expéditeur]
 
+## Banque de messages (à piocher, EN & FR)
+
+### Questions d'ouverture (ouvrir la conversation, ne pas pitcher)
+- Si vous deviez faire progresser une seule compétence chez vos managers cette année, laquelle ?
+- Quand vous lancez un parcours, comment vous assurez-vous que les comportements changent vraiment quelques semaines plus tard ?
+- Qu'est-ce qui limite le plus la performance de vos managers aujourd'hui : le manque de connaissances ou le manque de pratique ?
+- Combien d'occasions vos managers ont-ils réellement de s'entraîner avant une conversation importante ?
+- If you could improve just one skill across your managers this year, what would it be?
+- What's limiting your managers most today: a lack of knowledge or a lack of practice?
+
+### Thought leadership (FR)
+Bonjour [Prénom],
+
+Une question revient souvent dans mes échanges avec des responsables Learning : comment faire pour que les compétences développées en formation se traduisent vraiment dans les conversations et décisions une fois de retour sur le terrain ?
+
+Chez Coachello, on travaille exactement là-dessus, en permettant aux managers de pratiquer des situations réelles avant et après les formations via des Role-Plays IA.
+
+Curieux d'avoir votre regard sur le sujet.
+
+[Prénom expéditeur]
+
+### AI Role-Plays (FR)
+Bonjour [Prénom],
+
+On aide les managers à pratiquer les conversations qui ont le plus d'impact : feedback, recadrage, conduite du changement, gestion des conflits. Chaque scénario est adapté au contexte et à la culture de votre organisation.
+
+Serait-il intéressant d'en discuter ?
+
+[Prénom expéditeur]
+
+### Messages courts LinkedIn (par cible)
+- Générique : On aide les entreprises à transformer leurs formations en pratique via Role-Plays IA et coaching. Serait-il intéressant d'échanger ?
+- Leadership : On aide les managers à pratiquer leurs conversations clés (feedback, recadrage, conduite du changement) via des Role-Plays IA immersifs. Intéressé d'échanger ?
+- Sales : On aide les commerciaux à s'entraîner sur leurs vraies conversations via des Role-Plays IA adaptés à leur méthode et leurs offres. Partant pour échanger ?
+- Customer Service : On aide les équipes en contact client à pratiquer les situations les plus complexes via des Role-Plays IA immersifs. Serait-il intéressant d'en discuter ?
+
 ## CTA préférés
 
 "Ravi de partager quelques idées.", "Content de vous montrer ce qu'on observe.", "J'aimerais comparer nos perspectives.", "Je pense que l'approche vous intéresserait.", "Cela vaut il le coup d'échanger 20mn?".
