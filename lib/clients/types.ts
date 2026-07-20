@@ -598,6 +598,13 @@ export type ClientRow = {
   meetings_confirmed_at: string | null;
   meetings_confirmed_by: string | null;
   meeting_confirmation_requested_at: string | null;
+  // Nouveaux meetings Claap détectés lors d'un refresh (bouton ou cron), en
+  // attente de confirmation humaine (refresh manuel uniquement). Cf.
+  // migration clients_refresh_meeting_confirmation.sql et run-refresh.ts.
+  pending_refresh_meeting_candidates: MeetingCandidate[] | null;
+  // Recordings explicitement déclinés lors d'un popup de refresh : exclus
+  // définitivement de la discovery pour ce client.
+  declined_claap_recording_ids: string[] | null;
   last_enriched_at: string | null;
   last_health_run_at: string | null;
   last_news_run_at: string | null;

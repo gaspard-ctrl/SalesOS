@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const isNetlifyEnv = !!(process.env.NETLIFY || process.env.URL || process.env.DEPLOY_URL);
 
   if (!isNetlifyEnv) {
-    void runClientRefresh(id, user.id).catch((e) => {
+    void runClientRefresh(id, user.id, { trigger: "manual" }).catch((e) => {
       console.error(`[clients/refresh/${id}] inline run failed:`, e instanceof Error ? e.message : e);
     });
     return NextResponse.json({ ok: true, mode: "inline" }, { status: 202 });
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const res = await fetch(triggerUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-internal-secret": internalSecret },
-      body: JSON.stringify({ id, userId: user.id }),
+      body: JSON.stringify({ id, userId: user.id, trigger: "manual" }),
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok && res.status !== 202) {

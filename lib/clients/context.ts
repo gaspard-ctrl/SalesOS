@@ -77,7 +77,7 @@ export type ClientEnrichmentContext = {
 
 export async function loadClientContext(
   dealId: string,
-  opts?: { confirmedRecordingIds?: string[] },
+  opts?: { confirmedRecordingIds?: string[]; excludeRecordingIds?: string[] },
 ): Promise<ClientEnrichmentContext> {
   const [deal, indexed] = await Promise.all([
     // includeCompanyActivities : on compte aussi l'activité associée à la
@@ -94,12 +94,19 @@ export async function loadClientContext(
   //    aveugle. Garantit que l'analyse couvre les meetings confirmés (ni plus,
   //    ni moins).
   //  - sinon (refresh mensuel / cron) : discovery automatique par domaine/titre
-  //    comme historiquement.
+  //    comme historiquement. excludeRecordingIds (refresh uniquement) exclut en
+  //    plus les recordings explicitement déclinés par un humain lors d'un popup
+  //    de refresh — la discovery ne doit plus jamais les faire réapparaître.
   const alreadyIndexed = new Set(indexed.map((m) => m.recording_id));
   const confirmedIds = opts?.confirmedRecordingIds;
   const extras = await (confirmedIds
     ? fetchClaapRecordingsByIds(confirmedIds, alreadyIndexed)
-    : discoverExtraClaapMeetings(deal, alreadyIndexed)
+    : discoverExtraClaapMeetings(
+        deal,
+        opts?.excludeRecordingIds?.length
+          ? new Set([...alreadyIndexed, ...opts.excludeRecordingIds])
+          : alreadyIndexed,
+      )
   ).catch((e) => {
     console.warn(`[clients/context] Claap meetings load failed:`, e instanceof Error ? e.message : e);
     return [] as ClaapMeetingForClient[];

@@ -4,7 +4,7 @@ import { use, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ExternalLink, AlertTriangle, Loader2, Sparkles, Clock, Trash2, RefreshCw, Search, CheckCircle2, MailPlus, ListChecks, Video, UserCheck } from "lucide-react";
+import { ArrowLeft, ExternalLink, AlertTriangle, Loader2, Sparkles, Clock, Trash2, RefreshCw, Search, CheckCircle2, MailPlus, ListChecks, Video, UserCheck, Info } from "lucide-react";
 import { COLORS } from "@/lib/design/tokens";
 import { getMissingHubspotFields, mergeOnboardingItems, type ClientRow } from "@/lib/clients/types";
 import { useUserMe } from "@/lib/hooks/use-user-me";
@@ -18,6 +18,8 @@ import { NewsPanel } from "./_components/news-panel";
 import { RefreshReportPanel } from "./_components/refresh-report-panel";
 import { BillingPanel } from "./_components/billing-panel";
 import { MeetingConfirmationModal } from "./_components/meeting-confirmation-modal";
+import { NewMeetingConfirmationModal } from "./_components/new-meeting-confirmation-modal";
+import { AnalyzedMeetingsModal } from "./_components/analyzed-meetings-modal";
 import { HandoverPanel } from "./_components/handover-panel";
 import { HubspotChecklistPanel } from "./_components/hubspot-checklist-panel";
 import { OnboardingChecklistPanel } from "./_components/onboarding-checklist-panel";
@@ -32,10 +34,6 @@ async function fetcher<T>(url: string): Promise<T> {
     throw new Error(body.error ?? `HTTP ${res.status}`);
   }
   return res.json() as Promise<T>;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 type Resp = { client: ClientRow; meetings: ClientMeeting[] };
@@ -196,23 +194,49 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   const [refreshing, setRefreshing] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [analyzedMeetingsOpen, setAnalyzedMeetingsOpen] = useState(false);
+  // Le popup "nouveau meeting" se referme sur "Later" sans rien persister côté
+  // serveur : on le masque localement tant que le set de candidats ne change
+  // pas (cf. effet plus bas qui réarme dismissed à false sur un nouveau set).
+  const [newMeetingModalDismissed, setNewMeetingModalDismissed] = useState(false);
   // Distingue une fermeture "confirmée" (on reste sur la fiche, l'enrichissement
   // démarre) d'une fermeture "abandon" (on renvoie vers la liste, cf. gate).
   const confirmedMeetings = useRef(false);
-  // Coupe le polling du refresh si on quitte la fiche en cours de route.
-  const aliveRef = useRef(true);
-  useEffect(() => () => { aliveRef.current = false; }, []);
+  // Capturés au moment de lancer un refresh (bouton ou confirmation d'un
+  // nouveau meeting) : servent à détecter la fin du job dans l'effet plus bas.
+  const refreshBaselineRef = useRef<string | null>(null);
+  const refreshDeadlineRef = useRef(0);
 
   // Refresh agressif tant que l'enrichissement n'est pas terminé pour que le
   // CS voie les fields apparaître dès la fin du pipeline IA. Une fois "done"
-  // ou "error", on relâche la cadence.
+  // ou "error", on relâche la cadence. Pareil pendant un refresh incrémental
+  // (bouton "Actualiser" ou popup de confirmation d'un nouveau meeting) : on
+  // repasse à 3s tant que `refreshing` est vrai, pour que la fiche (report,
+  // health, popup de confirmation…) se mette à jour toute seule, sans reload.
   const { data, error, isLoading, mutate } = useSWR<Resp>(`/api/clients/${id}`, fetcher, {
     refreshInterval: (latest) => {
       const s = latest?.client?.enrichment_status;
-      return s === "pending" || s === "running" ? 5_000 : 0;
+      if (s === "pending" || s === "running") return 5_000;
+      if (refreshing) return 3_000;
+      return 0;
     },
     revalidateOnFocus: false,
   });
+
+  // Détecte la fin d'un refresh en cours à chaque revalidation SWR (nouveau
+  // report écrit, OU nouveau meeting détecté nécessitant confirmation, OU
+  // timeout de sécurité). Piloté par l'état de `data`, donc robuste à une
+  // erreur réseau ponctuelle (contrairement à une boucle de poll manuelle qui
+  // resterait bloquée sur "Refreshing…" indéfiniment si un `mutate()` throw).
+  useEffect(() => {
+    if (!refreshing || !data) return;
+    const stamp = data.client.last_refresh_report?.refreshed_at ?? null;
+    const hasPendingCandidates = (data.client.pending_refresh_meeting_candidates ?? []).length > 0;
+    const timedOut = Date.now() > refreshDeadlineRef.current;
+    if ((stamp && stamp !== refreshBaselineRef.current) || hasPendingCandidates || timedOut) {
+      setRefreshing(false);
+    }
+  }, [data, refreshing]);
 
   // Tant que les meetings Claap n'ont pas été confirmés (awaiting_meetings), la
   // fiche n'est pas consultable : le popup de confirmation est un passage obligé.
@@ -222,6 +246,16 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     if (mustConfirmMeetings) setConfirmOpen(true);
   }, [mustConfirmMeetings]);
+
+  // Nouveau(x) meeting(s) Claap détecté(s) par un refresh manuel (cf.
+  // runClientRefresh) : le popup se réarme dès que le set de candidats change
+  // (nouvelle détection après un "Later"), et se referme tout seul une fois
+  // pending_refresh_meeting_candidates vidé côté serveur (confirmé/décliné).
+  const pendingRefreshCandidates = data?.client.pending_refresh_meeting_candidates ?? [];
+  const pendingRefreshKey = pendingRefreshCandidates.map((c) => c.recording_id).join(",");
+  useEffect(() => {
+    setNewMeetingModalDismissed(false);
+  }, [pendingRefreshKey]);
 
   async function triggerEnrich() {
     setTriggering(true);
@@ -242,15 +276,21 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     }
   }
 
+  // Arme le polling SWR rapide (cf. refreshInterval plus haut) et l'effet qui
+  // le coupera à la fin. À appeler juste avant de déclencher un refresh
+  // (bouton "Actualiser" ou confirmation d'un nouveau meeting).
+  function armRefreshWatch() {
+    refreshBaselineRef.current = data?.client.last_refresh_report?.refreshed_at ?? null;
+    refreshDeadlineRef.current = Date.now() + 4 * 60_000;
+    setRefreshing(true);
+  }
+
   async function triggerRefresh() {
     // Le refresh tourne dans une background function Netlify (fields + news +
-    // health + insights, plusieurs appels IA) : 20-60s en général, bien plus que
-    // les 8s d'avant. On capture le timestamp du dernier report, puis on poll la
-    // fiche jusqu'à ce qu'un NOUVEAU report apparaisse (ou timeout). La fiche se
-    // met alors à jour toute seule à la fin du job, sans cmd+R, et le bouton
-    // reste sur "Refreshing…" tant que ce n'est pas réellement terminé.
-    const baseline = data?.client.last_refresh_report?.refreshed_at ?? null;
-    setRefreshing(true);
+    // health + insights, plusieurs appels IA) : 20-60s en général. La fiche se
+    // met à jour toute seule à la fin du job (report neuf, ou popup de
+    // confirmation d'un nouveau meeting), sans reload — cf. l'effet plus haut.
+    armRefreshWatch();
     setTriggerError(null);
     try {
       const res = await fetch(`/api/clients/${id}/refresh`, { method: "POST" });
@@ -263,20 +303,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       setRefreshing(false);
       return;
     }
-
-    // Poll toutes les 4s jusqu'à ce que la background function ait écrit un
-    // nouveau report. Garde-fou : 4 min max (la fonction a échoué silencieusement
-    // ou est anormalement lente). Le report d'erreur a aussi un refreshed_at neuf,
-    // donc un échec est détecté et affiché (cf. RefreshReportPanel).
-    const deadline = Date.now() + 4 * 60_000;
-    while (aliveRef.current && Date.now() < deadline) {
-      await sleep(4_000);
-      if (!aliveRef.current) return;
-      const fresh = await mutate();
-      const stamp = fresh?.client.last_refresh_report?.refreshed_at ?? null;
-      if (stamp && stamp !== baseline) break;
-    }
-    if (aliveRef.current) setRefreshing(false);
+    void mutate();
   }
 
   async function restoreOnboarding() {
@@ -539,6 +566,28 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
               {refreshing ? "Refreshing…" : "Refresh"}
             </button>
           )}
+          {client.enrichment_status === "done" && (
+            <button
+              type="button"
+              onClick={() => setAnalyzedMeetingsOpen(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 12,
+                fontWeight: 500,
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: `1px solid ${COLORS.line}`,
+                background: COLORS.bgCard,
+                color: COLORS.ink1,
+                cursor: "pointer",
+              }}
+              title="See every Claap meeting that has fed this client's data."
+            >
+              <Info size={12} />
+            </button>
+          )}
           {HUBSPOT_PORTAL_ID && (
             <a
               href={`https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/deal/${client.hubspot_deal_id}`}
@@ -612,6 +661,27 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
       {emailModalOpen && <MissingInfoEmailModal clientId={client.id} onClose={() => setEmailModalOpen(false)} />}
 
+      {analyzedMeetingsOpen && (
+        <AnalyzedMeetingsModal
+          clientId={client.id}
+          dealId={client.hubspot_deal_id}
+          onClose={() => setAnalyzedMeetingsOpen(false)}
+        />
+      )}
+
+      {pendingRefreshCandidates.length > 0 && !newMeetingModalDismissed && (
+        <NewMeetingConfirmationModal
+          clientId={client.id}
+          candidates={pendingRefreshCandidates}
+          onClose={() => setNewMeetingModalDismissed(true)}
+          onResolved={() => {
+            setNewMeetingModalDismissed(true);
+            armRefreshWatch();
+            void mutate();
+          }}
+        />
+      )}
+
       {confirmOpen && (
         <MeetingConfirmationModal
           clientId={client.id}
@@ -672,7 +742,7 @@ function ClientBody({
       <StatusBanner client={client} onConfirmMeetings={onConfirmMeetings} />
       <HandoverPanel client={client} fields={client.fields_json ?? {}} onUpdated={onUpdated} />
       <HealthPanel health={client.health} insights={client.insights} clientId={client.id} onUpdated={onUpdated} />
-      <RefreshReportPanel report={client.last_refresh_report} />
+      <RefreshReportPanel report={client.last_refresh_report} fields={client.fields_json ?? {}} />
       <DealRecapPanel recap={client.deal_recap} clientId={client.id} onUpdated={onUpdated} />
       <CoachBriefPanel
         brief={client.coach_brief ?? null}

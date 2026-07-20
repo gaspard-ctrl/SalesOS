@@ -9,10 +9,12 @@ export default async (req: Request) => {
 
   let id: string | undefined;
   let userId: string | null = null;
+  let trigger: "manual" | "cron" = "manual";
   try {
-    const body = (await req.json()) as { id?: string; userId?: string | null };
+    const body = (await req.json()) as { id?: string; userId?: string | null; trigger?: "manual" | "cron" };
     id = body.id;
     userId = body.userId ?? null;
+    trigger = body.trigger === "cron" ? "cron" : "manual";
   } catch {
     console.error("[clients-refresh-bg] invalid JSON body");
     return;
@@ -23,11 +25,13 @@ export default async (req: Request) => {
     return;
   }
 
-  const result = await runClientRefresh(id, userId);
+  const result = await runClientRefresh(id, userId, { trigger });
   if (!result.ok) {
     console.error(`[clients-refresh-bg] ${id} failed:`, result.error);
   } else if ("skipped" in result) {
     console.log(`[clients-refresh-bg] ${id} skipped: ${result.reason}`);
+  } else if ("needsConfirmation" in result) {
+    console.log(`[clients-refresh-bg] ${id} needs confirmation: ${result.candidates.length} new meeting(s)`);
   } else {
     console.log(
       `[clients-refresh-bg] ${id} done: ${result.report.new_activity_count} new activities, ${result.report.changed_fields.length} fields changed`,

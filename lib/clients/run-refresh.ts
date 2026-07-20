@@ -2,7 +2,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { db } from "../db";
 import { logUsage } from "../log-usage";
 import { withAnthropicRetry } from "../anthropic-retry";
-import { loadClientContext, renderClientContextForPrompt, type ClientEnrichmentContext } from "./context";
+import { fetchDealContext } from "../hubspot";
+import { loadClientContext, loadClaapMeetingsForDeal, renderClientContextForPrompt, type ClientEnrichmentContext } from "./context";
+import { discoverClaapMeetingCandidates } from "./claap-discovery";
 import {
   CLIENT_EXTRACTION_MODEL,
   CLIENT_EXTRACTION_SYSTEM_PROMPT,
@@ -20,6 +22,8 @@ import {
   SECTION_DEFINITIONS,
   type ClientFields,
   type ClientFieldValue,
+  type ConfirmedRecording,
+  type MeetingCandidate,
   type RefreshReport,
   type SectionKey,
 } from "./types";
@@ -34,6 +38,7 @@ import {
 export type RunRefreshResult =
   | { ok: true; report: RefreshReport }
   | { ok: true; skipped: true; reason: "not_done" }
+  | { ok: true; needsConfirmation: true; candidates: MeetingCandidate[] }
   | { ok: false; error: string };
 
 type ClientRefreshRow = {
@@ -45,6 +50,15 @@ type ClientRefreshRow = {
   health_history: unknown[] | null;
   last_enriched_at: string | null;
   last_refreshed_at: string | null;
+  confirmed_claap_recordings: ConfirmedRecording[] | null;
+  discovered_claap_recordings: Array<{
+    recording_id: string;
+    meeting_title: string | null;
+    meeting_started_at: string | null;
+    claap_url: string | null;
+    discovered_at: string;
+  }> | null;
+  declined_claap_recording_ids: string[] | null;
 };
 
 // Compte les activités (engagements HubSpot + meetings Claap) postérieures à
@@ -121,11 +135,14 @@ function mergeFieldsPreservingManual(
 export async function runClientRefresh(
   clientId: string,
   userId: string | null = null,
+  opts?: { trigger?: "manual" | "cron" },
 ): Promise<RunRefreshResult> {
+  const trigger = opts?.trigger ?? "manual";
+
   const { data: row, error: rowErr } = await db
     .from("clients")
     .select(
-      "id, hubspot_deal_id, enrichment_status, fields_json, health, health_history, last_enriched_at, last_refreshed_at",
+      "id, hubspot_deal_id, enrichment_status, fields_json, health, health_history, last_enriched_at, last_refreshed_at, confirmed_claap_recordings, discovered_claap_recordings, declined_claap_recording_ids",
     )
     .eq("id", clientId)
     .single<ClientRefreshRow>();
@@ -140,14 +157,92 @@ export async function runClientRefresh(
 
   try {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY missing");
+
+    const declinedIds = row.declined_claap_recording_ids ?? [];
+
+    // ── Détection des NOUVEAUX meetings Claap pour ce client ──────────────────
+    // "Connu" = indexé sous ce deal (sales_coach_analyses status=done), déjà
+    // confirmé, déjà découvert lors d'un refresh précédent, ou explicitement
+    // décliné. Tout recording qui matche par domaine/titre en dehors de cet
+    // ensemble est un candidat "nouveau" pour ce client. On ne se base PAS sur
+    // une fenêtre de date : un meeting jamais vu par le pipeline (ex. lié à un
+    // deal HubSpot différent créé après le closed-won) doit être détecté même
+    // s'il est chronologiquement ancien.
+    const [indexedMeetings, dealForDiscovery] = await Promise.all([
+      loadClaapMeetingsForDeal(row.hubspot_deal_id),
+      fetchDealContext(row.hubspot_deal_id).catch((e) => {
+        console.warn(
+          `[clients/refresh/${clientId}] deal fetch for meeting discovery failed:`,
+          e instanceof Error ? e.message : e,
+        );
+        return null;
+      }),
+    ]);
+    const knownIds = new Set([
+      ...indexedMeetings.map((m) => m.recording_id),
+      ...(row.confirmed_claap_recordings ?? []).map((r) => r.recording_id),
+      ...(row.discovered_claap_recordings ?? []).map((r) => r.recording_id),
+      ...declinedIds,
+    ]);
+    const newCandidates = await discoverClaapMeetingCandidates(dealForDiscovery, knownIds).catch((e) => {
+      console.warn(
+        `[clients/refresh/${clientId}] new-meeting discovery failed:`,
+        e instanceof Error ? e.message : e,
+      );
+      return [] as MeetingCandidate[];
+    });
+
+    // Refresh manuel + nouveau(x) meeting(s) : on s'arrête ici, rien d'autre
+    // n'est mis à jour (health/news/fields compris) tant qu'un humain n'a pas
+    // confirmé ou décliné. Cf. app/api/clients/[id]/confirm-refresh-meetings.
+    if (newCandidates.length > 0 && trigger === "manual") {
+      await db
+        .from("clients")
+        .update({
+          pending_refresh_meeting_candidates: newCandidates,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", clientId);
+      return { ok: true, needsConfirmation: true, candidates: newCandidates };
+    }
+
+    // Refresh cron + nouveau(x) meeting(s) : pas d'humain disponible, on les
+    // retient directement (tracé dans confirmed_claap_recordings). La discovery
+    // aveugle plus bas les remontera de toute façon (même matching domaine/
+    // titre) ; cet append sert la traçabilité et évite qu'un futur refresh
+    // manuel les reflague comme "nouveaux".
+    const autoConfirmed: ConfirmedRecording[] =
+      newCandidates.length > 0
+        ? newCandidates.map((c) => ({
+            recording_id: c.recording_id,
+            meeting_title: c.meeting_title,
+            meeting_started_at: c.meeting_started_at,
+            claap_url: c.claap_url,
+            added_manually: false,
+          }))
+        : [];
+
     const clientsModel = await getModelPreference("clients", CLIENT_EXTRACTION_MODEL);
 
-    const ctx = await loadClientContext(row.hubspot_deal_id);
+    const ctx = await loadClientContext(row.hubspot_deal_id, {
+      excludeRecordingIds: declinedIds.length > 0 ? declinedIds : undefined,
+    });
 
     const since = [row.last_refreshed_at, row.last_enriched_at]
       .filter((d): d is string => !!d)
       .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
-    const newActivityCount = countNewActivitiesSince(ctx, since);
+
+    // Meetings jamais vus par le pipeline avant ce cycle (nouvellement inclus
+    // dans ctx.meetings via la discovery), indépendamment de leur date. Capture
+    // le cas où un meeting matché par domaine/titre est antérieur à `since`
+    // (ex. lié à un deal HubSpot différent créé après le closed-won) : sans ce
+    // signal, countNewActivitiesSince le raterait et les fields ne seraient
+    // jamais ré-extraits alors que le meeting vient tout juste d'être retenu.
+    const priorDiscoveredIds = new Set((row.discovered_claap_recordings ?? []).map((d) => d.recording_id));
+    const newlyDiscoveredCount = ctx.meetings.filter(
+      (m) => m.is_discovered && !priorDiscoveredIds.has(m.recording_id),
+    ).length;
+    const newActivityCount = countNewActivitiesSince(ctx, since) + newlyDiscoveredCount;
 
     const companyName = ctx.deal?.company?.name ?? ctx.deal?.name ?? "";
     const prevScore =
@@ -155,6 +250,26 @@ export async function runClientRefresh(
 
     const updatePayload: Record<string, unknown> = {};
     let changedFields: RefreshReport["changed_fields"] = [];
+
+    // Trace des recordings retenus ce cycle (existants + nouveaux), avec
+    // discovered_at préservé pour ceux déjà connus. Persisté à chaque refresh
+    // (pas seulement à l'enrichissement initial), sinon un futur refresh
+    // reflague indéfiniment les mêmes meetings comme "nouveaux".
+    const priorDiscoveredById = new Map((row.discovered_claap_recordings ?? []).map((d) => [d.recording_id, d]));
+    updatePayload.discovered_claap_recordings = ctx.meetings
+      .filter((m) => m.is_discovered)
+      .map((m) => ({
+        recording_id: m.recording_id,
+        meeting_title: m.meeting_title,
+        meeting_started_at: m.meeting_started_at,
+        claap_url: m.claap_url ?? null,
+        discovered_at: priorDiscoveredById.get(m.recording_id)?.discovered_at ?? new Date().toISOString(),
+      }));
+
+    if (autoConfirmed.length > 0) {
+      updatePayload.confirmed_claap_recordings = [...(row.confirmed_claap_recordings ?? []), ...autoConfirmed];
+      updatePayload.pending_refresh_meeting_candidates = null;
+    }
 
     // ── Fields : ré-extraction seulement s'il y a du nouveau ──────────────────
     if (newActivityCount > 0) {

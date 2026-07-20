@@ -52,14 +52,18 @@ export default async (req: Request) => {
   }
 
   // ── (2) Refresh incrémental — séquentiel, best-effort ───────────────────────
+  // trigger: "cron" : pas d'humain disponible pour confirmer un nouveau
+  // meeting Claap détecté, il est retenu automatiquement (cf. run-refresh.ts).
   let refreshed = 0;
   let skipped = 0;
+  let autoConfirmed = 0;
   let errors = 0;
   for (const c of list) {
     try {
-      const result = await runClientRefresh(c.id, cronUserId);
+      const result = await runClientRefresh(c.id, cronUserId, { trigger: "cron" });
       if (!result.ok) errors++;
       else if ("skipped" in result) skipped++;
+      else if ("needsConfirmation" in result) autoConfirmed++; // ne devrait pas arriver en cron
       else refreshed++;
     } catch (e) {
       errors++;
@@ -68,6 +72,6 @@ export default async (req: Request) => {
   }
 
   console.log(
-    `[clients-monthly-refresh-bg] DONE — refreshed ${refreshed}, skipped ${skipped}, errors ${errors}, billing ${billingUpdated}`,
+    `[clients-monthly-refresh-bg] DONE — refreshed ${refreshed}, skipped ${skipped}, unexpected-confirmation ${autoConfirmed}, errors ${errors}, billing ${billingUpdated}`,
   );
 };
