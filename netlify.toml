@@ -2,16 +2,25 @@
   command = "npm run build"
   publish = ".next"
 
-# Secrets scanning : ces variables sont utilisées UNIQUEMENT côté serveur
-# (API routes, server components, Netlify Functions). Aucune n'est préfixée
-# NEXT_PUBLIC_, donc Next.js ne les inline jamais dans le bundle navigateur
-# (vérifié : rien de sensible dans .next/static). Le scanner Netlify les
-# détecte quand même dans les artefacts serveur (function bundles générés par
-# @netlify/plugin-nextjs + source maps) : faux positif. On les exclut du scan.
-# Ne JAMAIS ajouter ici une variable NEXT_PUBLIC_* (elle est réellement
-# exposée au client, le scan doit rester actif dessus).
+# Secrets scanning (contrôle CI Netlify uniquement — ne change RIEN à la
+# confidentialité des variables, ne les expose nulle part).
+#
+# Le scanner Netlify fait échouer le build s'il retrouve la VALEUR d'une
+# variable d'env dans les artefacts de build. Deux familles de faux positifs :
+#  1. Les NEXT_PUBLIC_* : elles sont, PAR DESIGN, embarquées dans le bundle
+#     navigateur (c'est le sens du préfixe). Ce ne sont pas des secrets
+#     sensibles (URLs, clé publishable Clerk). Le scan doit donc les ignorer.
+#  2. Les secrets server-only (clés API, tokens, credentials) : jamais inlinés
+#     côté client par Next.js (vérifié : rien de sensible dans .next/static),
+#     mais présents dans les function bundles serveur générés par
+#     @netlify/plugin-nextjs. Faux positif également.
+#
+# IMPORTANT : cette clé, définie ici, REMPLACE (ne fusionne pas) la variable
+# du même nom configurée dans l'UI Netlify. La liste doit donc être COMPLÈTE
+# (inclure les NEXT_PUBLIC_* qui étaient déjà exclues côté UI), sinon le scan
+# reflague ce qui manque. Ajouter toute nouvelle variable d'env ici.
 [build.environment]
-  SECRETS_SCAN_OMIT_KEYS = "ANTHROPIC_API_KEY,APOLLO_API_KEY,TAVILY_API_KEY,HUBSPOT_ACCESS_TOKEN,HUBSPOT_CLIENT_SECRET,HUBSPOT_WEBHOOK_TARGET_URL,SLACK_BOT_TOKEN,SLACK_USER_TOKEN,SLACK_SIGNING_SECRET,SLACK_NEW_MEETINGS_CHANNEL,CLERK_SECRET_KEY,ENCRYPTION_SECRET,INTERNAL_SECRET,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REFRESH_TOKEN,GOOGLE_DRIVE_REFRESH_TOKEN,BRIGHTDATA_API_KEY,BRIGHTDATA_LINKEDIN_DATASET_ID,BRIGHTDATA_SERP_ZONE,CLAAP_API_TOKEN,CLAAP_WEBHOOK_SECRET,HEYGEN_API_KEY,HEYGEN_AVATAR_ID,HEYGEN_AVATAR_TYPE,HEYGEN_VOICE_ID,HEYGEN_VOICE_ID_FR,WORDPRESS_API_URL,WORDPRESS_APP_USER,WORDPRESS_APP_PASSWORD,GA4_PROPERTY_ID,SEARCH_CONSOLE_SITE_URL,CRON_USER_EMAIL,BILLING_DRIVE_FILE_ID,BILLING_SHEET_TAB,AE_REVENUE_DRIVE_FILE_ID,AE_ACTIVITY_START"
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_APP_URL,NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL,NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,NEXT_PUBLIC_CLERK_SIGN_IN_URL,ANTHROPIC_API_KEY,APOLLO_API_KEY,TAVILY_API_KEY,HUBSPOT_ACCESS_TOKEN,HUBSPOT_CLIENT_SECRET,HUBSPOT_WEBHOOK_SECRET,HUBSPOT_WEBHOOK_TARGET_URL,SLACK_BOT_TOKEN,SLACK_USER_TOKEN,SLACK_SIGNING_SECRET,SLACK_MODE,SLACK_NEW_MEETINGS_CHANNEL,SALES_COACH_SLACK_ENABLED,CLERK_SECRET_KEY,ENCRYPTION_SECRET,INTERNAL_SECRET,CRON_SECRET,CRON_USER_EMAIL,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,GOOGLE_REFRESH_TOKEN,GOOGLE_DRIVE_REFRESH_TOKEN,BRIGHTDATA_API_KEY,BRIGHTDATA_LINKEDIN_DATASET_ID,BRIGHTDATA_SERP_ZONE,CLAAP_API_TOKEN,CLAAP_WEBHOOK_SECRET,CLAAP_NOTE_SLACK_TEST_USER,NETROWS_API_KEY,NETROWS_WEBHOOK_SECRET,HEYGEN_API_KEY,HEYGEN_AVATAR_ID,HEYGEN_AVATAR_TYPE,HEYGEN_VOICE_ID,HEYGEN_VOICE_ID_FR,WORDPRESS_API_URL,WORDPRESS_APP_USER,WORDPRESS_APP_PASSWORD,GA4_PROPERTY_ID,SEARCH_CONSOLE_SITE_URL,LINKEDIN_OWN_POST_SOURCES,LINKEDIN_POSTS_DIGEST_MODE,DEALS_AE_DIGEST_MODE,CLIENTS_AUTO_ENRICH,CLIENTS_OWNER_NOTIFY_MODE,BILLING_DRIVE_FILE_ID,BILLING_SHEET_TAB,AE_REVENUE_DRIVE_FILE_ID,AE_ACTIVITY_START"
 
 [functions]
   directory = "netlify/functions"
