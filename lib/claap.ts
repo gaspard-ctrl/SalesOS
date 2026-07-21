@@ -447,6 +447,25 @@ function recordingStartMs(rec: ClaapRecording): number | null {
 }
 
 /**
+ * Matche le titre d'un meeting contre une requête tolérante aux espaces et à la
+ * ponctuation. Comme HubSpot, un `includes` littéral échouerait sur un titre
+ * concaténé : "health hero" ne serait pas trouvé dans "HealthHero Q3". On
+ * découpe la requête en tokens alphanumériques (accents retirés) et on exige
+ * que chacun soit présent en sous-chaîne dans le titre (AND). Résultat :
+ * "health hero", "healthhero" et "health-hero" matchent tous "HealthHero Q3".
+ * Si la requête ne contient aucun token, on retombe sur un includes littéral.
+ */
+export function claapTitleMatches(title: string | null | undefined, query: string): boolean {
+  const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const q = norm(query).trim();
+  if (!q) return true;
+  const titleN = norm(title ?? "");
+  const tokens = q.split(/[^a-z0-9]+/).filter(Boolean);
+  if (tokens.length === 0) return titleN.includes(q);
+  return tokens.every((t) => titleN.includes(t));
+}
+
+/**
  * Recherche des recordings Claap par filtres simples (participant_email,
  * participant_domain, title_query, since, until). Tous les filtres sont
  * optionnels et combinables (AND). Pagine Claap et filtre en mémoire car
@@ -505,7 +524,7 @@ export async function searchClaapMeetings(opts: {
     if (sinceMs !== null && ms !== null && ms < sinceMs) continue;
     if (untilMs !== null && ms !== null && ms > untilMs) continue;
 
-    if (titleLc && !(rec.title?.toLowerCase() ?? "").includes(titleLc)) continue;
+    if (titleLc && !claapTitleMatches(rec.title, titleLc)) continue;
 
     if (emailLc || domainLcSet.size > 0) {
       let participantOk = false;
@@ -593,7 +612,7 @@ export async function searchClaapMeetingsPage(opts: {
       // reste est encore plus ancien → on note la borne et on arrête après.
       if (sinceMs !== null && ms !== null && ms < sinceMs) { reachedSince = true; continue; }
       if (untilMs !== null && ms !== null && ms > untilMs) continue;
-      if (titleLc && !(rec.title?.toLowerCase() ?? "").includes(titleLc)) continue;
+      if (titleLc && !claapTitleMatches(rec.title, titleLc)) continue;
       if (emailLc) {
         // Match participant OU recorder : un sales est souvent celui qui a
         // enregistré le meeting, pas forcément listé dans participants.
