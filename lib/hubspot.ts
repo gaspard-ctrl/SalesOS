@@ -880,12 +880,39 @@ export type DealSearchResult = {
 };
 
 /**
+ * Construit des filtres `dealname` robustes aux espaces et aux noms concaténés.
+ *
+ * HubSpot tokenise "HealthHero" en un seul token `healthhero` : un
+ * CONTAINS_TOKEN nu sur "health" ou "hero" échoue donc (le AND des deux tokens
+ * ne matche jamais), alors que "healthhero" collé matche. On découpe la requête
+ * sur les espaces ET la ponctuation, on retire les accents, puis on cherche
+ * chaque token en sous-chaîne (wildcard `*token*`) combiné en AND. Résultat :
+ * "Health Hero", "healthhero" et "health-hero" matchent tous un deal nommé
+ * "HealthHero" (et "Coachello Plan" matche "Coachello Plan Pro" mais pas
+ * "Plan B", la sémantique AND étant préservée).
+ */
+export function dealNameSearchFilters(
+  query: string,
+): { propertyName: string; operator: string; value: string }[] {
+  const tokens = query
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 2);
+  return tokens.map((token) => ({
+    propertyName: "dealname",
+    operator: "CONTAINS_TOKEN",
+    value: `*${token}*`,
+  }));
+}
+
+/**
  * Recherche HubSpot par nom de deal pour l'autocomplete et la résolution
  * manuelle quand le résolveur auto a échoué.
  *
- * - Découpe le query en tokens et applique CONTAINS_TOKEN pour chacun (AND
- *   intra-groupe) : "Coachello Plan" matchera "Coachello Plan Pro" mais pas
- *   uniquement "Plan B".
+ * - Utilise `dealNameSearchFilters` : robuste aux espaces et aux noms
+ *   concaténés (voir le helper).
  * - Si query est vide, retourne []. La page UI affichera les deals après que
  *   l'utilisateur ait commencé à taper.
  * - Résout en parallèle stage_label / pipeline_label / owner_name pour que
@@ -899,26 +926,15 @@ export async function searchDealsByName(
   const q = query.trim();
   if (q.length < 2) return [];
 
-  const tokens = q
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 2);
-  if (tokens.length === 0) return [];
+  const filters = dealNameSearchFilters(q);
+  if (filters.length === 0) return [];
 
   type SearchHit = { id: string; properties?: Record<string, string> };
   const searchRes = await hubspotFetch<{ results?: SearchHit[] }>(
     "/crm/v3/objects/deals/search",
     "POST",
     {
-      filterGroups: [
-        {
-          filters: tokens.map((token) => ({
-            propertyName: "dealname",
-            operator: "CONTAINS_TOKEN",
-            value: token,
-          })),
-        },
-      ],
+      filterGroups: [{ filters }],
       sorts: [{ propertyName: "hs_lastmodifieddate", direction: "DESCENDING" }],
       properties: [
         "dealname",

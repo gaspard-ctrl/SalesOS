@@ -21,7 +21,7 @@ import { logUsage } from "@/lib/log-usage";
 import { DEFAULT_BOT_GUIDE } from "@/lib/guides/bot";
 import { searchGmailMessages, getGmailMessage } from "@/lib/gmail";
 import { searchClaapMeetings, fetchClaapMeetingDetail } from "@/lib/claap";
-import { fetchDealContext } from "@/lib/hubspot";
+import { fetchDealContext, dealNameSearchFilters } from "@/lib/hubspot";
 import { fetchBillingRows, matchBillingRow } from "@/lib/billing/google-sheet";
 
 const PUBLIC_EMAIL_DOMAINS = new Set([
@@ -562,28 +562,45 @@ async function executeTool(
       if (input.my_contacts_only && userOwnerId) {
         filters.push({ propertyName: "hubspot_owner_id", operator: "EQ", value: userOwnerId });
       }
-      const data = await hubspot("/crm/v3/objects/contacts/search", "POST", {
-        query: input.query,
-        limit: input.limit || 10,
-        properties: props,
-        ...(filters.length ? { filterGroups: [{ filters }] } : {}),
-      });
-      const results = (data.results ?? []).map((r: { id: string; properties: Record<string, unknown> }) => ({
-        id: r.id,
-        properties: stripEmpty(r.properties),
-      }));
-      return JSON.stringify(results);
+      // Le param `query` de HubSpot tokenise sur les espaces : chercher un
+      // contact chez "HealthHero" via "Health Hero" échoue (le token "hero" ne
+      // matche pas le token "healthhero"). On lance en parallèle la requête
+      // d'origine + une variante "collée" (espaces retirés) et on merge, pour
+      // récupérer aussi les noms de société concaténés sans casser les vrais
+      // noms de personnes espacés.
+      const rawQuery = String(input.query ?? "").trim();
+      const collapsed = rawQuery.replace(/\s+/g, "");
+      const queries = collapsed && collapsed !== rawQuery ? [rawQuery, collapsed] : [rawQuery];
+      const responses = await Promise.all(
+        queries.map((q) =>
+          hubspot("/crm/v3/objects/contacts/search", "POST", {
+            query: q,
+            limit: input.limit || 10,
+            properties: props,
+            ...(filters.length ? { filterGroups: [{ filters }] } : {}),
+          }),
+        ),
+      );
+      const byId = new Map<string, { id: string; properties: Record<string, unknown> }>();
+      for (const data of responses) {
+        for (const r of (data.results ?? []) as { id: string; properties: Record<string, unknown> }[]) {
+          if (!byId.has(r.id)) byId.set(r.id, { id: r.id, properties: stripEmpty(r.properties) });
+        }
+      }
+      return JSON.stringify([...byId.values()]);
     }
     case "search_deals": {
       const props = getPropertyNames("deals");
-      const filters: { propertyName: string; operator: string; value: string }[] = [];
+      // Recherche par tokens wildcard sur dealname (robuste aux espaces et aux
+      // noms concaténés) plutôt que le param `query` de HubSpot, qui échoue sur
+      // "Health Hero" quand le deal s'appelle "HealthHero" (voir le helper).
+      const filters = dealNameSearchFilters(String(input.query ?? ""));
       const dealOwnerId = input.owner_id as string | undefined
         ?? (input.my_deals_only && userOwnerId ? userOwnerId : undefined);
       if (dealOwnerId) {
         filters.push({ propertyName: "hubspot_owner_id", operator: "EQ", value: dealOwnerId });
       }
       const data = await hubspot("/crm/v3/objects/deals/search", "POST", {
-        query: input.query,
         limit: input.limit || 10,
         properties: props,
         ...(filters.length ? { filterGroups: [{ filters }] } : {}),
