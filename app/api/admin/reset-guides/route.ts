@@ -11,9 +11,11 @@ export async function POST() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Le bot guide et le briefing guide sont figés en dur : seule la prospection est
+  // surchargeable par user, donc seule celle-ci (+ instructions perso du chat) se reset.
   const { error } = await db
     .from("users")
-    .update({ user_prompt: null, prospection_guide: null, briefing_guide: null })
+    .update({ user_prompt: null, prospection_guide: null })
     .not("id", "is", null);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

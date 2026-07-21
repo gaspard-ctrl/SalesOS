@@ -229,21 +229,16 @@ export async function POST(req: NextRequest) {
     let briefingGuide: string = DEFAULT_BRIEFING_GUIDE;
     let briefingModel = "claude-haiku-4-5-20251001";
     if (process.env.SUPABASE_URL) {
-      const [keyRes, userRes, globalGuide, globalModelPrefs] = await Promise.all([
+      const [keyRes, globalModelPrefs] = await Promise.all([
         db.from("user_keys").select("encrypted_key, iv, auth_tag, is_active").eq("user_id", user.id).eq("service", "claude").single(),
-        db.from("users").select("briefing_guide").eq("id", user.id).single(),
-        db.from("guide_defaults").select("content").eq("key", "briefing").single(),
         db.from("guide_defaults").select("content").eq("key", "model_preferences").single(),
       ]);
       if (!keyRes.data?.is_active) {
         return NextResponse.json({ error: "Claude key not configured" }, { status: 402 });
       }
       claudeApiKey = decrypt({ encryptedKey: keyRes.data.encrypted_key, iv: keyRes.data.iv, authTag: keyRes.data.auth_tag });
-      const adminBriefing = globalGuide.data?.content ?? DEFAULT_BRIEFING_GUIDE;
-      const userBriefingInstructions = userRes.data?.briefing_guide?.trim() ?? "";
-      briefingGuide = userBriefingInstructions
-        ? `${adminBriefing}\n\n--- INSTRUCTIONS PERSONNELLES ---\n${userBriefingInstructions}`
-        : adminBriefing;
+      // Briefing guide figé en dur (non surchargeable en base ni par user).
+      briefingGuide = DEFAULT_BRIEFING_GUIDE;
       try {
         const modelMap = globalModelPrefs.data?.content ? JSON.parse(globalModelPrefs.data.content) as Record<string, string> : {};
         briefingModel = modelMap.briefing ?? "claude-haiku-4-5-20251001";

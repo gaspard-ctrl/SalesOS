@@ -12,7 +12,6 @@ import { SignatureEditor } from "./_components/signature-editor";
 import { normalizeSignature, type EmailSignature } from "@/lib/email/signature";
 import { DEFAULT_BOT_GUIDE } from "@/lib/guides/bot";
 import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/guides/prospection";
-import { DEFAULT_BRIEFING_GUIDE } from "@/lib/guides/briefing";
 
 
 async function getIntegrationStatus(userId: string) {
@@ -50,7 +49,7 @@ export default async function SettingsPage() {
   const { claudeActive, gmailConnected, slackDisplayName, hubspotOwnerId } = await getIntegrationStatus(user.id);
 
   const [{ data: guides }, { data: globalGuides }] = await Promise.all([
-    db.from("users").select("user_prompt, prospection_guide, briefing_guide, model_preferences, email_signature").eq("id", user.id).single(),
+    db.from("users").select("user_prompt, prospection_guide, model_preferences, email_signature").eq("id", user.id).single(),
     db.from("guide_defaults").select("key, content"),
   ]);
 
@@ -59,9 +58,10 @@ export default async function SettingsPage() {
     : null;
 
   const globalMap = Object.fromEntries((globalGuides ?? []).map((r) => [r.key, r.content as string]));
-  const globalBotGuide = globalMap.bot ?? DEFAULT_BOT_GUIDE;
+  // Bot guide + briefing guide : figés en dur (non surchargeables en base, non éditables
+  // par le user). Seule la prospection reste surchargeable par user.
+  const globalBotGuide = DEFAULT_BOT_GUIDE;
   const globalProspectionGuide = globalMap.prospection ?? DEFAULT_PROSPECTION_GUIDE;
-  const globalBriefingGuide = globalMap.briefing ?? DEFAULT_BRIEFING_GUIDE;
 
   return (
     <div className="p-8 max-w-2xl mx-auto">
@@ -199,13 +199,6 @@ export default async function SettingsPage() {
           endpoint="/api/settings/guide"
           title="Prospecting guide"
           description="Instructions for generating emails. Fully customizable."
-        />
-        <LockedGuideEditor
-          adminGuide={globalBriefingGuide}
-          initialUserInstructions={guides?.briefing_guide ?? ""}
-          endpoint="/api/settings/briefing-guide"
-          title="Briefing guide"
-          description="Instructions for pre-meeting briefings. The admin guide is fixed, add your instructions on top."
         />
       </div>
 

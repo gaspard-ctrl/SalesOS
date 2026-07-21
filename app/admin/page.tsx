@@ -3,9 +3,7 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/admin";
 import { db } from "@/lib/db";
 import { UsersTable } from "./_components/users-table";
-import { DEFAULT_BOT_GUIDE } from "@/lib/guides/bot";
 import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/guides/prospection";
-import { DEFAULT_BRIEFING_GUIDE } from "@/lib/guides/briefing";
 import { GuideEditor } from "../settings/_components/guide-editor";
 import { ModelPreferencesAdmin } from "./_components/model-preferences-admin";
 import { ResetGuidesButton } from "./_components/reset-guides-button";
@@ -162,26 +160,14 @@ export default async function AdminPage() {
         <div className="space-y-3">
           <ResetGuidesButton />
           <Suspense>
-            <GuideEditor
-              initialGuide={globalMap.bot ?? null}
-              defaultGuide={DEFAULT_BOT_GUIDE}
-              endpoint="/api/admin/guides?key=bot"
-              title="Bot guide"
-              description="System prompt for the CoachelloGPT chat."
-            />
+            {/* Bot guide + Briefing guide : figés en dur (lib/guides/bot.ts,
+                lib/guides/briefing.ts), non éditables ici. */}
             <GuideEditor
               initialGuide={globalMap.prospection ?? null}
               defaultGuide={DEFAULT_PROSPECTION_GUIDE}
               endpoint="/api/admin/guides?key=prospection"
               title="Prospecting guide"
               description="Instructions for generating emails in Prospecting."
-            />
-            <GuideEditor
-              initialGuide={globalMap.briefing ?? null}
-              defaultGuide={DEFAULT_BRIEFING_GUIDE}
-              endpoint="/api/admin/guides?key=briefing"
-              title="Briefing guide"
-              description="Instructions for preparing pre-meeting briefings."
             />
           </Suspense>
         </div>

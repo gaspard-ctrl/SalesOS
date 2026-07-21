@@ -1,6 +1,5 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { db } from "./db";
-import { DEFAULT_BOT_GUIDE } from "./guides/bot";
 import { resolveAndStoreUserMappings } from "./onboarding/resolve-mappings";
 
 export interface DbUser {
@@ -48,7 +47,9 @@ export async function getAuthenticatedUser(): Promise<DbUser | null> {
       email,
       name: name || null,
       is_admin: false,
-      user_prompt: DEFAULT_BOT_GUIDE,
+      // Instructions perso vides au départ : le bot guide est déjà en dur côté chat
+      // (lib/guides/bot.ts). L'utilisateur n'ajoute que ses propres consignes par-dessus.
+      user_prompt: null,
     })
     .select()
     .single();

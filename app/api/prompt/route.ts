@@ -9,14 +9,17 @@ export async function GET() {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const [userRes, globalGuide] = await Promise.all([
-    db.from("users").select("user_prompt, name").eq("id", user.id).maybeSingle(),
-    db.from("guide_defaults").select("content").eq("key", "bot").maybeSingle(),
-  ]);
+  const { data: userData } = await db
+    .from("users")
+    .select("user_prompt, name")
+    .eq("id", user.id)
+    .maybeSingle();
 
-  const adminGuide = globalGuide.data?.content ?? DEFAULT_BOT_GUIDE;
-  const userInstructions = userRes.data?.user_prompt ?? "";
-  const firstName = (userRes.data?.name ?? user.name ?? "").split(" ")[0] || "moi";
+  // Bot guide en dur (non surchargeable en base) : affiché en lecture seule, les users
+  // n'ajoutent que leurs instructions perso par-dessus.
+  const adminGuide = DEFAULT_BOT_GUIDE;
+  const userInstructions = userData?.user_prompt ?? "";
+  const firstName = (userData?.name ?? user.name ?? "").split(" ")[0] || "moi";
 
   return NextResponse.json({ adminGuide, userInstructions, firstName });
 }

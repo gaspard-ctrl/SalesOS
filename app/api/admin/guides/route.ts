@@ -2,20 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/admin";
 import { db } from "@/lib/db";
-import { DEFAULT_BOT_GUIDE } from "@/lib/guides/bot";
-import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/guides/prospection";
-import { DEFAULT_BRIEFING_GUIDE } from "@/lib/guides/briefing";
 
 export const dynamic = "force-dynamic";
 
-const VALID_KEYS = ["bot", "prospection", "briefing"] as const;
+// Le bot guide (lib/guides/bot.ts) et le briefing guide (lib/guides/briefing.ts) sont
+// figés en dur : non surchargeables en base ni éditables ici. Seule la prospection reste
+// modifiable.
+const VALID_KEYS = ["prospection"] as const;
 type GuideKey = typeof VALID_KEYS[number];
-
-const HARDCODED: Record<GuideKey, string> = {
-  bot: DEFAULT_BOT_GUIDE,
-  prospection: DEFAULT_PROSPECTION_GUIDE,
-  briefing: DEFAULT_BRIEFING_GUIDE,
-};
 
 export async function GET() {
   const user = await getAuthenticatedUser();

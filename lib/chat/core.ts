@@ -1246,13 +1246,15 @@ export async function runChat(args: {
   let userOwnerId: string | null = null;
   let userDisplay = userId;
   if (process.env.SUPABASE_URL) {
-    const [{ data: userData }, { data: globalGuide }, { data: globalModelEntry }, { data: ownerRow }] = await Promise.all([
+    const [{ data: userData }, { data: globalModelEntry }, { data: ownerRow }] = await Promise.all([
       db.from("users").select("user_prompt, email, name").eq("id", userId).single(),
-      db.from("guide_defaults").select("content").eq("key", "bot").single(),
       db.from("guide_defaults").select("content").eq("key", "model_preferences").single(),
       db.from("users").select("hubspot_owner_id").eq("id", userId).single(),
     ]);
-    const adminGuide = globalGuide?.content ?? DEFAULT_BOT_GUIDE;
+    // Le bot guide est en dur (DEFAULT_BOT_GUIDE), non surchargeable en base : il n'est
+    // modifiable que dans le code (lib/guides/bot.ts). Seules les instructions perso par
+    // user (users.user_prompt) s'ajoutent par-dessus.
+    const adminGuide = DEFAULT_BOT_GUIDE;
     const userInstructions = userData?.user_prompt?.trim() ?? "";
     systemPrompt = userInstructions
       ? `${adminGuide}\n\n--- INSTRUCTIONS PERSONNELLES DE L'UTILISATEUR ---\n${userInstructions}`
