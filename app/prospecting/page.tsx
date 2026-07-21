@@ -3,12 +3,13 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from "react";
 import { useGmailStatus } from "@/lib/hooks/use-gmail-status";
 import { useOutreachCounts } from "@/lib/hooks/use-outreach-counts";
+import { useUserMe } from "@/lib/hooks/use-user-me";
 import { ExchangesBadge } from "@/components/ui/exchanges-badge";
 import { DraftProvenanceCard } from "@/components/draft-provenance";
 import { ProspectingModeToggle } from "@/components/prospecting-mode-toggle";
 import type { DraftProvenance } from "@/lib/prospection/provenance";
 import { useUser } from "@clerk/nextjs";
-import { Paperclip, Send, Save, X, Search, Loader2, Sparkles, RotateCcw, ChevronDown, ChevronRight, ChevronUp, Linkedin, Copy, Check, Mail, MailOpen, Phone, Calendar, MessageSquare } from "lucide-react";
+import { Paperclip, Send, Save, X, Search, Loader2, Sparkles, RotateCcw, ChevronDown, ChevronRight, ChevronUp, Linkedin, Copy, Check, Mail, MailOpen, Phone, Calendar, MessageSquare, PenLine } from "lucide-react";
 import Link from "next/link";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -351,6 +352,11 @@ export default function ProspectingPage() {
   // Gmail (SWR-cached)
   const { gmailConnected } = useGmailStatus();
 
+  // Signature perso (configurée dans Settings)
+  const { signature } = useUserMe();
+  const hasSignature = Boolean(signature?.enabled);
+  const [includeSignature, setIncludeSignature] = useState(true);
+
   // Composer state
   const [to, setTo] = useState<string[]>([]);
   const [cc, setCc] = useState<string[]>([]);
@@ -504,6 +510,7 @@ export default function ProspectingPage() {
     fd.append("subject", subject);
     fd.append("body", body);
     fd.append("source", "prospecting");
+    if (hasSignature && includeSignature) fd.append("include_signature", "1");
     if (selectedContact?.id) fd.append("hubspot_id", selectedContact.id);
     attachments.forEach((f) => fd.append("attachments", f));
     return fd;
@@ -1134,7 +1141,7 @@ export default function ProspectingPage() {
 
               {/* Footer */}
               <div className="flex items-center justify-between px-4 py-3 border-t shrink-0" style={{ borderColor: "#f0f0f0", background: "#fafafa" }}>
-                <div>
+                <div className="flex items-center gap-4">
                   <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFiles} />
                   <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 text-xs transition-colors" style={{ color: "#bbb" }}
                     onMouseEnter={(e) => (e.currentTarget.style.color = "#555")}
@@ -1143,6 +1150,24 @@ export default function ProspectingPage() {
                     <Paperclip size={14} />
                     Attach
                   </button>
+                  {hasSignature ? (
+                    <button
+                      onClick={() => setIncludeSignature((v) => !v)}
+                      className="flex items-center gap-1.5 text-xs transition-colors"
+                      style={{ color: includeSignature ? "#f01563" : "#bbb" }}
+                      title={includeSignature ? "Signature added to this email" : "Signature disabled for this email"}
+                    >
+                      <PenLine size={14} />
+                      {includeSignature ? "Signature on" : "Signature off"}
+                    </button>
+                  ) : (
+                    <Link href="/settings" className="flex items-center gap-1.5 text-xs transition-colors" style={{ color: "#ccc" }}
+                      title="Set up your signature in Settings"
+                    >
+                      <PenLine size={14} />
+                      Add signature
+                    </Link>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   {sendStatus && (

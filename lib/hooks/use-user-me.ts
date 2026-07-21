@@ -1,4 +1,5 @@
 import useSWR from "swr";
+import type { EmailSignature } from "@/lib/email/signature";
 
 interface UserMe {
   id: string;
@@ -7,6 +8,7 @@ interface UserMe {
   is_admin: boolean;
   slack_display_name: string | null;
   hubspot_owner_id: string | null;
+  email_signature: EmailSignature | null;
 }
 
 export function useUserMe() {
@@ -15,6 +17,7 @@ export function useUserMe() {
     user: data ?? null,
     isAdmin: data?.is_admin ?? false,
     slackName: data?.slack_display_name ?? null,
+    signature: data?.email_signature ?? null,
     isLoading,
     error,
   };

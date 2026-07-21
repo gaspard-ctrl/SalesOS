@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { getGmailAccessToken, buildRawEmail } from "@/lib/gmail";
+import { getGmailAccessToken, buildRawEmail, loadUserSignature } from "@/lib/gmail";
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
   const bcc = (formData.get("bcc") as string ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   const subject = (formData.get("subject") as string) ?? "";
   const body = (formData.get("body") as string) ?? "";
+  const includeSignature = ["1", "true"].includes(((formData.get("include_signature") as string) ?? "").trim());
   const files = formData.getAll("attachments") as File[];
 
   const attachments = await Promise.all(
@@ -34,7 +35,9 @@ export async function POST(req: NextRequest) {
   });
   const { emailAddress } = await profileRes.json();
 
-  const raw = buildRawEmail({ from: emailAddress, to, cc, bcc, subject, body, attachments });
+  const signature = includeSignature ? await loadUserSignature(user.id) : null;
+
+  const raw = buildRawEmail({ from: emailAddress, to, cc, bcc, subject, body, attachments, signature: signature ?? undefined });
 
   const draftRes = await fetch("https://www.googleapis.com/gmail/v1/users/me/drafts", {
     method: "POST",

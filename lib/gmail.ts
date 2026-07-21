@@ -1,5 +1,11 @@
 import { db } from "./db";
 import { decrypt } from "./crypto";
+import {
+  escapeHtml,
+  normalizeSignature,
+  renderSignatureHtml,
+  renderSignaturePlain,
+} from "./email/signature";
 
 export async function getGmailAccessToken(userId: string): Promise<string> {
   const { data } = await db
@@ -153,6 +159,43 @@ export async function getGmailMessage(userId: string, messageId: string): Promis
   };
 }
 
+function textToHtml(text: string): string {
+  return escapeHtml(text).replace(/\r\n/g, "\n").replace(/\n/g, "<br>");
+}
+
+export type SignatureImage = { data: Buffer; mime: string; cid: string };
+
+/**
+ * Charge la signature d'un utilisateur et la rend (HTML + texte) prête pour l'envoi.
+ * Si une image est présente, elle est décodée (bytes) et le HTML référence `cid:...`
+ * pour l'embarquer inline. Retourne null si aucune signature configurée/activée.
+ */
+export async function loadUserSignature(
+  userId: string,
+): Promise<{ html: string; plain: string; image?: SignatureImage } | null> {
+  const { data } = await db
+    .from("users")
+    .select("email_signature")
+    .eq("id", userId)
+    .single();
+
+  if (!data?.email_signature) return null;
+  const sig = normalizeSignature(data.email_signature);
+  if (!sig.enabled) return null;
+
+  let image: SignatureImage | undefined;
+  const m = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i.exec(sig.image);
+  if (m) {
+    const buf = Buffer.from(m[2].replace(/\s/g, ""), "base64");
+    if (buf.length > 0) image = { data: buf, mime: m[1], cid: "signature-image" };
+  }
+
+  const html = renderSignatureHtml(sig, { imageSrc: image ? `cid:${image.cid}` : undefined });
+  const plain = renderSignaturePlain(sig);
+  if (!html && !plain) return null;
+  return { html, plain, image };
+}
+
 export function buildRawEmail({
   from,
   to,
@@ -161,6 +204,7 @@ export function buildRawEmail({
   subject,
   body,
   attachments = [],
+  signature,
 }: {
   from: string;
   to: string[];
@@ -169,6 +213,7 @@ export function buildRawEmail({
   subject: string;
   body: string;
   attachments?: { name: string; type: string; data: Buffer }[];
+  signature?: { html: string; plain: string; image?: SignatureImage };
 }): string {
   const encodedSubject = `=?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`;
   const headers: string[] = [
@@ -180,17 +225,73 @@ export function buildRawEmail({
     "MIME-Version: 1.0",
   ];
 
+  // Si une signature riche est fournie, on passe l'email en multipart/alternative
+  // (texte + HTML) pour que la signature s'affiche mise en forme. Sinon on reste
+  // en text/plain comme avant (rétrocompatible).
+  const withHtml = Boolean(signature && signature.html);
+  const plainBody = signature?.plain ? `${body}\n\n${signature.plain}` : body;
+
+  // Content-Type + contenu du "corps" (avant les éventuelles pièces jointes).
+  let contentType: string;
+  let contentBlock: string;
+  if (withHtml) {
+    const htmlBody =
+      `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#111;">` +
+      `${textToHtml(body)}</div>${signature!.html}`;
+    const altBoundary = `__alt_${Date.now()}__`;
+    const altBlock = [
+      `--${altBoundary}`,
+      "Content-Type: text/plain; charset=UTF-8",
+      "",
+      plainBody,
+      `--${altBoundary}`,
+      "Content-Type: text/html; charset=UTF-8",
+      "",
+      htmlBody,
+      `--${altBoundary}--`,
+    ].join("\r\n");
+    const altType = `multipart/alternative; boundary="${altBoundary}"`;
+
+    const img = signature!.image;
+    if (img) {
+      // Image inline (CID) : multipart/related { alternative, image }.
+      const imgB64 = img.data.toString("base64").replace(/.{76}/g, "$&\r\n");
+      const relBoundary = `__rel_${Date.now()}__`;
+      contentType = `multipart/related; boundary="${relBoundary}"`;
+      contentBlock = [
+        `--${relBoundary}`,
+        `Content-Type: ${altType}`,
+        "",
+        altBlock,
+        `--${relBoundary}`,
+        `Content-Type: ${img.mime}`,
+        "Content-Transfer-Encoding: base64",
+        `Content-ID: <${img.cid}>`,
+        'Content-Disposition: inline; filename="signature"',
+        "",
+        imgB64,
+        `--${relBoundary}--`,
+      ].join("\r\n");
+    } else {
+      contentType = altType;
+      contentBlock = altBlock;
+    }
+  } else {
+    contentType = "text/plain; charset=UTF-8";
+    contentBlock = plainBody;
+  }
+
   if (attachments.length === 0) {
-    const msg = [...headers, "Content-Type: text/plain; charset=UTF-8", "", body].join("\r\n");
+    const msg = [...headers, `Content-Type: ${contentType}`, "", contentBlock].join("\r\n");
     return Buffer.from(msg).toString("base64url");
   }
 
   const boundary = `__boundary_${Date.now()}__`;
   const parts: string[] = [
     `--${boundary}`,
-    "Content-Type: text/plain; charset=UTF-8",
+    `Content-Type: ${contentType}`,
     "",
-    body,
+    contentBlock,
   ];
 
   for (const att of attachments) {

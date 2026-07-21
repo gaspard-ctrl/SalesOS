@@ -8,6 +8,8 @@ import { GuideEditor } from "./_components/guide-editor";
 import { LockedGuideEditor } from "./_components/locked-guide-editor";
 import { SlackNameInput } from "./_components/slack-name-input";
 import { HubspotOwnerInput } from "./_components/hubspot-owner-input";
+import { SignatureEditor } from "./_components/signature-editor";
+import { normalizeSignature, type EmailSignature } from "@/lib/email/signature";
 import { DEFAULT_BOT_GUIDE } from "@/lib/guides/bot";
 import { DEFAULT_PROSPECTION_GUIDE } from "@/lib/guides/prospection";
 import { DEFAULT_BRIEFING_GUIDE } from "@/lib/guides/briefing";
@@ -48,9 +50,13 @@ export default async function SettingsPage() {
   const { claudeActive, gmailConnected, slackDisplayName, hubspotOwnerId } = await getIntegrationStatus(user.id);
 
   const [{ data: guides }, { data: globalGuides }] = await Promise.all([
-    db.from("users").select("user_prompt, prospection_guide, briefing_guide, model_preferences").eq("id", user.id).single(),
+    db.from("users").select("user_prompt, prospection_guide, briefing_guide, model_preferences, email_signature").eq("id", user.id).single(),
     db.from("guide_defaults").select("key, content"),
   ]);
+
+  const signature: EmailSignature | null = guides?.email_signature
+    ? normalizeSignature(guides.email_signature)
+    : null;
 
   const globalMap = Object.fromEntries((globalGuides ?? []).map((r) => [r.key, r.content as string]));
   const globalBotGuide = globalMap.bot ?? DEFAULT_BOT_GUIDE;
@@ -167,6 +173,9 @@ export default async function SettingsPage() {
             </div>
           }
         />
+
+        {/* Signature email (page Prospection) */}
+        <SignatureEditor initialValue={signature} initialName={user.name ?? ""} />
       </div>
 
       {/* Guides IA */}

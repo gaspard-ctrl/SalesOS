@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getGmailAccessToken, buildRawEmail } from "@/lib/gmail";
+import { getGmailAccessToken, buildRawEmail, loadUserSignature } from "@/lib/gmail";
 
 export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
   const subject = (formData.get("subject") as string) ?? "";
   const body = (formData.get("body") as string) ?? "";
   const source = ((formData.get("source") as string) ?? "gmail_send").trim() || "gmail_send";
+  const includeSignature = ["1", "true"].includes(((formData.get("include_signature") as string) ?? "").trim());
   const hubspotId = ((formData.get("hubspot_id") as string) ?? "").trim() || null;
   const scopeCompanyId = ((formData.get("scope_company_id") as string) ?? "").trim() || null;
   const files = formData.getAll("attachments") as File[];
@@ -42,7 +43,9 @@ export async function POST(req: NextRequest) {
   });
   const { emailAddress } = await profileRes.json();
 
-  const raw = buildRawEmail({ from: emailAddress, to, cc, bcc, subject, body, attachments });
+  const signature = includeSignature ? await loadUserSignature(user.id) : null;
+
+  const raw = buildRawEmail({ from: emailAddress, to, cc, bcc, subject, body, attachments, signature: signature ?? undefined });
 
   const sendRes = await fetch("https://www.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
