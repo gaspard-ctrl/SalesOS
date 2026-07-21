@@ -131,6 +131,31 @@ async function slackGet(path: string, params?: Record<string, string>) {
   return data.ok ? data : null;
 }
 
+type ClaapRecapRow = {
+  meeting_title: string | null;
+  meeting_started_at: string | null;
+  meeting_kind: string | null;
+  audience: string | null;
+  meeting_recap: {
+    context?: string | null;
+    need?: string | null;
+    risks_competition?: string | null;
+    opportunities?: string | null;
+    next_steps?: string | null;
+  } | null;
+};
+
+async function fetchSalesCoachRecaps(dealId: string): Promise<ClaapRecapRow[]> {
+  if (!process.env.SUPABASE_URL) return [];
+  const { data } = await db
+    .from("sales_coach_analyses")
+    .select("meeting_title, meeting_started_at, meeting_kind, audience, meeting_recap")
+    .eq("hubspot_deal_id", dealId)
+    .eq("status", "done")
+    .order("meeting_started_at", { ascending: false });
+  return (data ?? []) as ClaapRecapRow[];
+}
+
 async function searchSlackForCompany(companyName: string): Promise<{ channel: string; text: string; user: string; timestamp: string }[]> {
   if (!companyName || !process.env.SLACK_BOT_TOKEN) return [];
   const messages: { channel: string; text: string; user: string; timestamp: string }[] = [];
@@ -242,7 +267,7 @@ export async function runDealAnalysis(dealId: string, userId: string | null): Pr
 
     const dealCompanyName = p.dealname?.replace(/\s*[-–|/].*$/, "").trim() ?? "";
 
-    const [engResult, scoreResult, modelResult, slackResult] = await Promise.allSettled([
+    const [engResult, scoreResult, modelResult, slackResult, claapRecapsResult] = await Promise.allSettled([
       engIds.length > 0
         ? Promise.allSettled([
             hubspot("/crm/v3/objects/engagements/batch/read", "POST", {
@@ -271,6 +296,7 @@ export async function runDealAnalysis(dealId: string, userId: string | null): Pr
         : Promise.resolve({ data: null }),
       db.from("guide_defaults").select("content").eq("key", "model_preferences").single(),
       searchSlackForCompany(dealCompanyName),
+      fetchSalesCoachRecaps(dealId),
     ]);
 
     if (engResult.status === "fulfilled" && engResult.value) {
@@ -358,6 +384,24 @@ export async function runDealAnalysis(dealId: string, userId: string | null): Pr
         }).join("\n\n")
       : "";
 
+    const claapRecaps = claapRecapsResult.status === "fulfilled" ? claapRecapsResult.value : [];
+    const claapSection = claapRecaps.length > 0
+      ? "\n\nRécaps Sales Coach (meetings Claap analysés, rattachés à ce deal) :\n" +
+        claapRecaps.map((m) => {
+          const date = m.meeting_started_at ? new Date(m.meeting_started_at).toLocaleDateString("fr-FR") : "?";
+          const title = m.meeting_title ?? "Meeting";
+          const r = m.meeting_recap ?? {};
+          const parts = [
+            r.context ? `Contexte:\n${r.context}` : null,
+            r.need ? `Besoin:\n${r.need}` : null,
+            r.risks_competition ? `Risques/Concurrence:\n${r.risks_competition}` : null,
+            r.opportunities ? `Opportunités:\n${r.opportunities}` : null,
+            r.next_steps ? `Prochaines étapes:\n${r.next_steps}` : null,
+          ].filter(Boolean).join("\n");
+          return `[MEETING CLAAP ${date}] ${title} (${m.meeting_kind ?? "?"})\n${parts}`;
+        }).join("\n\n")
+      : "";
+
     const contextBlock = [
       `Deal : ${p.dealname ?? "?"} | Stage : ${p.dealstage ?? "?"} | Montant : ${p.amount ? `${parseFloat(p.amount).toLocaleString("fr-FR")}€` : "?"}`,
       `Clôture : ${p.closedate ? new Date(p.closedate).toLocaleDateString("fr-FR") : "?"}`,
@@ -366,6 +410,7 @@ export async function runDealAnalysis(dealId: string, userId: string | null): Pr
       `\n${scoreContext}`,
       engagementLines ? `\nTous les échanges HubSpot :\n${engagementLines}` : "\nÉchanges : aucun enregistré",
       slackSection || null,
+      claapSection || null,
     ].filter(Boolean).join("\n").slice(0, 14000);
 
     const client = new Anthropic({ timeout: 600_000 });
@@ -373,9 +418,10 @@ export async function runDealAnalysis(dealId: string, userId: string | null): Pr
       model: analyzeModel,
       max_tokens: 4000,
       system: `Tu es un expert en vente B2B pour Coachello (coaching professionnel).
-Analyse ce deal commercial en profondeur à partir de TOUTES les données disponibles (score IA, échanges HubSpot, conversations Slack internes, contacts, contexte).
+Analyse ce deal commercial en profondeur à partir de TOUTES les données disponibles (score IA, échanges HubSpot, conversations Slack internes, récaps Sales Coach des meetings Claap, contacts, contexte).
 Sois hyper précis et factuel - base chaque analyse sur des éléments concrets tirés des échanges.
 Les messages Slack sont des conversations internes de l'équipe Coachello - ils contiennent souvent des insights précieux sur l'avancement du deal, les blocages, et le contexte commercial.
+Les récaps Sales Coach sont générés à partir des transcripts des meetings Claap réellement tenus sur ce deal - ce sont une source de vérité de premier ordre sur les besoins, risques, concurrence, opportunités et prochaines étapes évoqués en réunion.
 Ne mentionne jamais la probabilité HubSpot du stage - c'est une valeur automatique non pertinente. Raisonne uniquement sur la dynamique réelle (échanges, signaux, engagement).
 Identifie aussi les ÉVÉNEMENTS CLÉS datés qui retracent le parcours du deal (devis/proposition envoyé, échange ou réunion important, objection majeure, relance décisive, décision ou engagement du prospect…). Pour chacun : une date au format YYYY-MM-DD (convertis depuis les dates DD/MM/YYYY du contexte), un label court, un type, une phrase de contexte. N'invente JAMAIS de date : si un événement ne peut pas être daté à partir du contexte, ne l'inclus pas.
 Utilise l'outil deal_analysis pour retourner ton analyse.
