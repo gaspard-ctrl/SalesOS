@@ -21,7 +21,7 @@ const defs: Anthropic.Tool[] = [
   {
     name: "notion_fetch",
     description:
-      "Lit une page (ou database) Notion de la base de connaissance Coachello EN ENTIER, rendue en markdown. Méthode PAR DÉFAUT : navigation déterministe par les IDs du registre (charge d'abord le guide notion_knowledge via load_guide si ce n'est pas fait). Les sous-pages apparaissent comme des liens avec leur id : descends en refetchant. Cite ensuite chaque page utilisée : Source : [Titre](URL Notion).",
+      "Lit une page (ou database) Notion de la base de connaissance Coachello EN ENTIER, rendue en markdown. Méthode PAR DÉFAUT : navigation déterministe par les IDs du registre (charge d'abord le guide notion_knowledge via load_guide si ce n'est pas fait). COUVERTURE : appelle notion_fetch PLUSIEURS FOIS EN PARALLÈLE dans le même tour, une par page plausible du registre (procédure/runbook + écran de l'outil + qui-fait-quoi), au lieu d'une seule page suivie d'un second tour. Les appels parallèles sont exécutés simultanément : le coût en temps est le même qu'un seul. Les sous-pages apparaissent comme des liens avec leur id : descends en refetchant. Cite ensuite chaque page utilisée : Source : [Titre](URL Notion).",
     input_schema: {
       type: "object" as const,
       properties: {

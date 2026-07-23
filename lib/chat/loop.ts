@@ -11,6 +11,9 @@
  *    l'appel API, JAMAIS persisté dans l'historique : la limite Anthropic est
  *    de 4 breakpoints, en persister accumulerait des marqueurs à chaque tour).
  *  - Les tool_results de guides (load_guide) ne sont jamais élagués.
+ *  - Les tool calls d'un même tour sont exécutés en PARALLÈLE : c'est ce qui
+ *    rend abordable la règle de couverture (fetcher d'un coup toutes les pages
+ *    Notion plausibles plutôt qu'une seule, puis une autre au tour suivant).
  */
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -181,47 +184,57 @@ export async function runLoop(args: {
       );
       currentMessages = [...currentMessages, { role: "assistant", content: message.content }];
 
-      const results: Anthropic.ToolResultBlockParam[] = [];
+      // Filet d'auto-injection : décidé AVANT l'exécution, parce que les outils
+      // tournent en parallèle. Sans réservation en amont, 3 notion_fetch d'un
+      // même tour injecteraient 3 fois le registre (~16k chars x3).
+      const injectIndex = loadedGuides.has("notion_knowledge")
+        ? -1
+        : toolBlocks.findIndex((t) => t.name === "notion_fetch" || t.name === "notion_search");
+      if (injectIndex >= 0) loadedGuides.add("notion_knowledge");
       for (const tool of toolBlocks) {
-        emit({ type: "tool", name: tool.name });
-        const input = tool.input as Record<string, unknown>;
-        try {
-          let result = await executeTool(tool.name, input, ctx);
-
-          if (tool.name === "load_guide" && typeof input.pack === "string") {
-            loadedGuides.add(input.pack);
-          }
-
-          // Filet d'auto-injection : premier outil Notion sans guide chargé ->
-          // on préfixe le registre/les règles au résultat, une seule fois.
-          // Le préfixe 'GUIDE "' est CONTRACTUEL : il protège ce tool_result du
-          // pruning (ci-dessous) et le rend détectable par collectLoadedGuides
-          // au tour suivant (pas de ré-injection en boucle).
-          if (
-            (tool.name === "notion_fetch" || tool.name === "notion_search") &&
-            !loadedGuides.has("notion_knowledge")
-          ) {
-            try {
-              const bundle = await loadGuideBundle();
-              const knowledge = bundle.packs.get("notion_knowledge");
-              if (knowledge) {
-                loadedGuides.add("notion_knowledge");
-                result =
-                  `${GUIDE_RESULT_PREFIX}notion_knowledge" (injecté automatiquement : il n'avait pas été chargé ; suis-le pour la suite de la conversation) :\n\n${knowledge.body}\n\n--- RÉSULTAT DE L'OUTIL ---\n${result}`;
-              }
-            } catch { /* best-effort : le résultat brut part quand même */ }
-          }
-
-          results.push({ type: "tool_result", tool_use_id: tool.id, content: result });
-        } catch (e) {
-          results.push({
-            type: "tool_result",
-            tool_use_id: tool.id,
-            content: `Erreur: ${e instanceof Error ? e.message : "inconnue"}`,
-            is_error: true,
-          });
+        if (tool.name === "load_guide") {
+          const pack = (tool.input as { pack?: string }).pack;
+          if (typeof pack === "string") loadedGuides.add(pack);
         }
       }
+
+      // Exécution PARALLÈLE des tool calls d'un même tour. Le modèle est
+      // explicitement invité à fetcher plusieurs pages Notion / guides d'un
+      // coup (couverture large) : en série, cette couverture coûterait N fois
+      // la latence d'un fetch et serait de fait dissuadée. Promise.all préserve
+      // l'ordre des résultats (contrat Anthropic : un tool_result par tool_use).
+      toolBlocks.forEach((tool) => emit({ type: "tool", name: tool.name }));
+      const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
+        toolBlocks.map(async (tool, idx): Promise<Anthropic.ToolResultBlockParam> => {
+          const input = tool.input as Record<string, unknown>;
+          try {
+            let result = await executeTool(tool.name, input, ctx);
+
+            // Le préfixe 'GUIDE "' est CONTRACTUEL : il protège ce tool_result
+            // du pruning (ci-dessous) et le rend détectable par
+            // collectLoadedGuides au tour suivant (pas de ré-injection).
+            if (idx === injectIndex) {
+              try {
+                const bundle = await loadGuideBundle();
+                const knowledge = bundle.packs.get("notion_knowledge");
+                if (knowledge) {
+                  result =
+                    `${GUIDE_RESULT_PREFIX}notion_knowledge" (injecté automatiquement : il n'avait pas été chargé ; suis-le pour la suite de la conversation) :\n\n${knowledge.body}\n\n--- RÉSULTAT DE L'OUTIL ---\n${result}`;
+                }
+              } catch { /* best-effort : le résultat brut part quand même */ }
+            }
+
+            return { type: "tool_result", tool_use_id: tool.id, content: result };
+          } catch (e) {
+            return {
+              type: "tool_result",
+              tool_use_id: tool.id,
+              content: `Erreur: ${e instanceof Error ? e.message : "inconnue"}`,
+              is_error: true,
+            };
+          }
+        })
+      );
       currentMessages.push({ role: "user", content: results });
 
       // Prune les tool results volumineux des messages anciens pour rester sous
