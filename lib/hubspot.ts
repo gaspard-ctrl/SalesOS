@@ -3,6 +3,12 @@ import { logUsage } from "./log-usage";
 
 export type HubspotObjectType = "contacts" | "deals" | "companies" | "leads";
 
+// Un appel HubSpot qui traîne ne doit jamais consommer tout le budget d'une
+// route synchrone (Netlify coupe la requête à ~26s, cf. leads/finalize). On
+// borne donc chaque appel : mieux vaut une erreur nette et rattrapable qu'un
+// 504 opaque côté navigateur.
+const HUBSPOT_CALL_TIMEOUT_MS = 15_000;
+
 export async function hubspotFetch<T = unknown>(path: string, method = "GET", body?: unknown): Promise<T> {
   const res = await fetch(`https://api.hubapi.com${path}`, {
     method,
@@ -10,6 +16,7 @@ export async function hubspotFetch<T = unknown>(path: string, method = "GET", bo
       Authorization: `Bearer ${process.env.HUBSPOT_ACCESS_TOKEN}`,
       "Content-Type": "application/json",
     },
+    signal: AbortSignal.timeout(HUBSPOT_CALL_TIMEOUT_MS),
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   if (!res.ok) {

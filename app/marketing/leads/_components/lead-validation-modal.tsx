@@ -36,6 +36,32 @@ interface FinalizeResponse {
   error?: string;
 }
 
+interface FinalizeStateResponse {
+  validationStatus?: string;
+  dealId?: string | null;
+  finalized?: boolean;
+}
+
+// Netlify coupe la réponse d'une fonction synchrone à ~26s alors que celle-ci
+// continue de tourner : le deal peut donc être créé sans que le navigateur
+// l'apprenne. Plutôt que d'afficher une erreur (et de pousser à un retry qui
+// créerait un doublon), on redemande l'état réel au serveur pendant quelques
+// secondes, le temps que la fonction termine son écriture en base.
+async function pollFinalized(leadId: string, attempts = 5): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const res = await fetch(`/api/marketing/leads/${leadId}/finalize`);
+      if (!res.ok) continue;
+      const data = (await res.json()) as FinalizeStateResponse;
+      if (data.finalized) return true;
+    } catch {
+      // réseau encore instable : on retente
+    }
+  }
+  return false;
+}
+
 interface Props {
   lead: LeadWithAnalysis | null;
   onClose: () => void;
@@ -191,10 +217,22 @@ export default function LeadValidationModal({ lead, onClose, onSuccess }: Props)
         data = null;
       }
       if (!res.ok || !data?.ok) {
+        // Netlify coupe la réponse à ~26s alors que la fonction continue de
+        // tourner : un 502/504 ne veut donc PAS dire "échec". On va relire
+        // l'état réel avant de crier à l'erreur, sinon on pousse l'admin à
+        // recliquer sur un lead déjà traité.
+        if (res.status === 504 || res.status === 502) {
+          const finalized = await pollFinalized(lead.id);
+          if (finalized) {
+            onSuccess();
+            onClose();
+            return;
+          }
+        }
         throw new Error(
           data?.error ??
             (res.status === 504 || res.status === 502
-              ? "The server took too long to respond (timeout). The deal may already have been created, check HubSpot before retrying."
+              ? "The server took too long to respond (timeout) and the deal was not created. You can retry."
               : `Deal creation failed (HTTP ${res.status})`),
         );
       }

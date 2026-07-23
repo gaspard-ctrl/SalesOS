@@ -43,7 +43,9 @@ interface RawPipeline {
 
 interface DefaultStage {
   pipelineId: string;
+  pipelineLabel: string | null;
   stageId: string;
+  stageLabel: string | null;
 }
 
 let defaultStageCache: { ts: number; value: DefaultStage } | null = null;
@@ -66,7 +68,12 @@ async function resolveDefaultDealStage(): Promise<DefaultStage> {
     .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
   const stage = discovery ?? fallbackOrdered[0];
   if (!stage) throw new Error("No open stage found in the pipeline");
-  const value: DefaultStage = { pipelineId: pipeline.id, stageId: stage.id };
+  const value: DefaultStage = {
+    pipelineId: pipeline.id,
+    pipelineLabel: pipeline.label ?? null,
+    stageId: stage.id,
+    stageLabel: stage.label ?? null,
+  };
   defaultStageCache = { ts: Date.now(), value };
   return value;
 }
@@ -253,6 +260,10 @@ interface SlackPostResult {
   error?: string;
 }
 
+// Slack est en fin de parcours : un appel qui traîne ferait sauter la réponse
+// HTTP alors que le deal est déjà créé. On borne (cf. hubspotFetch).
+const SLACK_CALL_TIMEOUT_MS = 8_000;
+
 async function slackPost(path: string, body: Record<string, unknown>): Promise<SlackPostResult> {
   const res = await fetch(`https://slack.com/api${path}`, {
     method: "POST",
@@ -260,6 +271,7 @@ async function slackPost(path: string, body: Record<string, unknown>): Promise<S
       Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`,
       "Content-Type": "application/json",
     },
+    signal: AbortSignal.timeout(SLACK_CALL_TIMEOUT_MS),
     body: JSON.stringify(body),
   });
   const data = (await res.json()) as SlackPostResult;
@@ -275,6 +287,7 @@ async function loadSlackMembers(): Promise<SlackMember[]> {
   }
   const res = await fetch("https://slack.com/api/users.list?limit=200", {
     headers: { Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}` },
+    signal: AbortSignal.timeout(SLACK_CALL_TIMEOUT_MS),
   });
   const data = (await res.json()) as { ok: boolean; members?: SlackMember[] };
   if (!data.ok || !data.members) return [];
@@ -306,7 +319,20 @@ async function resolveSlackUserIdForOwner(hubspotOwnerId: string): Promise<strin
   return findSlackUserIdByDisplayName(displayName);
 }
 
-function snapshotPatch(snapshot: DealSnapshot | null) {
+interface SnapshotPatch {
+  deal_name: string | null;
+  deal_stage: string | null;
+  deal_stage_label: string | null;
+  deal_pipeline_label: string | null;
+  deal_amount: number | null;
+  deal_close_date: string | null;
+  deal_owner_id: string | null;
+  deal_owner_name: string | null;
+  deal_is_closed: boolean | null;
+  deal_is_closed_won: boolean | null;
+}
+
+function snapshotPatch(snapshot: DealSnapshot | null): SnapshotPatch {
   if (!snapshot) {
     return {
       deal_name: null,
@@ -333,6 +359,105 @@ function snapshotPatch(snapshot: DealSnapshot | null) {
     deal_is_closed: snapshot.is_closed,
     deal_is_closed_won: snapshot.is_closed_won,
   };
+}
+
+// Snapshot d'un deal qu'on vient de créer. Appeler fetchDealContext ici serait
+// absurde : elle déclenche ~15 requêtes HubSpot (owners, pipelines, 3 assocs,
+// puis meetings/calls/notes/emails) pour un deal vieux de 200ms, forcément
+// vide. On a déjà toutes les valeurs sous la main, on écrit exactement le même
+// patch sans un seul aller-retour réseau.
+function createdDealPatch(args: {
+  dealName: string;
+  stage: DefaultStage;
+  ownerId: string;
+  ownerName: string | null;
+}): SnapshotPatch {
+  return {
+    deal_name: args.dealName,
+    deal_stage: args.stage.stageId,
+    deal_stage_label: args.stage.stageLabel,
+    deal_pipeline_label: args.stage.pipelineLabel,
+    deal_amount: null,
+    deal_close_date: null,
+    deal_owner_id: args.ownerId,
+    deal_owner_name: args.ownerName,
+    deal_is_closed: false,
+    deal_is_closed_won: false,
+  };
+}
+
+// Écrit l'état "lead validé + deal rattaché". C'est la barrière d'idempotence :
+// tant qu'elle n'est pas passée, un timeout laisse un deal HubSpot orphelin que
+// la base ignore, et un nouveau clic sur "Validate" recréerait un doublon. Elle
+// est donc appelée IMMÉDIATEMENT après la création du deal, avant les
+// associations et Slack.
+async function persistFinalized(args: {
+  leadId: string;
+  analysisId: string;
+  validatedBy: string;
+  contactId: string | null;
+  dealId: string;
+  source: string | null;
+  patch: SnapshotPatch;
+}): Promise<void> {
+  const nowIso = new Date().toISOString();
+  await db
+    .from("leads")
+    .update({
+      validation_status: "validated",
+      validated_by: args.validatedBy,
+      validated_at: nowIso,
+      analysis_status: "done",
+      analyzed_at: nowIso,
+    })
+    .eq("id", args.leadId);
+
+  await db
+    .from("lead_analyses")
+    .update({
+      status: "done",
+      hubspot_contact_id: args.contactId,
+      hubspot_deal_id: args.dealId,
+      match_strategy: "email",
+      extracted_source: args.source,
+      ...args.patch,
+      updated_at: nowIso,
+    })
+    .eq("id", args.analysisId);
+}
+
+// Réconciliation après un 504 : le navigateur a perdu la réponse mais la
+// fonction a pu finir son travail. Le modal interroge cet endpoint pour savoir
+// si le deal existe déjà, au lieu d'afficher une erreur et de pousser au retry.
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const user = await getAuthenticatedUser();
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  if (!user.is_admin) return NextResponse.json({ error: "Admin only" }, { status: 403 });
+
+  const { id: leadId } = await params;
+  const { data: lead } = await db
+    .from("leads")
+    .select("validation_status, last_analysis_id")
+    .eq("id", leadId)
+    .maybeSingle();
+  const leadRow = lead as { validation_status: string; last_analysis_id: string | null } | null;
+  if (!leadRow) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+
+  let dealId: string | null = null;
+  if (leadRow.last_analysis_id) {
+    const { data: analysis } = await db
+      .from("lead_analyses")
+      .select("hubspot_deal_id")
+      .eq("id", leadRow.last_analysis_id)
+      .maybeSingle();
+    dealId = (analysis as { hubspot_deal_id: string | null } | null)?.hubspot_deal_id ?? null;
+  }
+
+  return NextResponse.json({
+    validationStatus: leadRow.validation_status,
+    dealId,
+    finalized: leadRow.validation_status === "validated" && !!dealId,
+  });
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -378,13 +503,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // for legacy callers.
   let ownerId = fallbackOwnerId ?? "";
   let ownerSlackDisplayName: string | null = null;
+  let ownerName: string | null = null;
   if (requestedUserId) {
     const { data: sales } = await db
       .from("users")
-      .select("hubspot_owner_id, slack_display_name")
+      .select("name, hubspot_owner_id, slack_display_name")
       .eq("id", requestedUserId)
       .maybeSingle();
     const salesRow = sales as {
+      name: string | null;
       hubspot_owner_id: string | null;
       slack_display_name: string | null;
     } | null;
@@ -396,6 +523,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     ownerId = salesRow.hubspot_owner_id;
     ownerSlackDisplayName = salesRow.slack_display_name?.trim() || null;
+    ownerName = salesRow.name?.trim() || null;
   }
   if (!ownerId) {
     return NextResponse.json({ error: "HubSpot owner not found" }, { status: 400 });
@@ -449,12 +577,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // hiccup, or a Netlify sync-function timeout ~26s) must still surface as JSON,
   // otherwise the client's res.json() crashes with "Unexpected end of JSON input"
   // and hides the real cause.
+  // persistedDealId : une fois renseigné, l'essentiel est fait (deal créé +
+  // rattaché en base). Un échec ultérieur (assoc, Slack) ne doit plus se
+  // présenter comme un échec global au sales qui valide.
+  let persistedDealId: string | null = null;
   try {
     let dealId: string;
     let contactId: string | null = analysisRow?.hubspot_contact_id ?? null;
     let companyId: string | null = null;
     let pipelineId: string | null = null;
     let stageId: string | null = null;
+    let ownerDisplayName: string | null = ownerName;
     const domain = domainFromEmail(contactEmail);
 
     if (existingDealId) {
@@ -501,7 +634,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // 4. Create Deal
       dealId = await createDeal(dealName, ownerId, pipelineId, stageId, source);
 
-      // 5. Associate (best-effort, parallel)
+      // 5. Persist AVANT tout le reste : à partir d'ici le deal existe, la base
+      // doit le savoir même si la requête est coupée juste après (Netlify tue
+      // la réponse à ~26s alors que la fonction, elle, continue). Sans ça un
+      // re-clic sur "Validate" repartait sur le chemin création = doublon.
+      await persistFinalized({
+        leadId,
+        analysisId: analysisRow!.id,
+        validatedBy: user.id,
+        contactId,
+        dealId,
+        source,
+        patch: createdDealPatch({ dealName, stage, ownerId, ownerName }),
+      });
+      persistedDealId = dealId;
+
+      // 6. Associate (best-effort, parallel)
       await Promise.allSettled([
         hubspotAssociate("deals", dealId, "contacts", contactId!),
         hubspotAssociate("deals", dealId, "companies", companyId!),
@@ -509,36 +657,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ]);
     }
 
-    // 6. Snapshot the freshly created deal
-    const snapshot = await fetchDealContext(dealId).catch(() => null);
+    // Chemin réassignation uniquement : le deal préexiste, son état réel n'est
+    // connu que de HubSpot, donc on va le chercher (coûteux mais justifié ici).
+    if (existingDealId) {
+      const snapshot = await fetchDealContext(dealId).catch(() => null);
+      ownerDisplayName = ownerName ?? snapshot?.owner_name ?? null;
+      await persistFinalized({
+        leadId,
+        analysisId: analysisRow!.id,
+        validatedBy: user.id,
+        contactId,
+        dealId,
+        source,
+        patch: snapshotPatch(snapshot),
+      });
+      persistedDealId = dealId;
+    }
 
-    // 7. Persist app state
-    const nowIso = new Date().toISOString();
-    await db
-      .from("leads")
-      .update({
-        validation_status: "validated",
-        validated_by: user.id,
-        validated_at: nowIso,
-        analysis_status: "done",
-        analyzed_at: nowIso,
-      })
-      .eq("id", leadId);
-
-    await db
-      .from("lead_analyses")
-      .update({
-        status: "done",
-        hubspot_contact_id: contactId,
-        hubspot_deal_id: dealId,
-        match_strategy: "email",
-        extracted_source: source,
-        ...snapshotPatch(snapshot),
-        updated_at: nowIso,
-      })
-      .eq("id", analysisRow!.id);
-
-    // 8. Slack thread reply tagging the owner
+    // 7. Slack thread reply tagging the owner
     const portalId = process.env.NEXT_PUBLIC_HUBSPOT_PORTAL_ID;
     const dealUrl = portalId
       ? `https://app.hubspot.com/contacts/${portalId}/deal/${dealId}`
@@ -550,7 +686,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ? await findSlackUserIdByDisplayName(ownerSlackDisplayName).catch(() => null)
       : await resolveSlackUserIdForOwner(ownerId).catch(() => null);
     const ownerFallbackName =
-      ownerSlackDisplayName || snapshot?.owner_name || "owner";
+      ownerSlackDisplayName || ownerDisplayName || "owner";
     const ownerTag = slackOwnerUserId
       ? `<@${slackOwnerUserId}>`
       : `@${ownerFallbackName}`;
@@ -564,17 +700,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const slackWarnings: string[] = [];
     if (leadRow.slack_channel_id && leadRow.slack_ts) {
-      const res = await slackPost("/chat.postMessage", {
-        channel: leadRow.slack_channel_id,
-        thread_ts: leadRow.slack_ts,
-        text: slackText,
-      });
-      if (!res.ok) slackWarnings.push(`postMessage in channel: ${res.error ?? "unknown"}`);
+      try {
+        const res = await slackPost("/chat.postMessage", {
+          channel: leadRow.slack_channel_id,
+          thread_ts: leadRow.slack_ts,
+          text: slackText,
+        });
+        if (!res.ok) slackWarnings.push(`postMessage in channel: ${res.error ?? "unknown"}`);
+      } catch (e) {
+        slackWarnings.push(`postMessage threw: ${e instanceof Error ? e.message : "unknown"}`);
+      }
     } else {
       slackWarnings.push("Lead without slack_channel_id/ts, message not sent.");
     }
 
-    // 9. Test phase: DM to the QA user (Arthur) with a summary.
+    // 8. Test phase: DM to the QA user (Arthur) with a summary.
     // The env var accepts either a Slack user id ("U123...") or a display/real
     // name we resolve via users.list.
     let testNotifSent = false;
@@ -594,7 +734,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             const summary = [
               `:white_check_mark: Lead finalisé via SalesOS (phase test)`,
               `• Deal : ${dealUrl ? `<${dealUrl}|${dealName}>` : dealName}`,
-              `• Owner attribué : ${snapshot?.owner_name ?? ownerId}`,
+              `• Owner attribué : ${ownerDisplayName ?? ownerId}`,
               `• Company : ${companyName} (id \`${companyId}\`)`,
               `• Contact : ${contactName || contactEmail} (id \`${contactId}\`)`,
               `• Origine : ${source ?? "non renseignée"}`,
@@ -627,12 +767,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
   } catch (e) {
     console.error("[leads/finalize] failed", e);
-    return NextResponse.json(
-      {
-        ok: false,
-        error: e instanceof Error ? e.message : "Finalize failed unexpectedly",
-      },
-      { status: 500 },
-    );
+    const message = e instanceof Error ? e.message : "Finalize failed unexpectedly";
+    // Deal déjà créé et rattaché : l'échec ne porte que sur du secondaire
+    // (associations, Slack). Renvoyer une erreur rouge ici pousserait à un
+    // retry inutile alors que la validation, elle, a bien eu lieu.
+    if (persistedDealId) {
+      return NextResponse.json({
+        ok: true,
+        dealId: persistedDealId,
+        reassigned: !!existingDealId,
+        slackWarnings: [`Deal créé, mais une étape secondaire a échoué : ${message}`],
+      });
+    }
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }
