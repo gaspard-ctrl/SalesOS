@@ -112,6 +112,13 @@ export default async function AdminPage() {
         </div>
         <div className="flex items-center gap-2">
           <a
+            href="/admin/rag"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+            style={{ background: "#fff", color: "#666", border: "1px solid #e5e5e5" }}
+          >
+            RAG Insights →
+          </a>
+          <a
             href="/admin/logs"
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
             style={{ background: "#fff", color: "#666", border: "1px solid #e5e5e5" }}

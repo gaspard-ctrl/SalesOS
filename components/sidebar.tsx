@@ -18,6 +18,7 @@ import {
   Settings,
   ShieldCheck,
   BarChart3,
+  MessageCircleQuestion,
   Menu,
   X,
   ChevronLeft,
@@ -244,6 +245,16 @@ function SidebarBody({
             label="AE Activity"
             icon={BarChart3}
             active={pathname === "/admin/ae-activity"}
+            collapsed={collapsed}
+            tone="bottom"
+          />
+        )}
+        {isAdmin && (
+          <NavLink
+            href="/admin/rag"
+            label="RAG Insights"
+            icon={MessageCircleQuestion}
+            active={pathname === "/admin/rag"}
             collapsed={collapsed}
             tone="bottom"
           />

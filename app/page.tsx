@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, memo } from "react";
-import { Plus, X, Check, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Plus, X, Check, PanelLeftClose, PanelLeftOpen, ThumbsUp, ThumbsDown } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -12,7 +12,10 @@ import { ToolLogo, logoKeyForTool, logoKeyForSourceKind } from "./_components/to
 import { ChatInputBar, type ChatAttachment } from "./_components/chat-input-bar";
 import { COLORS } from "@/lib/design/tokens";
 
-type Message = { role: "user" | "assistant"; content: string; attachments?: string[]; sources?: ChatSource[] };
+// jobId : id de la row chat_jobs qui a produit la réponse. Sert de cible au
+// feedback 👍/👎 (POST /api/chat/[jobId]/feedback), relu ensuite par
+// /admin/rag où il prime sur l'estimation de satisfaction du juge.
+type Message = { role: "user" | "assistant"; content: string; attachments?: string[]; sources?: ChatSource[]; jobId?: string };
 type ApiMessage = { role: "user" | "assistant"; content: unknown };
 type ChatSource = { kind: string; title: string; url?: string };
 type ToolStep = { name: string | null; label: string };
@@ -171,10 +174,62 @@ const MessageBubble = memo(function MessageBubble({ message }: { message: Messag
           </div>
         </div>
         {message.sources && message.sources.length > 0 && <SourceChips sources={message.sources} />}
+        {message.jobId && <FeedbackButtons jobId={message.jobId} />}
       </div>
     </div>
   );
 });
+
+// 👍/👎 sous une réponse. Optimiste : l'état visuel change tout de suite, l'API
+// est appelée en arrière-plan (un feedback perdu n'est pas un incident). Un
+// re-clic sur le bouton actif retire la note.
+function FeedbackButtons({ jobId }: { jobId: string }) {
+  const [rating, setRating] = useState<"up" | "down" | null>(null);
+
+  const send = (next: "up" | "down") => {
+    const value = rating === next ? null : next;
+    setRating(value);
+    fetch(`/api/chat/${jobId}/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rating: value }),
+    }).catch(() => {});
+  };
+
+  const btn = (kind: "up" | "down") => {
+    const active = rating === kind;
+    const Icon = kind === "up" ? ThumbsUp : ThumbsDown;
+    const activeColor = kind === "up" ? COLORS.ok : "#c02b2b";
+    return (
+      <button
+        type="button"
+        onClick={() => send(kind)}
+        aria-label={kind === "up" ? "Helpful answer" : "Unhelpful answer"}
+        title={kind === "up" ? "Helpful answer" : "Unhelpful answer"}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 26,
+          height: 26,
+          borderRadius: 8,
+          color: active ? activeColor : COLORS.ink4,
+          background: active ? `${activeColor}14` : "transparent",
+          transition: "color 120ms, background 120ms",
+        }}
+      >
+        <Icon size={13} strokeWidth={active ? 2.5 : 2} />
+      </button>
+    );
+  };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 2, marginTop: -2 }}>
+      {btn("up")}
+      {btn("down")}
+    </div>
+  );
+}
 
 // Stable reference for remark plugins array
 const remarkPlugins = [remarkGfm];
@@ -426,7 +481,7 @@ export default function IntelligencePage() {
           const latestHistory: ApiMessage[] | null = Array.isArray(job.history) ? job.history : null;
           const doneSources: ChatSource[] = Array.isArray(job.sources) ? job.sources : [];
           pollRef.current = null;
-          setMessages((prev) => [...prev, { role: "assistant", content: fullText, sources: doneSources }]);
+          setMessages((prev) => [...prev, { role: "assistant", content: fullText, sources: doneSources, jobId }]);
           setSources([]);
           if (latestHistory) setApiHistory(latestHistory);
           setStreamingText("");

@@ -36,7 +36,9 @@ Agent conversationnel unique, architecture **"manifest"** (2026-07-21, plan : [_
 
 Le cerveau (socle + packs sales + guide Notion) vit dans le repo GitHub privé `Coachello.RAG` (`salesos/socle.md`, `salesos/packs/*.md`, `AGENT_GUIDE.md`), fetché avec cache 5 min + snapshot DB de secours ([lib/chat/rag/guide-loader.ts](lib/chat/rag/guide-loader.ts)). **Pièces jointes** : PDF/images (natifs Claude), xlsx, docx, csv, txt, md (upload via trombone, table `chat_attachments`). **Sources consultées** (pages Notion, meetings Claap, fichiers Drive...) émises en temps réel vers le front (colonne `chat_jobs.sources`). Prompt caching Anthropic (socle + tools + historique). Historique conversations en DB, instructions perso par utilisateur via `/prompt`, modèle configurable (défaut : Sonnet).
 
-Code : [lib/chat/run-agent.ts](lib/chat/run-agent.ts) (orchestration), [lib/chat/loop.ts](lib/chat/loop.ts) (boucle agentique + filet d'auto-injection Notion), [lib/chat/tools/](lib/chat/tools/) (outils par famille, règles d'usage dans les descriptions), [lib/chat/prompt/build.ts](lib/chat/prompt/build.ts), [lib/notion/](lib/notion/) (client lecture seule). `lib/chat/core.ts` n'est plus qu'un shim de re-export.
+**Couverture Notion** : sur une question de type "comment on fait X / guide-moi", l'agent ouvre **toutes** les pages plausibles du registre en une fois (procédure + écran de l'outil + qui-fait-quoi), pas seulement la première qui matche. Règle §3.0 du cerveau (`AGENT_GUIDE.md`), rappelée dans l'adapter SalesOS ([lib/chat/rag/guide-loader.ts](lib/chat/rag/guide-loader.ts)) et dans la description de `notion_fetch` ; rendue abordable par l'**exécution parallèle des tool calls** d'un même tour ([lib/chat/loop.ts](lib/chat/loop.ts)) : ouvrir 4 pages coûte le temps d'une.
+
+Code : [lib/chat/run-agent.ts](lib/chat/run-agent.ts) (orchestration), [lib/chat/loop.ts](lib/chat/loop.ts) (boucle agentique, tool calls parallèles + filet d'auto-injection Notion), [lib/chat/tools/](lib/chat/tools/) (outils par famille, règles d'usage dans les descriptions), [lib/chat/prompt/build.ts](lib/chat/prompt/build.ts), [lib/notion/](lib/notion/) (client lecture seule). `lib/chat/core.ts` n'est plus qu'un shim de re-export.
 
 Env requises en plus : `NOTION_TOKEN` (intégration interne partagée sur `🧭 DATABASE`), `GITHUB_TOKEN` + `COACHELLO_RAG_REPO` (lecture du repo cerveau privé).
 
@@ -135,10 +137,11 @@ Répertoire interne Coachello : grille de cartes vers les outils de la plateform
 ### Admin (`/admin`) — réservé aux `users.is_admin = true`
 - **Gestion des utilisateurs** : liste des inscrits, assignation des clés API Claude, suivi tokens + coût (mensuel + total), et toggle **Sales** par utilisateur.
   - Le toggle **Sales** (`users.is_sales`) décide qui reçoit le **deal digest par AE** sur Slack (voir section Cron). Défaut `false` : il faut cocher manuellement les vrais sales. Un user non coché ne reçoit jamais le digest.
-- **Modèles IA** : modèle Claude par fonctionnalité, appliqué à tous (clé `model_preferences` dans `guide_defaults`). Features pilotables : chat, briefing, prospection, mass_prospection, deals_score, deals_analyze, deals_email, sales_coach, meeting_recap, clients, marketing.
+- **Modèles IA** : modèle Claude par fonctionnalité, appliqué à tous (clé `model_preferences` dans `guide_defaults`). Features pilotables : chat, briefing, prospection, mass_prospection, deals_score, deals_analyze, deals_email, sales_coach, meeting_recap, clients, marketing, rag_insights, rag_gaps.
 - **Guides IA** : guides par défaut (bot, prospection, briefing) + reset.
 - **Logs & Usage** (`/admin/logs`) : consommation par user / par feature, catalogue des modèles utilisés.
 - **AE Sales Activity** (`/admin/ae-activity`) : vue manager de l'activité commerciale par AE. Reps **dynamiques** (tous les `users.is_sales = true` avec un `hubspot_owner_id`). Sélecteurs rep + granularité (semaine / mois / trimestre / semestre). Par rep : prospection (appels, emails, dispositions), meetings (bookés HubSpot, tenus Claap, déclarés Slack #new-meetings), funnel, deals, win rate avec deltas période sur période, et **revenu facturé vs objectifs par trimestre** (source : Google Sheet « Dashboard revenue 2026 », pas HubSpot, car le montant des deals HubSpot est peu fiable). Bloc **coaching auto** synthétisé par Claude depuis Sales Coach (`sales_coach_analyses`). Cache Supabase (`ae_activity_snapshots`), refresh hebdo (cron lundi 6h UTC) + gros bouton manuel avec date du dernier refresh. Détail : [__documentation/ae-activity-dashboard-plan.md](__documentation/ae-activity-dashboard-plan.md). Code : [lib/ae-activity/](lib/ae-activity/).
+- **RAG Insights** (`/admin/rag`) : observabilité de CoachelloGPT. Répertorie **toutes** les questions posées à l'agent (chat web `chat_jobs` + Slack `slack_chat_threads`, relus rétroactivement, aucune instrumentation ajoutée au chat), les catégorise (10 catégories fermées), flagge `knowledge` (Notion) vs `sales` (CRM), et estime la **satisfaction 0-100** par tour. Deux signaux : le 👍/👎 explicite posé sous la réponse dans le chat (`chat_jobs.feedback`, prioritaire) et un juge Claude qui regarde la cohérence, la présence de sources et la **réaction du user au tour suivant** (reformulation, "non", correction). Onglet **Notion gaps** : Claude croise les questions ratées avec le registre du pack `notion_knowledge` et l'arbre live 🧭 DATABASE pour sortir les trous, les pages à enrichir et les pages à créer. Cache Supabase (`rag_question_analyses`, un tour n'est jamais réanalysé), refresh hebdo (cron lundi 7h UTC) + boutons manuels "Refresh analysis" et "Send Slack recap". Recap Slack hebdo : DM Arthur en test, Arthur + `RAG_INSIGHTS_RECIPIENTS` en prod. Code : [lib/rag-insights/](lib/rag-insights/).
 
 ---
 
@@ -299,6 +302,11 @@ CLIENTS_ENRICHMENT_DEAL_WHITELIST=    # liste CSV de dealIds HubSpot. Si défini
 AE_REVENUE_DRIVE_FILE_ID=             # (optionnel) fileId Drive du "Dashboard revenue 2026 .xlsx". Défaut : le fichier partagé actuel.
 AE_ACTIVITY_START=                    # (optionnel) date de départ des métriques (défaut 2026-01-01).
 SLACK_NEW_MEETINGS_CHANNEL=           # (optionnel) id du canal Slack #1y-new-meetings (meetings auto-déclarés). Inerte si absent.
+
+# RAG Insights (page admin /admin/rag + recap Slack hebdo)
+RAG_INSIGHTS_SLACK_MODE=              # "prod" (DM Arthur + RAG_INSIGHTS_RECIPIENTS) | "test" (défaut, DM Arthur seul)
+RAG_INSIGHTS_RECIPIENTS=              # (optionnel) emails destinataires en prod, séparés par des virgules. Défaut : gaspard@coachello.io
+NOTION_ROOT_PAGE_ID=                  # (optionnel) racine 🧭 DATABASE, partagée avec l'explorateur Notion. Défaut : la page actuelle.
 ```
 
 > Ne jamais committer `.env.local`. Il est dans `.gitignore`.
@@ -331,6 +339,8 @@ app/
   settings/page.tsx                 # Intégrations + préférences
   admin/page.tsx                    # Admin (users + Sales toggle, modèles, guides)
     admin/logs/page.tsx             # Logs & usage
+    admin/ae-activity/page.tsx      # AE Sales Activity (vue manager)
+    admin/rag/page.tsx              # RAG Insights (questions, satisfaction, trous Notion)
   pokedex/page.tsx                  # Répertoire outils Coachello
 
   # Placeholders « Coming Soon »
@@ -630,6 +640,10 @@ Voir section 1 pour la description fonctionnelle de chaque module. Cette section
 | `/api/admin/drive-token` | GET / POST | Refresh token Drive partagé. |
 | `/api/admin/model-preferences` | GET / PATCH | Préférences modèles globales (clés : chat, briefing, prospection, mass_prospection, deals_*, sales_coach, meeting_recap, clients, marketing). |
 | `/api/deals/ae-digest` | POST | Envoie le deal digest par AE (cron + admin). Destinataires : users `is_sales = true`. |
+| `/api/admin/rag` | GET | RAG Insights : tours analysés, agrégats, dernier rapport de gaps, état du run (`?days=7\|30\|90`). |
+| `/api/admin/rag/refresh` | POST | Relance l'analyse (background function en prod, inline en local). |
+| `/api/admin/rag/send-recap` | POST | Envoie le recap Slack maintenant (ignore l'idempotence). |
+| `/api/chat/[jobId]/feedback` | POST | 👍/👎 du user sous une réponse du chat (`rating: "up" \| "down" \| null`). Pas réservé aux admins. |
 | `/api/admin/ga4-debug` | GET | Debug configuration GA4. |
 | `/api/admin/reset-guides` | POST | Réinitialise les guides par défaut. |
 
@@ -684,6 +698,13 @@ Voir section 11 pour les détails.
   - `resolve-hubspot-company.ts` : lazy resolve `scope_company` → `hubspot_company_id` (fuzzy match + cache).
   - `run-ae-analysis.ts` : prompt Claude + tool `emit_ae_analysis` pour le brief AE Analysis.
 - **[marketing-types.ts](lib/marketing-types.ts)** - Types dashboard marketing.
+- **lib/rag-insights/** - Observabilité de CoachelloGPT (page `/admin/rag`) :
+  - `collect.ts` : reconstruit les tours (question, réponse, pages Notion lues, guides chargés, réaction du user au tour suivant) depuis `chat_jobs` (web) et `slack_chat_threads` (Slack). Exclut les tours déjà analysés.
+  - `analyze.ts` : juge Claude par lots (catégorie, knowledge vs sales, verdict, satisfaction, `answer_summary`, `issue`, `gap_summary`). `syncExplicitFeedback()` réaligne les scores quand un 👍/👎 arrive après l'analyse.
+  - `gaps.ts` : croise les questions ratées avec le registre `notion_knowledge` et l'arbre live 🧭 DATABASE → gaps, pages à enrichir, pages à créer, quick wins.
+  - `stats.ts` : agrégats déterministes (aucun LLM), partagés par la page, le rapport et le recap.
+  - `slack-recap.ts` : rendu et envoi du recap hebdo (mode test / prod via `RAG_INSIGHTS_SLACK_MODE`).
+  - `run.ts` : orchestration collect → analyze → gaps → Slack, avec état dans `rag_insights_meta`.
 
 ### Guides (prompts système)
 - **[guides/bot.ts](lib/guides/bot.ts)** — `DEFAULT_BOT_GUIDE` (routing CRM / général / veille, liste outils, canaux Slack, équipe).
@@ -989,6 +1010,47 @@ CREATE TABLE outreach_log (
 );
 ```
 
+### RAG Insights (`/admin/rag`)
+
+```sql
+-- Feedback explicite sous une réponse du chat web (une row chat_jobs = un tour).
+ALTER TABLE chat_jobs ADD COLUMN feedback TEXT;          -- 'up' | 'down'
+ALTER TABLE chat_jobs ADD COLUMN feedback_at TIMESTAMPTZ;
+
+-- Un tour (question -> réponse) jugé par Claude. L'UNIQUE fait le cache :
+-- un tour n'est jamais réanalysé, donc relancer le refresh ne coûte rien.
+CREATE TABLE rag_question_analyses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source TEXT NOT NULL,                   -- 'web' | 'slack'
+  source_id TEXT NOT NULL,                -- chat_jobs.id | slack_chat_threads.id
+  turn_index INT NOT NULL DEFAULT 0,
+  user_id TEXT, asked_at TIMESTAMPTZ NOT NULL,
+  question TEXT NOT NULL, answer_excerpt TEXT,
+  answer_summary TEXT, issue TEXT,        -- résumé de la réponse / ce qui ne va pas
+  category TEXT, is_knowledge BOOLEAN NOT NULL DEFAULT false,
+  used_notion BOOLEAN NOT NULL DEFAULT false,
+  notion_pages JSONB NOT NULL DEFAULT '[]'::jsonb,
+  guides_loaded JSONB NOT NULL DEFAULT '[]'::jsonb,
+  verdict TEXT,                           -- answered | partial | missing_info | wrong | off_scope
+  satisfaction SMALLINT,                  -- 0-100
+  satisfaction_basis TEXT,                -- explicit (👍/👎) | inferred (juge)
+  gap_summary TEXT, reasoning TEXT,
+  model TEXT, analyzed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (source, source_id, turn_index)
+);
+
+-- Rapport de trous Notion sur une fenêtre : { gaps[], new_pages[], quick_wins[], stats }
+CREATE TABLE rag_gap_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  period_start TIMESTAMPTZ NOT NULL, period_end TIMESTAMPTZ NOT NULL,
+  payload JSONB NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  slack_sent_at TIMESTAMPTZ, slack_recipients TEXT
+);
+
+-- Meta singleton : état du dernier run (idle | running | done | error).
+CREATE TABLE rag_insights_meta (id INT PRIMARY KEY DEFAULT 1, status TEXT NOT NULL DEFAULT 'idle', ...);
+```
+
 Migrations complètes : [supabase/migrations/](supabase/migrations/).
 
 ---
@@ -1006,6 +1068,7 @@ Implémentées en tant que **Netlify Scheduled / Background Functions** dans [ne
 | `sales-coach-recover-stuck-scheduled.mts` | `*/10 * * * *` (toutes les 10 min) | `POST /api/sales-coach/recover-stuck` | `X-Cron-Secret` | Récupère les analyses Claap bloquées en `analyzing` depuis trop longtemps. |
 | `clients-monthly-refresh-scheduled.mts` | `0 3 1 * *` (1er du mois, 3h UTC) | refresh incrémental des clients | `X-Cron-Secret` | Re-enrichit les fiches clients sur les nouvelles activités du mois. |
 | `ae-activity-refresh-scheduled.mts` | `0 6 * * 1` (tous les lundis 6h UTC) | `POST /.netlify/functions/ae-activity-refresh-background` | `Bearer CRON_SECRET` | Recalcule le dashboard **AE Sales Activity** (activité HubSpot + revenu Sheet + Claap + Slack + coaching) pour tous les reps sales. Aussi déclenchable à la demande via le bouton "Refresh" (`X-Internal-Secret`). |
+| `rag-insights-scheduled.mts` | `0 7 * * 1` (tous les lundis 7h UTC) | `POST /.netlify/functions/rag-insights-background` | `Bearer CRON_SECRET` | Analyse les nouveaux tours de CoachelloGPT (**RAG Insights**), reconstruit le rapport de trous Notion et envoie le **recap Slack hebdo** (DM Arthur en test, + `RAG_INSIGHTS_RECIPIENTS` en prod). Aussi déclenchable via les boutons "Refresh analysis" / "Send Slack recap" de `/admin/rag` (`X-Internal-Secret`). |
 
 #### Deal digest par AE (`/api/deals/ae-digest`, `lib/deals/ae-digest.ts`)
 

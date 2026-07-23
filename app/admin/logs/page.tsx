@@ -34,6 +34,8 @@ const FEATURE_LABELS: Record<string, string> = {
   clients_enrich_fields:   "Clients - 30 fields extraction",
   clients_coach_brief:     "Clients - Coach brief",
   clients_deal_recap:      "Clients - Deal recap",
+  rag_insights:            "RAG Insights - Question judge",
+  rag_gaps:                "RAG Insights - Notion gaps",
 };
 
 export type RawLog = {

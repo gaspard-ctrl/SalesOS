@@ -22,6 +22,8 @@ const FEATURES = [
   { key: "clients",        label: "Clients - profiles & recaps",        defaultModel: "claude-sonnet-4-6" },
   { key: "marketing",      label: "Marketing - articles & LinkedIn",    defaultModel: "claude-sonnet-4-6" },
   { key: "orgchart",       label: "Org Chart - hierarchy classification", defaultModel: "claude-sonnet-4-6" },
+  { key: "rag_insights",   label: "RAG Insights - question judge",      defaultModel: "claude-haiku-4-5-20251001" },
+  { key: "rag_gaps",       label: "RAG Insights - Notion gaps",         defaultModel: "claude-sonnet-4-6" },
 ];
 
 export function ModelPreferencesAdmin({ initialPreferences }: { initialPreferences: Record<string, string> }) {

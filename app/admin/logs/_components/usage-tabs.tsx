@@ -157,6 +157,8 @@ const FEATURE_TO_PREF: Record<string, string> = {
   marketing_content_analyze:  "marketing",
   marketing_content_theme:    "marketing",
   marketing_linkedin_analyze: "marketing",
+  rag_insights:               "rag_insights",
+  rag_gaps:                   "rag_gaps",
 };
 
 // Default model per admin pref key (matches model-preferences-admin.tsx)
@@ -171,6 +173,8 @@ const PREF_DEFAULTS: Record<string, string> = {
   meeting_recap:  "claude-haiku-4-5-20251001",
   clients:        "claude-sonnet-4-6",
   marketing:      "claude-sonnet-4-6",
+  rag_insights:   "claude-haiku-4-5-20251001",
+  rag_gaps:       "claude-sonnet-4-6",
 };
 
 export function UsageTabs({
