@@ -392,7 +392,11 @@ seulement quand ils servent.
   demande aucun changement de code.
 - **Garde-fous du RAG portés tels quels** (côté lecture) : zéro invention, citation
   systématique, périmètre borné à `🧭 DATABASE`, "pas encore documenté" si absent,
-  confidentialité. Côté écriture, un seul chemin existe (runner DAILY MAJ) : verrou
+  confidentialité. **Complétés le 2026-07-23 par la règle "fait vs déduction"** (socle +
+  packs pipeline / client-360 / meeting-prep / proposals + `prompt/fallback.ts`) : le
+  "zéro invention" ne couvrait que la donnée fabriquée, pas la déduction présentée comme
+  un fait sourcé (côté Notion c'était déjà couvert par le "pas de déduction" d'AGENT_GUIDE
+  §0, pas côté Sales). Côté écriture, un seul chemin existe (runner DAILY MAJ) : verrou
   d'import de `write.ts`, refus hors fil `daily_maj` validé, barrière de WRITE.md
   chargée avant chaque application, périmètre borné au contenu de pages existantes.
 - **Timeouts** : inchangés (watchdog 6 min, l'architecture n'ajoute pas d'appel LLM).
