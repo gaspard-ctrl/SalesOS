@@ -34,7 +34,7 @@ Agent conversationnel unique, architecture **"manifest"** (2026-07-21, plan : [_
 - **Sales** : HubSpot (contacts, deals, entreprises), Slack, Gmail, Google Drive, sheet revenue (source de vérité CA), LinkedIn (Bright Data), Claap (meetings + transcripts), web (Tavily)
 - **Connaissance Coachello** : base Notion `🧭 DATABASE` (programmes, pricing, pédagogie, positionnement, finance) en **lecture seule stricte** ; l'écriture Notion reste locale (repo `Coachello.RAG`)
 
-Le cerveau (socle + packs sales + guide Notion) vit dans le repo GitHub privé `Coachello.RAG` (`salesos/socle.md`, `salesos/packs/*.md`, `AGENT_GUIDE.md`), fetché avec cache 5 min + snapshot DB de secours ([lib/chat/rag/guide-loader.ts](lib/chat/rag/guide-loader.ts)). **Pièces jointes** : PDF/images (natifs Claude), xlsx, docx, csv, txt, md (upload via trombone, table `chat_attachments`). **Sources consultées** (pages Notion, meetings Claap, fichiers Drive...) émises en temps réel vers le front (colonne `chat_jobs.sources`). Prompt caching Anthropic (socle + tools + historique). Historique conversations en DB, instructions perso par utilisateur via `/prompt`, modèle configurable (défaut : Sonnet).
+Le cerveau (socle + packs sales + guide Notion) vit dans le repo GitHub privé `Coachello.RAG` (`salesos/socle.md`, `salesos/packs/*.md`, `AGENT_GUIDE.md`), fetché avec cache 5 min + snapshot DB de secours ([lib/chat/rag/guide-loader.ts](lib/chat/rag/guide-loader.ts)). **Pièces jointes** : PDF/images (natifs Claude), xlsx, docx, csv, txt, md (upload via trombone, table `chat_attachments`). **Sources consultées** (pages Notion, meetings Claap, fichiers Drive...) émises en temps réel vers le front (colonne `chat_jobs.sources`). Prompt caching Anthropic (socle + tools + historique). Historique conversations en DB, instructions perso par utilisateur via `/prompt`, modèle configurable (défaut : Sonnet). **Une URL par conversation** : `/c/<id>` (bookmarkable, résiste au refresh, l'URL suit la conversation ouverte via `history.replaceState`). Partager = envoyer ce lien, il n'y a rien à activer : l'auteur y retrouve son chat complet et continue d'écrire, un autre membre l'ouvre en **lecture seule**. Le lien **exige une session SalesOS** (middleware Clerk) : lisible par tout collègue connecté, par personne d'autre, et son contenu est live.
 
 **Couverture Notion** : sur une question de type "comment on fait X / guide-moi", l'agent ouvre **toutes** les pages plausibles du registre en une fois (procédure + écran de l'outil + qui-fait-quoi), pas seulement la première qui matche. Règle §3.0 du cerveau (`AGENT_GUIDE.md`), rappelée dans l'adapter SalesOS ([lib/chat/rag/guide-loader.ts](lib/chat/rag/guide-loader.ts)) et dans la description de `notion_fetch` ; rendue abordable par l'**exécution parallèle des tool calls** d'un même tour ([lib/chat/loop.ts](lib/chat/loop.ts)) : ouvrir 4 pages coûte le temps d'une.
 
@@ -317,7 +317,8 @@ NOTION_ROOT_PAGE_ID=                  # (optionnel) racine 🧭 DATABASE, partag
 
 ```
 app/
-  page.tsx                          # CoachelloGPT (chat IA)
+  page.tsx                          # CoachelloGPT (nouveau chat) -> ChatWorkspace
+  c/[id]/page.tsx                   # Une conversation : chat complet (auteur) ou lecture seule (partagée)
   layout.tsx                        # Layout global (Clerk + sidebar + SWR provider)
   error.tsx / not-found.tsx
   _components/                      # Composants partagés app (ChatInputBar, ChatTabs, etc.)
@@ -351,7 +352,7 @@ app/
   api/
     chat/                           # Agent IA streaming (HubSpot + Slack + Drive + Web)
     ask-context/                    # Q/R streaming sur un contexte deal/meeting
-    conversations/                  # CRUD conversations & messages
+    conversations/                  # CRUD conversations & messages + toggle de partage
     briefing/                       # gather + synthesize + send-slack
     calendar/                       # events + status
     gmail/                          # connect + callback + send + draft + search + status
@@ -466,7 +467,7 @@ Voir section 1 pour la description fonctionnelle de chaque module. Cette section
 
 | Page | Fichier | Pour modifier |
 |------|---------|---------------|
-| `/` CoachelloGPT | [app/page.tsx](app/page.tsx) | Outils : [app/api/chat/route.ts](app/api/chat/route.ts) — Prompt : [lib/guides/bot.ts](lib/guides/bot.ts) |
+| `/` et `/c/[id]` CoachelloGPT | [app/_components/chat-workspace.tsx](app/_components/chat-workspace.tsx) | Outils : [app/api/chat/route.ts](app/api/chat/route.ts) — Prompt : [lib/guides/bot.ts](lib/guides/bot.ts) · Vue partagée : [app/c/[id]/page.tsx](app/c/[id]/page.tsx) |
 | `/briefing` | [app/briefing/page.tsx](app/briefing/page.tsx) | Collecte : [app/api/briefing/gather/route.ts](app/api/briefing/gather/route.ts) — Synthèse : [app/api/briefing/synthesize/route.ts](app/api/briefing/synthesize/route.ts) — Guide : [lib/guides/briefing.ts](lib/guides/briefing.ts) |
 | `/deals` | [app/deals/page.tsx](app/deals/page.tsx) | Scoring : [app/api/deals/score/route.ts](app/api/deals/score/route.ts) — Analyse : [app/api/deals/analyze/route.ts](app/api/deals/analyze/route.ts) — Algo : [lib/deal-scoring.ts](lib/deal-scoring.ts) |
 | `/prospecting` | [app/prospecting/page.tsx](app/prospecting/page.tsx) | Recherche : [app/api/prospection/search/route.ts](app/api/prospection/search/route.ts) — Génération : [app/api/prospection/generate/route.ts](app/api/prospection/generate/route.ts) — Guide : [lib/guides/prospection.ts](lib/guides/prospection.ts) |
