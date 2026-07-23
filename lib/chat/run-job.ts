@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db";
-import { runChat, ChatAuthError, type ChatEvent } from "@/lib/chat/core";
+import { runChat, ChatAuthError, type ChatEvent, type ChatSource } from "@/lib/chat/core";
 import { chatToolLabel } from "@/lib/chat/tool-labels";
 
 // Throttle des écritures DB : on ne persiste jamais à chaque token. On flush au
@@ -38,8 +38,11 @@ export async function runChatJob(input: { jobId: string }): Promise<{ ok: boolea
   const { jobId } = input;
 
   // État local accumulé, miroir de la logique onEvent du front (app/page.tsx).
+  // tool_steps porte {name, label} : le front affiche le LOGO de l'outil à côté
+  // du libellé (les anciennes rows en string[] restent lisibles côté front).
   let streamingText = "";
-  let toolSteps: string[] = [];
+  let toolSteps: { name: string | null; label: string }[] = [];
+  let sources: ChatSource[] = [];
   let cost: number | null = null;
   let history: Anthropic.MessageParam[] | null = null;
 
@@ -60,6 +63,7 @@ export async function runChatJob(input: { jobId: string }): Promise<{ ok: boolea
       .update({
         streaming_text: streamingText,
         tool_steps: toolSteps,
+        sources,
         cost,
         updated_at: new Date().toISOString(),
       })
@@ -107,13 +111,19 @@ export async function runChatJob(input: { jobId: string }): Promise<{ ok: boolea
           streamingText += event.text;
           break;
         case "tool":
-          toolSteps = [...toolSteps, chatToolLabel(event.name)];
+          toolSteps = [...toolSteps, { name: event.name, label: chatToolLabel(event.name) }];
           break;
         case "tool_progress":
-          // Remplace la dernière étape (cf. app/page.tsx, event "tool_progress").
+          // Remplace le libellé de la dernière étape en gardant son outil.
           toolSteps = toolSteps.length > 0
-            ? [...toolSteps.slice(0, -1), event.message]
-            : [event.message];
+            ? [...toolSteps.slice(0, -1), { name: toolSteps[toolSteps.length - 1].name, label: event.message }]
+            : [{ name: null, label: event.message }];
+          break;
+        case "source":
+          // Dédup par (kind, title) : une page relue ne s'affiche qu'une fois.
+          if (!sources.some((s) => s.kind === event.source.kind && s.title === event.source.title)) {
+            sources = [...sources, event.source];
+          }
           break;
         case "cost_warning":
           cost = Number(event.cost);
@@ -156,6 +166,7 @@ export async function runChatJob(input: { jobId: string }): Promise<{ ok: boolea
           streaming_text: text,
           final_text: text,
           tool_steps: toolSteps,
+          sources,
           cost,
           history: history ?? null,
           updated_at: new Date().toISOString(),
@@ -171,6 +182,7 @@ export async function runChatJob(input: { jobId: string }): Promise<{ ok: boolea
         streaming_text: result.finalText || streamingText,
         final_text: result.finalText || streamingText,
         tool_steps: toolSteps,
+        sources,
         cost,
         history: history ?? result.messages,
         updated_at: new Date().toISOString(),

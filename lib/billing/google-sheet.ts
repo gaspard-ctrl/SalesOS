@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { downloadWorkbook } from "./drive-xlsx";
 import type { Billing } from "../clients/types";
 
 // Contexte facturation depuis l'onglet "Historique" du fichier revenue
@@ -17,33 +18,6 @@ export type BillingRow = {
   total: number | null;
   revenueByYear: Record<string, number>;
 };
-
-let _driveAccessToken: string | null = null;
-let _driveTokenExpiry = 0;
-
-async function getDriveAccessToken(): Promise<string> {
-  if (_driveAccessToken && Date.now() < _driveTokenExpiry) return _driveAccessToken;
-  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
-  if (!refreshToken) throw new Error("GOOGLE_DRIVE_REFRESH_TOKEN manquant");
-  const res = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      refresh_token: refreshToken,
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      grant_type: "refresh_token",
-    }),
-  });
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => "");
-    throw new Error(`Refresh token Drive échoué (${res.status}): ${errBody.slice(0, 120)}`);
-  }
-  const { access_token, expires_in } = await res.json();
-  _driveAccessToken = access_token;
-  _driveTokenExpiry = Date.now() + ((expires_in ?? 3600) - 60) * 1000;
-  return access_token;
-}
 
 // "€511,165" / "€0" / 0 / "" -> nombre (ou null). Retire €, espaces (y compris
 // insécables) et séparateurs de milliers.
@@ -64,17 +38,7 @@ export async function fetchBillingRows(): Promise<BillingRow[]> {
   }
   const tabName = process.env.BILLING_SHEET_TAB || "Historique";
 
-  const token = await getDriveAccessToken();
-  const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  );
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`Drive download ${res.status}: ${t.slice(0, 120)}`);
-  }
-  const buf = Buffer.from(await res.arrayBuffer());
-  const wb = XLSX.read(buf, { type: "buffer" });
+  const wb = await downloadWorkbook(fileId);
   const sheet = wb.Sheets[tabName];
   if (!sheet) {
     console.warn(`[billing] onglet "${tabName}" introuvable (onglets: ${wb.SheetNames.join(", ")})`);

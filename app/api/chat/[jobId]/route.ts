@@ -13,7 +13,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ job
   const { jobId } = await params;
   const { data, error } = await db
     .from("chat_jobs")
-    .select("id, status, streaming_text, tool_steps, cost, history, final_text, error, updated_at")
+    .select("id, status, streaming_text, tool_steps, sources, cost, history, final_text, error, updated_at")
     .eq("id", jobId)
     .eq("user_id", user.id)
     .maybeSingle();

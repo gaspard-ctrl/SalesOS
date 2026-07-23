@@ -30,12 +30,15 @@ Plateforme interne de l'équipe commerciale et marketing de Coachello. Connecté
 ## 1. Modules & fonctionnalités
 
 ### CoachelloGPT — Agent IA (page d'accueil `/`)
-Agent conversationnel polyvalent en streaming. Trois modes routés automatiquement :
-- **CRM** : HubSpot (contacts, deals, entreprises), Slack (lire/envoyer), Google Drive (recherche/lecture documents)
-- **Conseiller** : méthodologie de vente (MEDDIC, SPIN, Challenger…), rédaction d'emails, négociation, coaching, stratégie go-to-market
-- **Veille** : recherche web temps réel via Tavily
+Agent conversationnel unique, architecture **"manifest"** (2026-07-21, plan : [__documentation/coachello-gpt-rag-plan.md](__documentation/coachello-gpt-rag-plan.md)) : un socle court + un catalogue de guides, et l'agent charge lui-même les guides détaillés via l'outil `load_guide` selon la question. Deux fonctionnements, croisables dans une même réponse :
+- **Sales** : HubSpot (contacts, deals, entreprises), Slack, Gmail, Google Drive, sheet revenue (source de vérité CA), LinkedIn (Bright Data), Claap (meetings + transcripts), web (Tavily)
+- **Connaissance Coachello** : base Notion `🧭 DATABASE` (programmes, pricing, pédagogie, positionnement, finance) en **lecture seule stricte** ; l'écriture Notion reste locale (repo `Coachello.RAG`)
 
-Historique conversations sauvegardé en DB. Prompt système personnalisable par utilisateur via `/prompt`. Modèle IA configurable par fonctionnalité (Haiku / Sonnet / Opus).
+Le cerveau (socle + packs sales + guide Notion) vit dans le repo GitHub privé `Coachello.RAG` (`salesos/socle.md`, `salesos/packs/*.md`, `AGENT_GUIDE.md`), fetché avec cache 5 min + snapshot DB de secours ([lib/chat/rag/guide-loader.ts](lib/chat/rag/guide-loader.ts)). **Pièces jointes** : PDF/images (natifs Claude), xlsx, docx, csv, txt, md (upload via trombone, table `chat_attachments`). **Sources consultées** (pages Notion, meetings Claap, fichiers Drive...) émises en temps réel vers le front (colonne `chat_jobs.sources`). Prompt caching Anthropic (socle + tools + historique). Historique conversations en DB, instructions perso par utilisateur via `/prompt`, modèle configurable (défaut : Sonnet).
+
+Code : [lib/chat/run-agent.ts](lib/chat/run-agent.ts) (orchestration), [lib/chat/loop.ts](lib/chat/loop.ts) (boucle agentique + filet d'auto-injection Notion), [lib/chat/tools/](lib/chat/tools/) (outils par famille, règles d'usage dans les descriptions), [lib/chat/prompt/build.ts](lib/chat/prompt/build.ts), [lib/notion/](lib/notion/) (client lecture seule). `lib/chat/core.ts` n'est plus qu'un shim de re-export.
+
+Env requises en plus : `NOTION_TOKEN` (intégration interne partagée sur `🧭 DATABASE`), `GITHUB_TOKEN` + `COACHELLO_RAG_REPO` (lecture du repo cerveau privé).
 
 ### Briefing Meetings (`/briefing`)
 Prépare automatiquement les meetings à venir en croisant 5 sources :
@@ -135,6 +138,7 @@ Répertoire interne Coachello : grille de cartes vers les outils de la plateform
 - **Modèles IA** : modèle Claude par fonctionnalité, appliqué à tous (clé `model_preferences` dans `guide_defaults`). Features pilotables : chat, briefing, prospection, mass_prospection, deals_score, deals_analyze, deals_email, sales_coach, meeting_recap, clients, marketing.
 - **Guides IA** : guides par défaut (bot, prospection, briefing) + reset.
 - **Logs & Usage** (`/admin/logs`) : consommation par user / par feature, catalogue des modèles utilisés.
+- **AE Sales Activity** (`/admin/ae-activity`) : vue manager de l'activité commerciale par AE. Reps **dynamiques** (tous les `users.is_sales = true` avec un `hubspot_owner_id`). Sélecteurs rep + granularité (semaine / mois / trimestre / semestre). Par rep : prospection (appels, emails, dispositions), meetings (bookés HubSpot, tenus Claap, déclarés Slack #new-meetings), funnel, deals, win rate avec deltas période sur période, et **revenu facturé vs objectifs par trimestre** (source : Google Sheet « Dashboard revenue 2026 », pas HubSpot, car le montant des deals HubSpot est peu fiable). Bloc **coaching auto** synthétisé par Claude depuis Sales Coach (`sales_coach_analyses`). Cache Supabase (`ae_activity_snapshots`), refresh hebdo (cron lundi 6h UTC) + gros bouton manuel avec date du dernier refresh. Détail : [__documentation/ae-activity-dashboard-plan.md](__documentation/ae-activity-dashboard-plan.md). Code : [lib/ae-activity/](lib/ae-activity/).
 
 ---
 
@@ -290,6 +294,11 @@ DEALS_SALES_PIPELINE_ID=        # (optionnel) id du pipeline sales pour le diges
 # Clients (closed-won enrichment)
 CLIENTS_AUTO_ENRICH=                  # "false" (test) bloque l'enrichissement auto au webhook ; le user lance manuellement via le bouton "Lancer l'enrichissement" sur /clients/[id]. Unset ou "true" : auto.
 CLIENTS_ENRICHMENT_DEAL_WHITELIST=    # liste CSV de dealIds HubSpot. Si défini ET auto-enrich activé, seuls ces deals déclenchent Claude au passage closed-won ; les autres restent en pending (manuel).
+
+# AE Sales Activity (dashboard admin /admin/ae-activity)
+AE_REVENUE_DRIVE_FILE_ID=             # (optionnel) fileId Drive du "Dashboard revenue 2026 .xlsx". Défaut : le fichier partagé actuel.
+AE_ACTIVITY_START=                    # (optionnel) date de départ des métriques (défaut 2026-01-01).
+SLACK_NEW_MEETINGS_CHANNEL=           # (optionnel) id du canal Slack #1y-new-meetings (meetings auto-déclarés). Inerte si absent.
 ```
 
 > Ne jamais committer `.env.local`. Il est dans `.gitignore`.
@@ -711,6 +720,7 @@ CREATE TABLE users (
   prospection_guide TEXT,                    -- guides persos (override des défauts)
   briefing_guide TEXT,
   model_preferences JSONB,                   -- override perso des modèles par feature
+  email_signature JSONB,                     -- signature perso ajoutée aux mails de prospection (voir lib/email/signature.ts)
   hubspot_owner_id TEXT,                     -- résolu à la 1ère connexion (match email owners HubSpot)
   slack_user_id TEXT,                        -- résolu à la 1ère connexion (Slack lookupByEmail)
   slack_display_name TEXT,                   -- résolu à la 1ère connexion (Slack users.info)
@@ -995,6 +1005,7 @@ Implémentées en tant que **Netlify Scheduled / Background Functions** dans [ne
 | `score-deals-background.mts` | `0 22 1,15 * *` (1er et 15, 22h UTC) | `POST /api/deals/score-all` (chunks de 5), puis `POST /api/deals/ae-digest` | `X-Cron-Secret` | Rescore tous les deals HubSpot ouverts, **puis envoie le deal digest par AE** (voir ci-dessous). |
 | `sales-coach-recover-stuck-scheduled.mts` | `*/10 * * * *` (toutes les 10 min) | `POST /api/sales-coach/recover-stuck` | `X-Cron-Secret` | Récupère les analyses Claap bloquées en `analyzing` depuis trop longtemps. |
 | `clients-monthly-refresh-scheduled.mts` | `0 3 1 * *` (1er du mois, 3h UTC) | refresh incrémental des clients | `X-Cron-Secret` | Re-enrichit les fiches clients sur les nouvelles activités du mois. |
+| `ae-activity-refresh-scheduled.mts` | `0 6 * * 1` (tous les lundis 6h UTC) | `POST /.netlify/functions/ae-activity-refresh-background` | `Bearer CRON_SECRET` | Recalcule le dashboard **AE Sales Activity** (activité HubSpot + revenu Sheet + Claap + Slack + coaching) pour tous les reps sales. Aussi déclenchable à la demande via le bouton "Refresh" (`X-Internal-Secret`). |
 
 #### Deal digest par AE (`/api/deals/ae-digest`, `lib/deals/ae-digest.ts`)
 

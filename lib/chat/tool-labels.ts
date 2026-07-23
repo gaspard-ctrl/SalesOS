@@ -4,6 +4,7 @@
 // La version Slack a son propre jeu de labels (avec emojis) dans
 // netlify/functions/slack-chat-background.mts.
 export const CHAT_TOOL_LABELS: Record<string, string> = {
+  load_guide: "Loading internal guide…",
   search_contacts: "Searching contacts…",
   search_deals: "Searching deals…",
   get_deals: "Loading pipeline…",
@@ -18,11 +19,15 @@ export const CHAT_TOOL_LABELS: Record<string, string> = {
   web_search: "Searching the web…",
   search_drive: "Searching Google Drive…",
   read_drive_file: "Reading document…",
+  read_drive_excel: "Reading Excel file…",
   list_drive_folder: "Browsing Drive…",
+  get_billing_revenue: "Reading revenue sheet…",
   search_gmail: "Searching your emails…",
   read_gmail_message: "Reading email…",
   search_claap_meetings: "Searching Claap meetings…",
   get_claap_meeting_transcript: "Reading Claap transcript…",
+  notion_fetch: "Reading Coachello knowledge base…",
+  notion_search: "Searching Coachello knowledge base…",
 };
 
 export function chatToolLabel(name: string): string {

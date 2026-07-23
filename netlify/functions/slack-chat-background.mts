@@ -42,6 +42,10 @@ type Payload = {
  * affichés progressivement dans le message Slack pendant que Claude travaille.
  */
 const TOOL_LABELS: Record<string, string> = {
+  load_guide: "📖 Chargement d'un guide interne",
+  notion_fetch: "📚 Lecture base de connaissance Coachello",
+  notion_search: "📚 Recherche base de connaissance Coachello",
+  get_billing_revenue: "💶 Lecture sheet revenue",
   search_contacts: "📇 Recherche HubSpot (contacts)",
   search_deals: "💼 Recherche HubSpot (deals)",
   get_deals: "💼 Récupération du pipeline HubSpot",

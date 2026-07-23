@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse, after } from "next/server";
+import type Anthropic from "@anthropic-ai/sdk";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { runChatJob } from "@/lib/chat/run-job";
+import { expandMessagesWithAttachments, reexpandAttachmentMarkers } from "@/lib/chat/attachments";
 
 export const dynamic = "force-dynamic";
 
@@ -21,14 +23,40 @@ export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const { messages, betterThinking } = await req.json();
+  const { messages, betterThinking, attachmentIds } = await req.json();
+
+  // Pièces jointes (cahiers des charges, RFP...) : les IDs uploadés via
+  // POST /api/chat/attachments sont expandés ici en blocs de contenu Anthropic
+  // (document PDF natif, image, texte extrait), attachés au dernier message
+  // user. Le worker background n'a ainsi rien à refaire, et l'historique
+  // persisté (api_history) porte les documents pour les tours suivants.
+  let inputMessages: Anthropic.MessageParam[] = Array.isArray(messages) ? messages : [];
+  // L'historique rejoué ne porte que des MARQUEURS de pièces jointes (le base64
+  // est strippé avant persistance) : on ré-expand ici, côté serveur.
+  try {
+    inputMessages = await reexpandAttachmentMarkers(user.id, inputMessages);
+  } catch (e) {
+    console.error("[chat] marker re-expansion failed (continuing without):", e);
+  }
+  if (Array.isArray(attachmentIds) && attachmentIds.length > 0) {
+    try {
+      inputMessages = await expandMessagesWithAttachments(
+        user.id,
+        attachmentIds.filter((id: unknown): id is string => typeof id === "string"),
+        inputMessages
+      );
+    } catch (e) {
+      console.error("[chat] attachment expansion failed:", e);
+      return NextResponse.json({ error: "Impossible de charger les pièces jointes" }, { status: 500 });
+    }
+  }
 
   const { data: job, error } = await db
     .from("chat_jobs")
     .insert({
       user_id: user.id,
       status: "running",
-      input_messages: Array.isArray(messages) ? messages : [],
+      input_messages: inputMessages,
       better_thinking: betterThinking === true,
     })
     .select("id")

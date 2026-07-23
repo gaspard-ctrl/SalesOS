@@ -17,6 +17,7 @@ import {
   Network,
   Settings,
   ShieldCheck,
+  BarChart3,
   Menu,
   X,
   ChevronLeft,
@@ -237,6 +238,16 @@ function SidebarBody({
           </button>
         )}
 
+        {isAdmin && (
+          <NavLink
+            href="/admin/ae-activity"
+            label="AE Activity"
+            icon={BarChart3}
+            active={pathname === "/admin/ae-activity"}
+            collapsed={collapsed}
+            tone="bottom"
+          />
+        )}
         {isAdmin && (
           <NavLink
             href="/admin"
