@@ -18,7 +18,11 @@ import {
   Send,
   ChevronDown,
   Sparkles,
+  Wand2,
+  PenLine,
 } from "lucide-react";
+import Link from "next/link";
+import { useUserMe } from "@/lib/hooks/use-user-me";
 import {
   scoreBadge,
   reliabilityLabel,
@@ -89,6 +93,13 @@ export function DealDetailPanel({
   const [sending, setSending] = React.useState(false);
   const [sent, setSent] = React.useState(false);
   const [showComposer, setShowComposer] = React.useState(false);
+  const [emailInstructions, setEmailInstructions] = React.useState("");
+  const [emailError, setEmailError] = React.useState("");
+
+  // Signature perso (configurée dans Settings), injectée à l'envoi par /api/gmail/send.
+  const { signature } = useUserMe();
+  const hasSignature = Boolean(signature?.enabled);
+  const [includeSignature, setIncludeSignature] = React.useState(true);
   const [showScoreDetails, setShowScoreDetails] = React.useState(false);
   const [showEngagements, setShowEngagements] = React.useState(false);
   const [engagementsShown, setEngagementsShown] = React.useState(5);
@@ -104,6 +115,8 @@ export function DealDetailPanel({
     setEmailDraft(null);
     setShowComposer(false);
     setSent(false);
+    setEmailInstructions("");
+    setEmailError("");
     setShowScoreDetails(false);
     setShowEngagements(false);
     setEngagementsShown(5);
@@ -218,44 +231,65 @@ export function DealDetailPanel({
     }
   }, [details]);
 
-  const generateEmail = React.useCallback(async () => {
+  /**
+   * Sans argument : génère un brouillon de zéro. Avec `rewrite`, retouche le
+   * brouillon courant (éditions manuelles comprises) selon les instructions.
+   */
+  const generateEmail = React.useCallback(async (rewrite?: string) => {
     if (!details) return;
     setGenerating(true);
+    setEmailError("");
     try {
       const r = await fetch("/api/deals/generate-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dealId: details.id }),
+        body: JSON.stringify({
+          dealId: details.id,
+          ...(rewrite
+            ? { instructions: rewrite, currentSubject: emailSubject, currentBody: emailBody }
+            : {}),
+        }),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? "Error");
-      setEmailDraft(data);
+      if (rewrite) {
+        // Retouche : on ne touche pas au destinataire éventuellement édité.
+        setEmailSubject(data.subject ?? "");
+        setEmailBody(data.body ?? "");
+        setEmailInstructions("");
+      } else {
+        setEmailDraft(data);
+      }
     } catch (e) {
-      console.error(e);
+      setEmailError(e instanceof Error ? e.message : "Error");
     } finally {
       setGenerating(false);
     }
-  }, [details]);
+  }, [details, emailSubject, emailBody]);
 
   const sendEmail = React.useCallback(async () => {
     if (!emailTo || !emailSubject || !emailBody) return;
     setSending(true);
+    setEmailError("");
     try {
-      const r = await fetch("/api/gmail/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: emailTo, subject: emailSubject, body: emailBody }),
-      });
-      if (r.ok) {
-        setSent(true);
-        setShowComposer(false);
-      }
+      // /api/gmail/send lit un FormData (pièces jointes possibles), pas du JSON.
+      const fd = new FormData();
+      fd.set("to", emailTo);
+      fd.set("subject", emailSubject);
+      fd.set("body", emailBody);
+      fd.set("source", "deals_email");
+      if (hasSignature && includeSignature) fd.set("include_signature", "1");
+      const r = await fetch("/api/gmail/send", { method: "POST", body: fd });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error ?? "Failed to send");
+      setSent(true);
+      setShowComposer(false);
     } catch (e) {
-      console.error(e);
+      setEmailError(e instanceof Error ? e.message : "Error");
     } finally {
       setSending(false);
     }
-  }, [emailTo, emailSubject, emailBody]);
+  }, [emailTo, emailSubject, emailBody, hasSignature, includeSignature]);
 
   const rescore = React.useCallback(async () => {
     if (!details) return;
@@ -429,7 +463,7 @@ export function DealDetailPanel({
           <IconButton
             icon={Mail}
             aria-label="Write an email"
-            onClick={generateEmail}
+            onClick={() => generateEmail()}
             disabled={generating}
             title="Follow-up email"
           />
@@ -1010,6 +1044,97 @@ export function DealDetailPanel({
                     lineHeight: 1.5,
                   }}
                 />
+
+                {/* Reprompt : retouche le brouillon courant plutôt que de tout refaire */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                    padding: 10,
+                    borderRadius: 6,
+                    background: COLORS.bgSoft,
+                  }}
+                >
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: COLORS.ink0 }}>
+                    <Sparkles size={12} style={{ color: COLORS.brand }} />
+                    Ask Claude to rewrite
+                  </span>
+                  <textarea
+                    value={emailInstructions}
+                    onChange={(e) => setEmailInstructions(e.target.value)}
+                    rows={2}
+                    disabled={generating}
+                    placeholder="e.g. Make it shorter, warmer tone, push for a meeting next week…"
+                    style={{
+                      fontSize: 12,
+                      padding: "7px 9px",
+                      borderRadius: 6,
+                      border: `1px solid ${COLORS.line}`,
+                      outline: "none",
+                      resize: "none",
+                      fontFamily: "inherit",
+                      background: "#fff",
+                    }}
+                  />
+                  <button
+                    onClick={() => generateEmail(emailInstructions.trim())}
+                    disabled={generating || !emailInstructions.trim()}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 5,
+                      padding: 7,
+                      borderRadius: 6,
+                      background: generating || !emailInstructions.trim() ? COLORS.bgSoft : COLORS.brand,
+                      color: generating || !emailInstructions.trim() ? COLORS.ink3 : "#fff",
+                      border: generating || !emailInstructions.trim() ? `1px solid ${COLORS.line}` : "none",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: generating || !emailInstructions.trim() ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    <Wand2 size={12} />
+                    {generating ? "Rewriting…" : "Rewrite"}
+                  </button>
+                </div>
+
+                {hasSignature ? (
+                  <button
+                    onClick={() => setIncludeSignature((v) => !v)}
+                    title={includeSignature ? "Signature added to this email" : "Signature disabled for this email"}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      alignSelf: "flex-start",
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      fontSize: 12,
+                      color: includeSignature ? COLORS.brand : COLORS.ink3,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <PenLine size={13} />
+                    {includeSignature ? "Signature on" : "Signature off"}
+                  </button>
+                ) : (
+                  <Link
+                    href="/settings"
+                    title="Set up your signature in Settings"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, alignSelf: "flex-start", fontSize: 12, color: COLORS.ink3 }}
+                  >
+                    <PenLine size={13} />
+                    Add signature
+                  </Link>
+                )}
+
+                {emailError && (
+                  <div style={{ fontSize: 12, color: COLORS.err }}>{emailError}</div>
+                )}
+
                 <div style={{ display: "flex", gap: 6 }}>
                   <button
                     onClick={sendEmail}

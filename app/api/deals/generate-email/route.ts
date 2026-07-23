@@ -34,8 +34,19 @@ export async function POST(req: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const { dealId, instructions } = await req.json() as { dealId: string; instructions?: string };
+  const { dealId, instructions, currentSubject, currentBody } = await req.json() as {
+    dealId: string;
+    instructions?: string;
+    currentSubject?: string;
+    currentBody?: string;
+  };
   if (!dealId) return NextResponse.json({ error: "dealId missing" }, { status: 400 });
+
+  // Avec des instructions + un brouillon existant, on retouche au lieu de repartir de zéro.
+  const rewriteInstructions = (instructions ?? "").trim();
+  const baseSubject = (currentSubject ?? "").trim();
+  const baseBody = (currentBody ?? "").trim();
+  const isRewrite = Boolean(rewriteInstructions && baseBody);
 
   try {
     const DEAL_PROPS = [
@@ -107,14 +118,22 @@ export async function POST(req: NextRequest) {
       contactName ? `Contact principal : ${contactName}${contactTitle ? ` - ${contactTitle}` : ""}` : null,
       toEmail ? `Email : ${toEmail}` : null,
       engagementLines ? `\nHistorique des échanges :\n${engagementLines}` : null,
-      instructions ? `\nInstructions spécifiques : ${instructions}` : null,
+      isRewrite ? `\nEMAIL ACTUEL (à retoucher) :\nObjet : ${baseSubject}\n\n${baseBody}` : null,
+      rewriteInstructions
+        ? `\n${isRewrite ? "INSTRUCTIONS DE RÉÉCRITURE DE L'UTILISATEUR" : "Instructions spécifiques"} : ${rewriteInstructions}`
+        : null,
+      isRewrite
+        ? "\nRetouche cet email en respectant ces instructions. Ne change que ce qui est demandé, garde le reste tel quel."
+        : null,
     ].filter(Boolean).join("\n");
 
     const systemPrompt = [
       "Tu es un expert en vente B2B pour Coachello, une entreprise de coaching professionnel.",
       "Tu rédiges des emails de suivi de deal personnalisés, humains et percutants.",
       "L'email doit faire avancer le deal vers la prochaine étape.",
-      "LANGUE : détecte la langue dominante à partir, dans l'ordre, des Instructions spécifiques, puis de l'Historique des échanges, puis de la Description du deal. Sinon, repli sur le français. Rédige TOUT (subject, body, signature) dans cette langue. Si la source est en anglais, écris en anglais ; en espagnol, en espagnol ; etc.",
+      isRewrite
+        ? "LANGUE : garde celle de l'EMAIL ACTUEL. Les instructions de réécriture ne définissent PAS la langue, sauf demande explicite de l'utilisateur. Rédige TOUT (subject, body, signature) dans cette langue."
+        : "LANGUE : détecte la langue dominante à partir, dans l'ordre, des Instructions spécifiques, puis de l'Historique des échanges, puis de la Description du deal. Sinon, repli sur le français. Rédige TOUT (subject, body, signature) dans cette langue. Si la source est en anglais, écris en anglais ; en espagnol, en espagnol ; etc.",
       NO_EM_DASH_RULE,
       "Réponds UNIQUEMENT en JSON valide : { \"subject\": \"...\", \"body\": \"...\" }",
       "Le body doit être en texte brut (pas de HTML, pas de markdown).",
@@ -132,7 +151,13 @@ export async function POST(req: NextRequest) {
       messages: [{ role: "user", content: `Rédige un email de suivi pour ce deal :\n\n${contextBlock}` }],
     });
 
-    logUsage(user.id, emailModel, message.usage.input_tokens, message.usage.output_tokens, "deals_email");
+    logUsage(
+      user.id,
+      emailModel,
+      message.usage.input_tokens,
+      message.usage.output_tokens,
+      isRewrite ? "deals_email_rewrite" : "deals_email",
+    );
     const raw = message.content[0].type === "text" ? message.content[0].text : "";
     let subject = "";
     let body = "";

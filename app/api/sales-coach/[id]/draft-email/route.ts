@@ -25,18 +25,31 @@ const draftTool: Anthropic.Tool = {
   },
 };
 
-export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { id } = await params;
+
+  // Body optionnel : sans body on régénère de zéro, avec `instructions` on
+  // retouche le brouillon courant (édité côté client) selon la demande.
+  const {
+    instructions = "",
+    currentSubject = "",
+    currentBody = "",
+  } = (await req.json().catch(() => ({}))) as {
+    instructions?: string;
+    currentSubject?: string;
+    currentBody?: string;
+  };
+  const rewriteInstructions = instructions.trim();
 
   const { data: userRow } = await db.from("users").select("is_admin, name").eq("id", user.id).single();
   const isAdmin = !!userRow?.is_admin;
 
   const { data: row } = await db
     .from("sales_coach_analyses")
-    .select("user_id, meeting_title, meeting_started_at, analysis, deal_snapshot, recorder_email")
+    .select("user_id, meeting_title, meeting_started_at, analysis, deal_snapshot, recorder_email, email_draft")
     .eq("id", id)
     .single();
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -67,6 +80,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     ? new Date(row.meeting_started_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })
     : null;
 
+  // Brouillon de référence pour une retouche : ce que l'utilisateur a sous les
+  // yeux (donc ses éditions manuelles), sinon la dernière version enregistrée.
+  const storedDraft = (row.email_draft ?? null) as { subject?: string; body?: string } | null;
+  const baseSubject = currentSubject.trim() || storedDraft?.subject?.trim() || "";
+  const baseBody = currentBody.trim() || storedDraft?.body?.trim() || "";
+  const isRewrite = Boolean(rewriteInstructions && baseBody);
+
   const userPrompt = [
     `Tu rédiges un email de suivi commercial post-meeting pour ${senderName}.`,
     `Le mail est envoyé à : ${contactNames || "le prospect"}.`,
@@ -82,6 +102,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     "",
     "Règles de rédaction :",
     "- LANGUE : détecte la langue dominante de la Synthèse du meeting et des Next steps. Sinon, repli sur le français. Rédige TOUT (subject, body, signature) dans cette langue. Si la synthèse est en anglais, écris en anglais ; en espagnol, en espagnol ; etc.",
+    isRewrite
+      ? "- Les instructions de réécriture ne définissent PAS la langue : garde celle de l'email actuel, sauf si l'utilisateur demande explicitement une autre langue."
+      : "",
     "- ton chaleureux mais sobre, pas commercial",
     "- 4-6 phrases max",
     "- pas de markdown, pas de bullet points dans le corps",
@@ -89,6 +112,14 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     "- finir par une signature simple avec le prénom",
     "- jamais inventer un fait, un chiffre, un engagement non discuté",
     `- ${NO_EM_DASH_RULE}`,
+    isRewrite
+      ? "- En cas de conflit, les INSTRUCTIONS DE RÉÉCRITURE priment sur les règles de longueur et de ton ci-dessus."
+      : "",
+    isRewrite ? `\nEMAIL ACTUEL (à retoucher) :\nObjet : ${baseSubject}\n\n${baseBody}` : "",
+    isRewrite ? `\nINSTRUCTIONS DE RÉÉCRITURE DE L'UTILISATEUR :\n${rewriteInstructions}` : "",
+    isRewrite
+      ? "\nRetouche cet email en respectant ces instructions. Ne change que ce qui est demandé, garde le reste tel quel."
+      : "",
     "",
     "Utilise l'outil email_draft pour retourner le sujet + le corps.",
   ].filter(Boolean).join("\n");
@@ -102,7 +133,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     tool_choice: { type: "tool" as const, name: "email_draft" },
   });
 
-  logUsage(user.id, model, message.usage.input_tokens, message.usage.output_tokens, "sales_coach_email_draft");
+  logUsage(
+    user.id,
+    model,
+    message.usage.input_tokens,
+    message.usage.output_tokens,
+    isRewrite ? "sales_coach_email_rewrite" : "sales_coach_email_draft",
+  );
 
   const block = message.content.find((b) => b.type === "tool_use");
   if (!block || !("input" in block)) {
