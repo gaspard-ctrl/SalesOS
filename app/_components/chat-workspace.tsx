@@ -721,7 +721,7 @@ function ConversationsPanel({
           Chats
         </span>
       </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "0 8px 12px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "0 8px 12px", fontFamily: "var(--font-chats), system-ui, sans-serif" }}>
         {conversations.length === 0 && (
           <p style={{ fontSize: 12, color: COLORS.ink5, padding: "8px 6px", margin: 0 }}>No conversations yet.</p>
         )}

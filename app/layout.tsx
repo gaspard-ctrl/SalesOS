@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Geist, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,6 +10,7 @@ import Sidebar from "@/components/sidebar";
 import { SidebarProvider } from "@/components/sidebar/sidebar-context";
 
 const geist = Geist({ subsets: ["latin"] });
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-chats" });
 
 export const metadata: Metadata = {
   title: "SalesOS",
@@ -25,7 +26,7 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en" suppressHydrationWarning>
-        <body className={`${geist.className} antialiased`} style={{ background: "#ffffff", color: "#111" }}>
+        <body className={`${geist.className} ${spaceGrotesk.variable} antialiased`} style={{ background: "#ffffff", color: "#111" }}>
           <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:p-2 focus:bg-white focus:text-black">
             Skip to main content
           </a>
