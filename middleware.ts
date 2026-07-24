@@ -1,5 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
@@ -13,7 +13,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/sales-coach/recover-stuck(.*)", // Cron / UI — accepts Bearer CRON_SECRET OR Clerk session (admin)
 ]);
 
-export default clerkMiddleware(async (auth, request) => {
+const handleRequest = clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
     await auth.protect();
   }
@@ -29,6 +29,31 @@ export default clerkMiddleware(async (auth, request) => {
 
   return response;
 });
+
+// Cookies Clerk posés sur le navigateur. On les efface quand la session est
+// illisible, sinon chaque requête suivante replante sur le même cookie.
+const CLERK_COOKIES = ["__session", "__client_uat", "__clerk_db_jwt", "__clerk_handshake"];
+
+// Un cookie `__session` corrompu (JWT tronqué, instance Clerk changée, clés
+// tournées) fait jeter le décodage du token À L'INTÉRIEUR de clerkMiddleware :
+// "Unexpected token ... is not valid JSON". Sans rattrapage, l'exception tue
+// l'edge function Netlify et l'utilisateur voit "This edge function has
+// crashed" sur TOUTE l'app, sans moyen de s'en sortir. On rattrape donc pour
+// repartir proprement vers la connexion, cookies effacés.
+export default async function middleware(request: NextRequest, event: NextFetchEvent) {
+  try {
+    return await handleRequest(request, event);
+  } catch (error) {
+    console.error("[middleware] session illisible, reset des cookies Clerk:", error);
+    // Sur /sign-in on laisse passer (un redirect vers soi-même bouclerait),
+    // ailleurs on renvoie vers la connexion.
+    const response = isPublicRoute(request)
+      ? NextResponse.next()
+      : NextResponse.redirect(new URL("/sign-in", request.url));
+    for (const name of CLERK_COOKIES) response.cookies.delete(name);
+    return response;
+  }
+}
 
 export const config = {
   matcher: [
