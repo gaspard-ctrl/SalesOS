@@ -184,6 +184,13 @@ export async function runLoop(args: {
       );
       currentMessages = [...currentMessages, { role: "assistant", content: message.content }];
 
+      // Ce tour appelle des outils : tout texte streamé avant (préambule type
+      // "je regarde…") n'appartient pas à la réponse finale. On le retire de la
+      // bulle pour que l'écriture ne démarre visiblement qu'au dernier tour, en
+      // continu. Le prompt demande déjà au modèle de ne pas narrer ici ; ce reset
+      // est le filet déterministe si le modèle glisse.
+      emit({ type: "text_reset" });
+
       // Filet d'auto-injection : décidé AVANT l'exécution, parce que les outils
       // tournent en parallèle. Sans réservation en amont, 3 notion_fetch d'un
       // même tour injecteraient 3 fois le registre (~16k chars x3).

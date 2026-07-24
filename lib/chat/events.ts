@@ -9,6 +9,10 @@ import type { ChatSource } from "./tools/types";
  */
 export type ChatEvent =
   | { type: "text"; text: string }
+  // Vide le texte déjà streamé : émis quand un tour se termine par un tool_use,
+  // pour qu'un éventuel préambule ("je regarde…") ne pollue pas la bulle avant
+  // que le modèle ne rédige sa réponse finale d'un seul tenant.
+  | { type: "text_reset" }
   | { type: "tool"; name: string }
   | { type: "tool_progress"; message: string }
   | { type: "source"; source: ChatSource }

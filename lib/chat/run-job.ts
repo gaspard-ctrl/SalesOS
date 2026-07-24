@@ -110,6 +110,11 @@ export async function runChatJob(input: { jobId: string }): Promise<{ ok: boolea
         case "text":
           streamingText += event.text;
           break;
+        case "text_reset":
+          // Tour qui bascule vers des outils : on jette le préambule éventuel
+          // pour que seule la réponse finale s'affiche dans la bulle.
+          streamingText = "";
+          break;
         case "tool":
           toolSteps = [...toolSteps, { name: event.name, label: chatToolLabel(event.name) }];
           break;
