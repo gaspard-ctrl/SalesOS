@@ -7,7 +7,21 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { dealNameSearchFilters } from "@/lib/hubspot";
-import type { ToolModule } from "./types";
+import type { ToolContext, ToolModule } from "./types";
+
+/**
+ * Chaque outil HubSpot émet une source, MÊME quand il ne trouve rien : c'est
+ * ce que l'utilisateur lit ("N sources reviewed") pour juger si la réponse a
+ * cherché. Le nombre de résultats fait partie du libellé, pour qu'un zéro soit
+ * visible à l'écran au lieu d'être noyé dans la prose de la réponse.
+ */
+function emit(ctx: ToolContext, title: string) {
+  ctx.onSource({ kind: "hubspot", title });
+}
+
+function plural(n: number, word: string) {
+  return `${n} ${word}${n > 1 ? "s" : ""}`;
+}
 
 // ── Helper API ───────────────────────────────────────────────────────────────
 
@@ -49,6 +63,21 @@ function getPropertyNames(objectType: string): string[] {
   return PROPS[objectType] ?? PROPS.contacts;
 }
 
+/**
+ * Filtres de recherche sur le NOM d'une company, même logique que
+ * `dealNameSearchFilters` : tokens en wildcard, robustes aux espaces et aux
+ * noms concaténés ("Health Hero" retrouve "HealthHero").
+ */
+function companyNameSearchFilters(query: string) {
+  return query
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 2)
+    .map((token) => ({ propertyName: "name", operator: "CONTAINS_TOKEN", value: `*${token}*` }));
+}
+
 function stripEmpty(obj: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(obj).filter(([, v]) => v !== null && v !== "" && v !== undefined)
@@ -61,7 +90,8 @@ const defs: Anthropic.Tool[] = [
   {
     name: "search_contacts",
     description:
-      "Recherche des contacts HubSpot par nom, email ou entreprise. Pour les prospects et clients. Ne cherche JAMAIS un commercial Coachello ici : ce sont des owners (fournis dans ton contexte), pas des contacts.",
+      "Recherche des contacts HubSpot par nom, email ou entreprise. Pour les prospects et clients. Ne cherche JAMAIS un commercial Coachello ici : ce sont des owners (fournis dans ton contexte), pas des contacts. " +
+      "PÉRIMÈTRE : recherche plein texte HubSpot sur prénom, nom, email, téléphone, site et champ company du contact. Un contact dont le champ company est vide ne remonte pas sur le nom de sa société : passe alors par search_companies.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -75,7 +105,8 @@ const defs: Anthropic.Tool[] = [
   {
     name: "search_deals",
     description:
-      "Recherche UN deal HubSpot précis par nom de deal ou d'entreprise. À utiliser quand un deal/une société est nommé explicitement. Pour une analyse de masse du pipeline, utilise get_deals (UNE fois), jamais search_deals en boucle. Rappel : le montant d'un deal n'est PAS le CA facturé (source de vérité facturation = get_billing_revenue).",
+      "Recherche UN deal HubSpot précis par nom. À utiliser quand un deal/une société est nommé explicitement. Pour une analyse de masse du pipeline, utilise get_deals (UNE fois), jamais search_deals en boucle. Rappel : le montant d'un deal n'est PAS le CA facturé (source de vérité facturation = get_billing_revenue). " +
+      "PÉRIMÈTRE : ne matche QUE le champ dealname, jamais la company associée. Un zéro ici ne prouve donc PAS que le compte est inconnu de HubSpot : enchaîne avec search_companies (qui remonte la société ET ses deals, quel que soit leur nom) avant de conclure quoi que ce soit.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -102,7 +133,8 @@ const defs: Anthropic.Tool[] = [
   },
   {
     name: "get_companies",
-    description: "Récupère les entreprises dans HubSpot. Pour des questions sur les comptes, les secteurs, les tailles.",
+    description:
+      "LISTE les premières entreprises de HubSpot, sans filtre. Utile pour un panorama (secteurs, tailles), JAMAIS pour savoir si une société précise existe : il n'y a aucun paramètre de recherche ici, tu ne verrais que les N premières. Pour chercher une société nommée, c'est search_companies.",
     input_schema: {
       type: "object" as const,
       properties: { limit: { type: "number", description: "Nombre max de résultats (défaut : 20)" } },
@@ -146,6 +178,21 @@ const defs: Anthropic.Tool[] = [
       required: ["deal_id"],
     },
   },
+  {
+    name: "search_companies",
+    description:
+      "Recherche une ENTREPRISE dans HubSpot par nom ou domaine, et renvoie ses deals associés (ouverts, gagnés et perdus) quel que soit leur nom. " +
+      "RÉFLEXE : dès qu'une question nomme une société ('où on en est avec X', 'est-ce qu'on a déjà parlé à X'), c'est ici qu'on vérifie si le compte existe, PAS search_deals (qui ne matche que le nom du deal). " +
+      "Un compte peut très bien exister en company avec un deal nommé autrement, ou sans deal du tout. Tant que cet outil n'a pas répondu, tu n'as pas le droit d'écrire que le compte est absent de HubSpot.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Nom ou domaine de la société (ex: 'MBDA', 'mbda.net')" },
+        limit: { type: "number", description: "Nombre max de sociétés (défaut : 10)" },
+      },
+      required: ["query"],
+    },
+  },
 ];
 
 // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -184,6 +231,7 @@ const module_: ToolModule = {
           if (!byId.has(r.id)) byId.set(r.id, { id: r.id, properties: stripEmpty(r.properties) });
         }
       }
+      emit(ctx, `Contacts "${rawQuery}" (${plural(byId.size, "result")})`);
       return JSON.stringify([...byId.values()]);
     },
 
@@ -207,6 +255,17 @@ const module_: ToolModule = {
         id: r.id,
         properties: stripEmpty(r.properties),
       }));
+      const query = String(input.query ?? "");
+      emit(ctx, `Deals "${query}" (${plural(results.length, "result")})`);
+      if (results.length === 0) {
+        // Le modèle doit savoir CE QUE ce zéro ne couvre pas, sinon il le
+        // présente comme "ce compte n'existe pas dans HubSpot" (faux).
+        return JSON.stringify({
+          count: 0,
+          searched: "dealname uniquement",
+          note: `Aucun deal dont le NOM contient "${query}". Ce n'est pas une preuve que le compte est absent de HubSpot : la company peut exister avec des deals nommés autrement. Appelle search_companies("${query}") avant de conclure.`,
+        });
+      }
       return JSON.stringify(results);
     },
 
@@ -242,6 +301,7 @@ const module_: ToolModule = {
       const note = truncated
         ? `⚠️ Résultats partiels : ${allResults.length} deals (limite atteinte).`
         : `✅ ${allResults.length} deals récupérés.`;
+      emit(ctx, `Pipeline (${plural(allResults.length, "deal")})`);
       const compact = (allResults as { id: string; properties: Record<string, string> }[]).map((d) => {
         const p = d.properties;
         const date = p.createdate ? p.createdate.slice(0, 10) : "";
@@ -252,7 +312,7 @@ const module_: ToolModule = {
       return `${note}\nformat: id|nom|stage|montant|createdate|closedate|statut\nPour obtenir les conversations d'un deal, utilise get_deal_activity avec son id.\n${compact}`;
     },
 
-    get_companies: async (input) => {
+    get_companies: async (input, ctx) => {
       const props = getPropertyNames("companies");
       const data = await hubspot(
         `/crm/v3/objects/companies?limit=${input.limit || 20}&properties=${props.join(",")}`
@@ -261,16 +321,21 @@ const module_: ToolModule = {
         id: r.id,
         properties: stripEmpty(r.properties),
       }));
+      emit(ctx, `Companies list (${results.length} companies)`);
       return JSON.stringify(results);
     },
 
-    get_contact_details: async (input) => {
+    get_contact_details: async (input, ctx) => {
       const props = getPropertyNames("contacts");
       const data = await hubspot(`/crm/v3/objects/contacts/${input.contact_id}?properties=${props.join(",")}`);
+      const p = data.properties ?? {};
+      const name = [p.firstname, p.lastname].filter(Boolean).join(" ") || `Contact ${input.contact_id}`;
+      emit(ctx, `Contact ${name}`);
       return JSON.stringify({ id: data.id, properties: stripEmpty(data.properties) });
     },
 
-    get_contact_activity: async (input) => {
+    get_contact_activity: async (input, ctx) => {
+      emit(ctx, `Contact ${input.contact_id} history`);
       const [notes, emails, calls, meetings] = await Promise.allSettled([
         hubspot(`/crm/v3/objects/notes/search`, "POST", {
           filterGroups: [{ filters: [{ propertyName: "associations.contact", operator: "EQ", value: input.contact_id }] }],
@@ -301,7 +366,8 @@ const module_: ToolModule = {
       });
     },
 
-    get_deal_activity: async (input) => {
+    get_deal_activity: async (input, ctx) => {
+      emit(ctx, `Deal ${input.deal_id} history`);
       const T = 1500;
       const [notes, emails, calls, meetings] = await Promise.allSettled([
         hubspot(`/crm/v3/objects/notes/search`, "POST", {
@@ -354,7 +420,80 @@ const module_: ToolModule = {
       });
     },
 
-    get_deal_contacts: async (input) => {
+    search_companies: async (input, ctx) => {
+      const rawQuery = String(input.query ?? "").trim();
+      const limit = Math.max(1, Math.min(50, (input.limit as number | undefined) ?? 10));
+      const props = getPropertyNames("companies");
+
+      // Trois angles en parallele, fusionnes par id : le `query` HubSpot (nom,
+      // domaine, téléphone, site), la même requête espaces retirés (une company
+      // "HealthHero" ne remonte pas sur "Health Hero"), et un filtre par tokens
+      // wildcard sur `name` (qui rattrape les noms longs type "MBDA France SAS").
+      const collapsed = rawQuery.replace(/\s+/g, "");
+      const queries = collapsed && collapsed !== rawQuery ? [rawQuery, collapsed] : [rawQuery];
+      const nameFilters = companyNameSearchFilters(rawQuery);
+      const searches: Promise<{ results?: { id: string; properties: Record<string, unknown> }[] }>[] = [
+        ...queries.map((q) =>
+          hubspot("/crm/v3/objects/companies/search", "POST", { query: q, limit, properties: props }),
+        ),
+      ];
+      if (nameFilters.length) {
+        searches.push(
+          hubspot("/crm/v3/objects/companies/search", "POST", {
+            filterGroups: [{ filters: nameFilters }],
+            limit,
+            properties: props,
+          }),
+        );
+      }
+      const settled = await Promise.allSettled(searches);
+      const byId = new Map<string, { id: string; properties: Record<string, unknown> }>();
+      for (const r of settled) {
+        if (r.status !== "fulfilled") continue;
+        for (const c of r.value.results ?? []) {
+          if (!byId.has(c.id)) byId.set(c.id, { id: c.id, properties: stripEmpty(c.properties) });
+        }
+      }
+      const companies = [...byId.values()].slice(0, limit);
+      emit(ctx, `Companies "${rawQuery}" (${companies.length} results)`);
+
+      if (companies.length === 0) {
+        return JSON.stringify({
+          count: 0,
+          note: `Aucune company HubSpot ne matche "${rawQuery}" (nom, domaine, site). Restent à tenter avant de conclure : une autre orthographe, le groupe parent ou la filiale, search_contacts sur le nom, search_gmail et search_claap_meetings sur le domaine email.`,
+        });
+      }
+
+      // Les deals de la company, quel que soit leur NOM : c'est tout l'intérêt
+      // de cet outil face à search_deals, qui ne matche que le dealname.
+      const dealProps = getPropertyNames("deals");
+      const withDeals = await Promise.all(
+        companies.map(async (c) => {
+          let deals: { id: string; properties: Record<string, unknown> }[] = [];
+          let dealsError: string | undefined;
+          try {
+            const assoc = await hubspot(`/crm/v3/objects/companies/${c.id}/associations/deals`);
+            const ids = ((assoc.results ?? []) as { id: string }[]).slice(0, 20).map((a) => a.id);
+            const fetched = await Promise.allSettled(
+              ids.map((id) => hubspot(`/crm/v3/objects/deals/${id}?properties=${dealProps.join(",")}`)),
+            );
+            deals = fetched
+              .filter((r): r is PromiseFulfilledResult<{ id: string; properties: Record<string, unknown> }> => r.status === "fulfilled")
+              .map((r) => ({ id: r.value.id, properties: stripEmpty(r.value.properties) }));
+          } catch (e) {
+            // Jamais en silence : un échec d'association ne doit pas se lire
+            // comme "cette company n'a aucun deal".
+            dealsError = e instanceof Error ? e.message : "inconnue";
+          }
+          return { ...c, deals_count: deals.length, deals, ...(dealsError ? { deals_error: dealsError } : {}) };
+        }),
+      );
+
+      return JSON.stringify({ count: withDeals.length, companies: withDeals });
+    },
+
+    get_deal_contacts: async (input, ctx) => {
+      emit(ctx, `Deal ${input.deal_id} contacts`);
       const data = await hubspot(`/crm/v3/objects/deals/${input.deal_id}/associations/contacts`);
       if (!data.results?.length) return "[]";
       const contacts = await Promise.all(

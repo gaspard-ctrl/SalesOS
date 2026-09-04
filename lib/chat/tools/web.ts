@@ -13,9 +13,18 @@ type TavilyResult = {
   published_date?: string;
 };
 
-async function searchTavily(query: string, days = 30): Promise<TavilyResult[]> {
+/**
+ * Une clé absente ou un appel en échec renvoyaient un tableau vide,
+ * indistinguable d'une recherche qui n'a rien donné : le modèle annonçait
+ * "aucun résultat" alors que l'outil n'avait pas tourné. L'erreur remonte
+ * désormais telle quelle.
+ */
+async function searchTavily(
+  query: string,
+  days = 30
+): Promise<{ results: TavilyResult[]; error?: string }> {
   const apiKey = process.env.TAVILY_API_KEY;
-  if (!apiKey) return [];
+  if (!apiKey) return { results: [], error: "TAVILY_API_KEY manquant : la recherche web n'est pas configuree." };
   try {
     const res = await fetch("https://api.tavily.com/search", {
       method: "POST",
@@ -28,11 +37,11 @@ async function searchTavily(query: string, days = 30): Promise<TavilyResult[]> {
         days,
       }),
     });
-    if (!res.ok) return [];
+    if (!res.ok) return { results: [], error: `Tavily a répondu ${res.status}.` };
     const data = await res.json();
-    return (data.results ?? []) as TavilyResult[];
-  } catch {
-    return [];
+    return { results: (data.results ?? []) as TavilyResult[] };
+  } catch (e) {
+    return { results: [], error: e instanceof Error ? e.message : "erreur inconnue" };
   }
 }
 
@@ -54,8 +63,11 @@ const defs: Anthropic.Tool[] = [
 const module_: ToolModule = {
   defs,
   handlers: {
-    web_search: async (input) => {
-      const results = await searchTavily(input.query as string, (input.days as number) ?? 30);
+    web_search: async (input, ctx) => {
+      const query = String(input.query ?? "");
+      const { results, error } = await searchTavily(query, (input.days as number) ?? 30);
+      ctx.onSource({ kind: "web", title: `"${query}" (${results.length} results)` });
+      if (error) return `La recherche web n'a pas pu tourner : ${error} Ne présente pas ca comme une absence de résultat.`;
       if (results.length === 0) return "Aucun résultat trouvé pour cette recherche.";
       return JSON.stringify(results.map((r) => ({
         title: r.title,

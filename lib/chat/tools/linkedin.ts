@@ -107,7 +107,7 @@ const defs: Anthropic.Tool[] = [
 const module_: ToolModule = {
   defs,
   handlers: {
-    search_linkedin_people: async (input) => {
+    search_linkedin_people: async (input, ctx) => {
       try {
         const r = await searchPeople({
           company: input.company as string | undefined,
@@ -118,6 +118,10 @@ const module_: ToolModule = {
           start: input.start as number | undefined,
         });
         const items = r.data?.items ?? [];
+        ctx.onSource({
+          kind: "linkedin",
+          title: `People ${[input.company, input.keywordTitle, input.keywords].filter(Boolean).join(" ") || "search"} (${items.length} results)`,
+        });
         if (items.length === 0) return "Aucun profil trouvé.";
         return JSON.stringify(items.slice(0, 20));
       } catch (e) {
@@ -125,7 +129,7 @@ const module_: ToolModule = {
       }
     },
 
-    get_linkedin_profile: async (input) => {
+    get_linkedin_profile: async (input, ctx) => {
       try {
         const username = await resolveUsername({
           username: input.username as string | undefined,
@@ -135,6 +139,11 @@ const module_: ToolModule = {
         });
         if (!username) return "Aucun username LinkedIn trouvé. Précise le nom complet et l'entreprise.";
         const profile = await getProfile(username);
+        ctx.onSource({
+          kind: "linkedin",
+          title: `${profile.firstName} ${profile.lastName}`,
+          url: `https://www.linkedin.com/in/${profile.username}`,
+        });
         return JSON.stringify({
           username: profile.username,
           name: `${profile.firstName} ${profile.lastName}`,
@@ -164,8 +173,12 @@ const module_: ToolModule = {
       catch (e) { return `Erreur LinkedIn posts : ${e instanceof Error ? e.message : "inconnue"}`; }
     },
 
-    get_linkedin_company: async (input) => {
-      try { const c = await getCompanyDetails(input.username as string, { timeoutMs: 18_000 }); return c.name ? JSON.stringify(c) : "Fiche entreprise non disponible (scrape trop lent ou introuvable)."; }
+    get_linkedin_company: async (input, ctx) => {
+      try {
+        const c = await getCompanyDetails(input.username as string, { timeoutMs: 18_000 });
+        ctx.onSource({ kind: "linkedin", title: `Company ${c.name ?? input.username}` });
+        return c.name ? JSON.stringify(c) : "Fiche entreprise non disponible (scrape trop lent ou introuvable).";
+      }
       catch (e) { return `Erreur LinkedIn company : ${e instanceof Error ? e.message : "inconnue"}`; }
     },
 
@@ -179,14 +192,16 @@ const module_: ToolModule = {
       catch (e) { return `Erreur LinkedIn jobs : ${e instanceof Error ? e.message : "inconnue"}`; }
     },
 
-    search_linkedin_companies: async (input) => {
+    search_linkedin_companies: async (input, ctx) => {
       try {
         const r = await searchCompanies({
           keyword: input.keyword as string,
           industry: input.industry as string | undefined,
           size: input.size as string | undefined,
         });
-        return JSON.stringify((r.data?.items ?? []).slice(0, 20));
+        const items = r.data?.items ?? [];
+        ctx.onSource({ kind: "linkedin", title: `Companies "${input.keyword}" (${items.length} results)` });
+        return JSON.stringify(items.slice(0, 20));
       } catch (e) { return `Erreur LinkedIn search companies : ${e instanceof Error ? e.message : "inconnue"}`; }
     },
   },

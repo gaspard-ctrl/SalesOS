@@ -51,6 +51,9 @@ export function logoKeyForSourceKind(kind: string): LogoKey {
     case "billing": return "sheets";
     case "client": return "coachello";
     case "guide": return "guide";
+    case "hubspot": return "hubspot";
+    case "slack": return "slack";
+    case "linkedin": return "linkedin";
     default: return "web";
   }
 }

@@ -31,6 +31,10 @@ const SOURCE_KIND_LABELS: Record<string, string> = {
   billing: "Revenue",
   client: "Fiche client",
   guide: "Guide",
+  hubspot: "HubSpot",
+  slack: "Slack",
+  linkedin: "LinkedIn",
+  web: "Web",
 };
 
 // Stable reference for remark plugins array

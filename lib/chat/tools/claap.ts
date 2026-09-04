@@ -20,7 +20,7 @@ const defs: Anthropic.Tool[] = [
   {
     name: "search_claap_meetings",
     description:
-      "Recherche des réunions/calls enregistrés sur Claap. RÉFLEXE pour un deal/compte ciblé : liste ses meetings via deal_id même si la question ne parle pas de meetings (les calls font partie de la situation du compte) ; si deal_id ne renvoie rien, retente avec participant_domain ou title_query. En analyse de masse du pipeline, ne PAS appeler deal par deal. Filtres combinables : participant_email, participant_domain (ex: 'acme.com'), title_query (mot du titre), since/until (ISO YYYY-MM-DD), deal_id (HubSpot). Retourne une liste légère (id, titre, date, participants) sans transcript : utilise ensuite get_claap_meeting_transcript pour lire un meeting.",
+      "Recherche des réunions/calls enregistrés sur Claap. Un résultat vide signifie seulement qu'aucun meeting ne matche les filtres passés (titre, domaine email, dates) : ce n'est PAS la preuve qu'aucun call n'a eu lieu, et ça se dit ainsi dans la réponse. RÉFLEXE pour un deal/compte ciblé : liste ses meetings via deal_id même si la question ne parle pas de meetings (les calls font partie de la situation du compte) ; si deal_id ne renvoie rien, retente avec participant_domain ou title_query. En analyse de masse du pipeline, ne PAS appeler deal par deal. Filtres combinables : participant_email, participant_domain (ex: 'acme.com'), title_query (mot du titre), since/until (ISO YYYY-MM-DD), deal_id (HubSpot). Retourne une liste légère (id, titre, date, participants) sans transcript : utilise ensuite get_claap_meeting_transcript pour lire un meeting.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -94,6 +94,10 @@ const module_: ToolModule = {
             until,
             limit,
           });
+          ctx.onSource({
+            kind: "claap",
+            title: `Meetings deal ${deal.name} (${matches.length} results)`,
+          });
           return JSON.stringify({
             deal_id: dealId,
             deal_name: deal.name,
@@ -112,7 +116,26 @@ const module_: ToolModule = {
           until,
           limit,
         });
-        return JSON.stringify({ count: matches.length, meetings: matches });
+        const filters = [
+          participantEmail && `participant ${participantEmail}`,
+          participantDomain && `domaine ${participantDomain}`,
+          titleQuery && `titre "${titleQuery}"`,
+          since && `depuis ${since}`,
+          until && `jusqu'au ${until}`,
+        ].filter(Boolean) as string[];
+        ctx.onSource({
+          kind: "claap",
+          title: `Meetings ${filters.join(", ") || "récents"} (${matches.length} results)`,
+        });
+        return JSON.stringify({
+          count: matches.length,
+          meetings: matches,
+          ...(matches.length === 0
+            ? {
+                coverage: `Aucun meeting ne matche ${filters.join(", ") || "ces filtres"}. Claap ne se cherche que par titre, participant ou dates : un call peut exister sous un autre titre ou avec un participant d'un autre domaine. Retente avec le domaine email réel du compte avant de conclure.`,
+              }
+            : {}),
+        });
       } catch (e) {
         return `Erreur Claap search : ${e instanceof Error ? e.message : "inconnue"}`;
       }
