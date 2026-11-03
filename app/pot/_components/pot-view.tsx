@@ -6,6 +6,7 @@ import type { TeamPotView } from "@/lib/team-pot/read";
 import type { PotPace, PotState } from "@/lib/team-pot/compute";
 import {
   POT_ACCEL_BONUS,
+  POT_AI_BONUS_EXCLUDED,
   POT_AI_MULTIPLIER,
   POT_BONUS,
   POT_END_LEVEL,
@@ -165,7 +166,7 @@ export function PotView({ view, pace, syncedLabel }: { view: TeamPotView; pace: 
           <p className={styles.sub}>
             One number for the whole company: 2026 revenue. Each time it crosses a €50k milestone, the pot grows by{" "}
             {eur(POT_BONUS)}. Past {millions(POT_GATE)} the accelerator kicks in and every €50k adds {eur(POT_ACCEL_BONUS)}.
-            Every AI Roleplay deal earns {POT_AI_MULTIPLIER}x its share on top.
+            AI Roleplay deals earn {POT_AI_MULTIPLIER}x their share on top.
           </p>
         </header>
 
@@ -203,7 +204,8 @@ export function PotView({ view, pace, syncedLabel }: { view: TeamPotView; pace: 
               <p>
                 Every €50k normally adds {eur(POT_BONUS)} ({eur(POT_ACCEL_BONUS)} past {millions(POT_GATE)}), so each euro
                 invoiced has a share of the pot. When the invoice is an AI deal, that share counts {POT_AI_MULTIPLIER}x: a €30k
-                AI Roleplay deal adds a €300 bonus on top of the milestones (€600 in the accelerator zone).
+                AI Roleplay deal adds a €300 bonus on top of the milestones (€600 in the accelerator zone). Not eligible:{" "}
+                {POT_AI_BONUS_EXCLUDED.join(", ")} (counts toward revenue, no bonus).
               </p>
             </div>
             <div className={styles.rule}>

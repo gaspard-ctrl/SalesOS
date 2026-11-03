@@ -36,6 +36,12 @@ export const POT_BONUS = 1_000; // par palier jusqu'à POT_GATE inclus
 export const POT_ACCEL_BONUS = 2_000; // par palier au-delà de POT_GATE
 /** Une facture AI compte 1,5x sa part du pot (bonus = la moitié en plus). */
 export const POT_AI_MULTIPLIER = 1.5;
+/**
+ * Clients sans bonus 1,5x, écrits comme dans l'onglet Factures (décision
+ * d'Arthur, 2026-11-03). Leurs factures comptent quand même dans le total et
+ * les paliers.
+ */
+export const POT_AI_BONUS_EXCLUDED = ["PMI"];
 /** Repère "Official 2026 target" de la maquette (le classeur porte 4 013 150 €). */
 export const POT_OFFICIAL_TARGET = 3_088_750;
 

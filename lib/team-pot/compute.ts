@@ -11,13 +11,16 @@
 //   dépasse ; une fois figé en base, il ne bouge plus.
 // - Bonus AI : la part du pot d'une facture AI compte 1,5x (formule de la
 //   maquette : +0,5 x montant x 1 000/50k dans la zone 2,15M-2,7M, x 2 000/50k
-//   dans 2,7M-3,0M ; rien au-delà de 3,0M).
+//   dans 2,7M-3,0M ; rien au-delà de 3,0M). Les clients de
+//   POT_AI_BONUS_EXCLUDED n'y ont pas droit : leur facture AI est traitée comme
+//   une facture normale (comptée dans le total, sans bonus ni badge).
 // ────────────────────────────────────────────────────────────────────────
 
 import { isBilled, type Invoice } from "@/lib/billing/invoices";
 import { norm } from "@/lib/billing/drive-xlsx";
 import {
   POT_ACCEL_BONUS,
+  POT_AI_BONUS_EXCLUDED,
   POT_AI_MULTIPLIER,
   POT_BASELINE,
   POT_BONUS,
@@ -38,7 +41,7 @@ export type PotWin = {
   date: string; // YYYY-MM-DD
   kind: "New" | "Renewal";
   owner: string | null; // AE pour un New, AM pour un Renew
-  isAi: boolean;
+  isAi: boolean; // éligible au bonus : facture AI, hors POT_AI_BONUS_EXCLUDED
   before: number; // cumul avant cette facture
   after: number;
   aiBonus: number;
@@ -49,7 +52,7 @@ export type PotCrosser = {
   owner: string | null;
   amount: number;
   date: string;
-  isAi: boolean;
+  isAi: boolean; // éligible au bonus, comme PotWin.isAi
   aiBonus: number;
 };
 
@@ -80,6 +83,8 @@ export type PotState = {
   computedAt: string;
 };
 
+const AI_BONUS_EXCLUDED = new Set(POT_AI_BONUS_EXCLUDED.map((c) => norm(c)));
+
 function overlap(a: number, b: number, lo: number, hi: number): number {
   return Math.max(0, Math.min(b, hi) - Math.max(a, lo));
 }
@@ -109,7 +114,7 @@ export function computePot(
   const wins: PotWin[] = sorted.map((i) => {
     const before = run;
     run += i.amount;
-    const isAi = norm(i.type) === "ai";
+    const isAi = norm(i.type) === "ai" && !AI_BONUS_EXCLUDED.has(norm(i.company));
     const isNew = i.status === "new";
     return {
       key: `${norm(i.company)}|${i.date}|${i.amount}`,

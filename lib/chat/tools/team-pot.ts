@@ -14,6 +14,7 @@ import { readTeamPot } from "@/lib/team-pot/read";
 import { potPace } from "@/lib/team-pot/compute";
 import {
   POT_ACCEL_BONUS,
+  POT_AI_BONUS_EXCLUDED,
   POT_AI_MULTIPLIER,
   POT_BASELINE,
   POT_BONUS,
@@ -31,7 +32,7 @@ const defs: Anthropic.Tool[] = [
   {
     name: "get_team_pot",
     description:
-      "Pot d'équipe 2026 (\"The Coachello Pot\", page /pot de CoachelloHQ, annonces dans #office-life) : montant du pot, CA 2026 suivi, paliers de 50k atteints avec la facture qui a fait franchir chacun, prochain palier et reste à faire, factures comptées depuis le lancement (bonus AI Roleplay compris), rythme hebdo nécessaire pour 2,7M et 3,0M, jours restants. Règle : +1 000 € par palier de 50k de 2,2M à 2,7M, +2 000 € de 2,75M à 3,0M, une facture AI compte 1,5x sa part. Source : onglet Factures du sheet revenue (facturé New + Renew), mais SEULES les factures datées du 30/10 au 31/12/2026 font bouger le pot, au-dessus d'un point de départ figé (facturé 2026 avant le 30/10). Ce n'est donc pas forcément le facturé 2026 courant du sheet : pour lui, utilise get_revenue_kpis ou get_invoices. Chiffres rafraîchis toutes les heures de 8h à 20h (synced_at), figés après le 31/12. Recopie les montants renvoyés.",
+      "Pot d'équipe 2026 (\"The Coachello Pot\", page /pot de CoachelloHQ, annonces dans #office-life) : montant du pot, CA 2026 suivi, paliers de 50k atteints avec la facture qui a fait franchir chacun, prochain palier et reste à faire, factures comptées depuis le lancement (bonus AI Roleplay compris), rythme hebdo nécessaire pour 2,7M et 3,0M, jours restants. Règle : +1 000 € par palier de 50k de 2,2M à 2,7M, +2 000 € de 2,75M à 3,0M, une facture AI compte 1,5x sa part, sauf pour les clients de rules.ai_bonus_excluded_clients (leurs factures comptent dans le total, sans bonus, ai_bonus_eligible = false). Source : onglet Factures du sheet revenue (facturé New + Renew), mais SEULES les factures datées du 30/10 au 31/12/2026 font bouger le pot, au-dessus d'un point de départ figé (facturé 2026 avant le 30/10). Ce n'est donc pas forcément le facturé 2026 courant du sheet : pour lui, utilise get_revenue_kpis ou get_invoices. Chiffres rafraîchis toutes les heures de 8h à 20h (synced_at), figés après le 31/12. Recopie les montants renvoyés.",
     input_schema: { type: "object" as const, properties: {}, required: [] },
   },
 ];
@@ -56,6 +57,7 @@ const handlers: ToolModule["handlers"] = {
         milestones: `tous les ${POT_STEP} € de ${POT_START} à ${POT_END_LEVEL}`,
         bonus_per_milestone: `${POT_BONUS} € jusqu'à ${POT_GATE}, ${POT_ACCEL_BONUS} € au-delà`,
         ai_multiplier: POT_AI_MULTIPLIER,
+        ai_bonus_excluded_clients: POT_AI_BONUS_EXCLUDED,
         max_pot_without_ai_bonus: POT_MAX,
       },
       revenue_2026_tracked: s.total,
@@ -79,7 +81,7 @@ const handlers: ToolModule["handlers"] = {
           bonus: m.bonus,
           reached_at: m.reachedAt,
           crossed_by: m.crossedBy
-            ? { company: m.crossedBy.company, owner: m.crossedBy.owner, amount: m.crossedBy.amount, date: m.crossedBy.date, ai: m.crossedBy.isAi }
+            ? { company: m.crossedBy.company, owner: m.crossedBy.owner, amount: m.crossedBy.amount, date: m.crossedBy.date, ai_bonus_eligible: m.crossedBy.isAi }
             : null,
         })),
       wins_since_launch: s.wins.map((w) => ({
@@ -87,7 +89,7 @@ const handlers: ToolModule["handlers"] = {
         company: w.company,
         amount: w.amount,
         type: w.kind,
-        ai: w.isAi,
+        ai_bonus_eligible: w.isAi,
         owner: w.owner,
         ai_bonus: w.aiBonus,
       })),
